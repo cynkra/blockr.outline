@@ -556,6 +556,12 @@ outline_ext_srv <- function(annotations, block_order, title,
         # stack. Chapter actions merge it into the one above, dissolve it,
         # or flip every member's report flag. Dropping a chip on a chapter
         # heading moves that block into it.
+        # Blocks that move into a chapter started at `blk_id`. Normally the
+        # cut goes ABOVE the block, so it takes the rest of its run. When
+        # the block ALREADY starts a chapter there is no boundary to add
+        # above it, so it becomes a chapter on its own and the rest of the
+        # run stays behind -- otherwise the whole run would move, the old
+        # chapter would empty out, and the action would read as a rename.
         run_of <- function(blk_id) {
           s <- sections()
           i <- match(blk_id, s$ids)
@@ -563,6 +569,10 @@ outline_ext_srv <- function(annotations, block_order, title,
             return(character())
           }
           stk <- s$stack_ids[i]
+          starts_run <- i == 1L || !identical(s$stack_ids[i - 1L], stk)
+          if (starts_run && !is.na(stk)) {
+            return(s$ids[i])
+          }
           j <- i
           while (j < length(s$ids) && identical(s$stack_ids[j + 1L], stk)) {
             j <- j + 1L
