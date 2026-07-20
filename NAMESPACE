@@ -1,0 +1,6 @@
+# Hand-maintained (roxygen2 8.x not required to build this pilot package)
+export(new_outline_extension)
+import(shiny)
+importFrom(htmltools, htmlDependency, tagList, HTML)
+importFrom(stats, setNames)
+importFrom(utils, head)
