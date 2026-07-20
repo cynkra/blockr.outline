@@ -355,6 +355,9 @@ outline_tags <- function(sects, ns, editing = NULL) {
     div(
       class = "blockr-otl-chip",
       title = "Double-click the name to rename",
+      span(class = "blockr-otl-tile", tile),
+      span(class = "blockr-otl-rname", sects$names[i]),
+      span(class = "blockr-otl-sw"),
       span(
         class = "blockr-otl-grip",
         draggable = "true",
@@ -369,10 +372,7 @@ outline_tags <- function(sects, ns, editing = NULL) {
           "<circle cx=\"2.5\" cy=\"13\" r=\"1.3\"/>",
           "<circle cx=\"7.5\" cy=\"13\" r=\"1.3\"/></svg>"
         ))
-      ),
-      span(class = "blockr-otl-tile", tile),
-      span(class = "blockr-otl-rname", sects$names[i]),
-      span(class = "blockr-otl-sw")
+      )
     )
   }
 
