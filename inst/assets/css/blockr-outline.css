@@ -133,7 +133,15 @@
                        width: 16px; height: 16px; display: flex; align-items: center;
                        justify-content: center; color: var(--blockr-grey-400, #9ca3af); }
 .blockr-otl-chap:hover .blockr-otl-chevwrap { color: var(--blockr-grey-700, #374151); }
-.blockr-otl-chapicons { display: none; align-items: center; gap: 4px; margin-left: 6px; }
+/* Pinned to the row's right edge, not trailed after the title: the
+   heading text and the hover actions ("exclude all" / "include all")
+   are both variable width, so flowing the icons behind them left every
+   collapsed chapter's preview at a different x. Right-aligned they
+   share one edge and fill leftwards, and hovering a chapter no longer
+   shifts them. `auto` margin only consumes free space, so in a narrow
+   panel they simply sit next to the actions instead of overlapping. */
+.blockr-otl-chapicons { display: none; align-items: center; gap: 4px;
+  margin-left: auto; padding-left: 10px; }
 .blockr-otl-chap.collapsed .blockr-otl-chapicons { display: inline-flex; }
 .blockr-otl-minitile { width: 18px; height: 18px; border-radius: 4px; display: flex;
                        align-items: center; justify-content: center; overflow: hidden;
