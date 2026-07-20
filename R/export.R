@@ -160,12 +160,41 @@ outline_sections <- function(expressions, board, annotations,
   }
 
   if (!setequal(known, blockr.core::board_block_ids(board))) {
-    board <- blockr.core::board_blocks(board) |>
-      (\(b) {
-        brd <- board
-        blockr.core::board_blocks(brd) <- b[known]
-        brd
-      })()
+
+    # Narrow onto a PLAIN core board rather than mutating the one we were
+    # handed. A block whose expression is momentarily NULL (a ggplot block
+    # req()s while its upstream data settles) has to be dropped, but every
+    # container validates the dropped id against something it owns: core
+    # rejects links naming it, and a dock_board additionally rejects view
+    # memberships naming it. Both aborts landed in the caller's tryCatch,
+    # became req(FALSE), and froze the outline on its last good projection
+    # with nothing left to re-invalidate it -- so editing a block updated
+    # the block but never the document.
+    #
+    # The projection only needs blocks, links and stacks, so rebuilding
+    # those three narrowed decouples it from container validation
+    # entirely. Stack objects are carried over untouched, keeping their
+    # dock attributes (name, color) intact.
+    lnks <- blockr.core::board_links(board)
+    stks <- blockr.core::board_stacks(board)
+
+    narrowed <- lapply(
+      setNames(nm = names(stks)),
+      function(s) {
+        stk <- stks[[s]]
+        blockr.core::stack_blocks(stk) <- intersect(
+          blockr.core::stack_blocks(stk),
+          known
+        )
+        stk
+      }
+    )
+
+    board <- blockr.core::new_board(
+      blocks = blockr.core::board_blocks(board)[known],
+      links = lnks[lnks$from %in% known & lnks$to %in% known],
+      stacks = if (length(narrowed)) do.call(blockr.core::stacks, narrowed)
+    )
   }
 
   expressions <- expressions[known]

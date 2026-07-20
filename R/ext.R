@@ -205,6 +205,19 @@ outline_ext_srv <- function(annotations, block_order, title,
         # each expression defensively: a block that cannot report one is
         # dropped, so the outline redraws (showing the removal) instead of
         # freezing on the last good projection.
+        # Last known expression per block id. A block's expr reactive
+        # reports NULL whenever it cannot produce one right now -- a
+        # ggplot block req()s while its upstream data settles, and a block
+        # whose dock panel is not the visible tab stops reporting
+        # altogether. A report surface covers the whole board, so a block
+        # going quiet must not remove it from the document; the last
+        # expression it did report stays until it reports a new one.
+        # Without this the outline loses blocks as soon as you switch
+        # tabs. (The real fix is upstream: an extension cannot ask core to
+        # construct or evaluate a hidden block. Recorded as a core
+        # follow-up; the demo sets background_construction_delay = 0.)
+        expr_cache <- new.env(parent = emptyenv())
+
         board_exprs <- reactive(
           {
             ex <- lapply(
@@ -212,7 +225,33 @@ outline_ext_srv <- function(annotations, block_order, title,
               function(e) tryCatch(blockr.core::reval(e), error = function(err) NULL)
             )
 
-            ex[!vapply(ex, is.null, logical(1L))]
+            for (id in names(ex)) {
+              if (!is.null(ex[[id]])) {
+                assign(id, ex[[id]], envir = expr_cache)
+              }
+            }
+
+            # Keyed on the live board, so a removed block is gone for good
+            # rather than resurrected from the cache.
+            live <- blockr.core::board_block_ids(board$board)
+
+            out <- lapply(
+              setNames(nm = live),
+              function(id) {
+                if (!is.null(ex[[id]])) {
+                  ex[[id]]
+                } else if (exists(id, envir = expr_cache, inherits = FALSE)) {
+                  get(id, envir = expr_cache)
+                }
+              }
+            )
+
+            rm(
+              list = setdiff(ls(expr_cache), live),
+              envir = expr_cache
+            )
+
+            out[!vapply(out, is.null, logical(1L))]
           }
         )
 
@@ -281,19 +320,107 @@ outline_ext_srv <- function(annotations, block_order, title,
         spin_txt <- reactive(export_spin(sections()))
         qmd_txt <- reactive(export_qmd(sections(), rv_title()))
 
+        # Split the projection into the structural skeleton and the
+        # per-block code markup, each with its own identical-skip store.
+        # Editing a block value (a row count, say) changes only the code,
+        # so the skeleton store stays put, renderUI does not fire, and the
+        # observer below pushes just the changed chunks. Structural edits
+        # (drag, chapter changes, add/remove) move the skeleton and redraw
+        # wholesale, which is correct and rare.
+        skel_store <- reactiveVal(NULL)
+        code_store <- reactiveVal(NULL)
+
+        observe(
+          {
+            full <- sections()
+
+            skel <- full
+            skel$code <- NULL
+
+            if (!identical(skel, isolate(skel_store()))) {
+              skel_store(skel)
+            }
+
+            codes <- outline_code_map(full)
+
+            if (!identical(codes, isolate(code_store()))) {
+              code_store(codes)
+            }
+          }
+        )
+
+        # Diff against what the client already has. This compares every
+        # block, not just the edited one: assignment names flow downstream
+        # (`mut <- dplyr::mutate(filt, ...)`), so an upstream edit
+        # legitimately rewrites its dependents' code too.
+        pushed <- reactiveVal(NULL)
+
+        observe(
+          {
+            codes <- code_store()
+            req(!is.null(codes))
+
+            prev <- isolate(pushed())
+            pushed(codes)
+
+            # First paint: renderUI carries the markup itself.
+            req(!is.null(prev))
+
+            changed <- Filter(
+              function(n) !identical(codes[[n]], prev[[n]]),
+              names(codes)
+            )
+
+            if (!length(changed)) {
+              return()
+            }
+
+            session$sendCustomMessage(
+              "blockr-outline-code",
+              list(
+                items = lapply(
+                  changed,
+                  function(n) {
+                    list(
+                      id = session$ns(paste0("code-", n)),
+                      html = codes[[n]]
+                    )
+                  }
+                ),
+                # The hidden full script backs the copy button, so it has
+                # to track the pushed chunks or copying yields stale code.
+                script_id = session$ns("code_pre"),
+                script = isolate(spin_txt())
+              )
+            )
+          }
+        )
+
         output$outline_out <- renderUI(
           {
             view <- coal(input$code_view, "outline")
 
             if (identical(view, "outline")) {
+
+              # Skeleton reactively, code isolated: a code-only change must
+              # not re-render here (the push handles it), but when the
+              # skeleton does redraw it has to paint the current code.
+              sects <- skel_store()
+              req(!is.null(sects))
+              sects$code_html <- isolate(code_store())
+
               return(
                 tagList(
-                  outline_tags(sections(), session$ns, editing()),
+                  outline_tags(sects, session$ns, editing()),
                   # Hidden full script so the copy button works here too.
+                  # Isolated: reading it reactively would re-couple this
+                  # renderUI to every code change, which is exactly what
+                  # the skeleton/code split exists to avoid. The push
+                  # keeps this node's text current instead.
                   tags$pre(
                     id = session$ns("code_pre"),
                     style = "display: none;",
-                    spin_txt()
+                    isolate(spin_txt())
                   )
                 )
               )

@@ -61,6 +61,23 @@ outline_js <- function(ns) {
     "$(function() {",
     consts,
     "
+      // Incremental code updates: editing a block value changes only the
+      // generated code, never the outline's structure, so the server
+      // pushes the changed chunks instead of re-rendering the whole
+      // outline. Keeps the DOM (and any open editor, scroll and hover
+      // state) intact. Structural changes still go through renderUI.
+      Shiny.addCustomMessageHandler('blockr-outline-code', function(msg) {
+        (msg.items || []).forEach(function(it) {
+          var el = document.getElementById(it.id);
+          // A push can race a skeleton redraw that dropped the block.
+          if (el) el.innerHTML = it.html;
+        });
+        if (msg.script_id) {
+          var pre = document.getElementById(msg.script_id);
+          if (pre) pre.textContent = msg.script;
+        }
+      });
+
       var dragId = null;
       var collapseTimer = null;
       var openTimer = null;
@@ -471,6 +488,42 @@ outline_js <- function(ns) {
 # (the R script / Document views show the markdown). The element id
 # carries a nonce because the bundle keeps an instance registry keyed by
 # id (a reused id would be skipped).
+# Highlighted HTML for one section's chunk. Sole producer of block code
+# markup: the initial render calls it through outline_code_map(), and the
+# incremental push sends its output for the blocks whose code changed.
+# Depends on the chunk header too, so a report-flag flip regenerates the
+# markup (that flip also redraws the skeleton, which is what shows the
+# prose and the include=FALSE chip).
+sect_code_html <- function(sects, i) {
+
+  chunk <- paste(
+    c(
+      paste0(
+        "#+ ", sects$ids[i],
+        if (!sects$report[i]) ", include=FALSE"
+      ),
+      sects$code[i],
+      if (sects$report[i]) sects$ids[i]
+    ),
+    collapse = "\n"
+  )
+
+  hl <- highlight_r_code(chunk)
+
+  if (is.null(hl)) {
+    as.character(tags$pre(chunk))
+  } else {
+    hl
+  }
+}
+
+outline_code_map <- function(sects) {
+  setNames(
+    lapply(seq_along(sects$ids), function(i) sect_code_html(sects, i)),
+    sects$ids
+  )
+}
+
 desc_editor_ui <- function(ns, key, value) {
   div(
     class = "blockr-otl-sect blockr-otl-editor",
@@ -573,24 +626,14 @@ outline_tags <- function(sects, ns, editing = NULL) {
       return(desc_editor_ui(ns, sects$ids[i], sects$descriptions[i]))
     }
 
-    chunk <- paste(
-      c(
-        paste0(
-          "#+ ", sects$ids[i],
-          if (!sects$report[i]) ", include=FALSE"
-        ),
-        sects$code[i],
-        if (sects$report[i]) sects$ids[i]
-      ),
-      collapse = "\n"
+    # Rendered from the pre-computed map so the initial paint and the
+    # incremental push (see the code observer in ext.R) go through the
+    # same producer and can never drift apart.
+    code_tag <- div(
+      id = ns(paste0("code-", sects$ids[i])),
+      class = "blockr-otl-codewrap",
+      HTML(coal(sects$code_html[[sects$ids[i]]], ""))
     )
-
-    hl <- highlight_r_code(chunk)
-    code_tag <- if (is.null(hl)) {
-      tags$pre(chunk)
-    } else {
-      HTML(hl)
-    }
 
     prose <- if (sects$report[i] && nzchar(sects$descriptions[i])) {
       div(
