@@ -73,25 +73,14 @@ outline_js <- function(ns) {
       // silently with nothing to re-send it, leaving cells stuck on
       // their placeholder. Same re-apply pattern as collapsedStacks.
       var codeById = {};
-      var scriptText = null, scriptId = null;
       function applyCode() {
         Object.keys(codeById).forEach(function(id) {
           var el = document.getElementById(id);
           if (el && el.innerHTML !== codeById[id]) el.innerHTML = codeById[id];
         });
-        if (scriptId) {
-          var pre = document.getElementById(scriptId);
-          // Only the outline view's hidden copy buffer -- see the
-          // data-otl-buffer note in ext.R.
-          if (pre && pre.dataset.otlBuffer &&
-              pre.textContent !== scriptText) {
-            pre.textContent = scriptText;
-          }
-        }
       }
       Shiny.addCustomMessageHandler('blockr-outline-code', function(msg) {
         (msg.items || []).forEach(function(it) { codeById[it.id] = it.html; });
-        if (msg.script_id) { scriptId = msg.script_id; scriptText = msg.script; }
         applyCode();
       });
 
@@ -119,18 +108,7 @@ outline_js <- function(ns) {
       $(document).on('shiny:value', function(ev) {
         if (ev.name && /outline_out$/.test(ev.name)) {
           setTimeout(applyCollapsed, 0);
-          // The raw views carry copy in their file header, so the
-          // toolbar's button would be a duplicate. Keyed off the header
-          // being present rather than off the view name, so the two can
-          // never disagree.
-          setTimeout(function() {
-            var panel = document.querySelector('.blockr-otl-panel');
-            if (panel) {
-              panel.classList.toggle(
-                'has-filehead', !!panel.querySelector('.blockr-otl-fileblock')
-              );
-            }
-          }, 0);
+
           // Fill in any push that landed before this render inserted its
           // nodes. renderUI carries current code, so this is a no-op
           // whenever the two are already in step.

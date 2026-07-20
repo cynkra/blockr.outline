@@ -65,32 +65,23 @@ outline_ext_ui <- function(id, board, ...) {
       ),
       div(
         class = "blockr-otl-toolbar-right",
+        # selectize = FALSE: a native <select> can be sized to match the
+        # buttons beside it; selectize's wrapper cannot without fighting
+        # its own layout (it rendered 42px against their 28px).
         selectInput(
           ns("code_render_format"),
           label = NULL,
           choices = formats,
           selected = "html",
-          width = "110px"
+          selectize = FALSE,
+          width = "92px"
         ),
         downloadButton(
           ns("code_render"),
           "Render",
           class = "blockr-otl-tbbtn blockr-otl-renderbtn"
         ),
-        tags$button(
-          id = ns("code_copy"),
-          type = "button",
-          class = "blockr-otl-tbbtn blockr-otl-copybtn",
-          title = "Copy code to clipboard",
-          onclick = sprintf(
-            paste0(
-              "navigator.clipboard.writeText(",
-              "document.getElementById('%s').innerText);"
-            ),
-            ns("code_pre")
-          ),
-          icon("clipboard")
-        )
+        NULL
       )
     ),
     uiOutput(ns("outline_out")),
@@ -409,11 +400,7 @@ outline_ext_srv <- function(annotations, block_order, title,
                       html = codes[[n]]
                     )
                   }
-                ),
-                # The hidden full script backs the copy button, so it has
-                # to track the pushed chunks or copying yields stale code.
-                script_id = session$ns("code_pre"),
-                script = isolate(spin_txt())
+                )
               )
             )
           }
@@ -435,24 +422,7 @@ outline_ext_srv <- function(annotations, block_order, title,
               return(
                 tagList(
                   outline_tags(sects, session$ns, editing()),
-                  # Hidden full script so the copy button works here too.
-                  # Isolated: reading it reactively would re-couple this
-                  # renderUI to every code change, which is exactly what
-                  # the skeleton/code split exists to avoid. The push
-                  # keeps this node's text current instead.
-                  tags$pre(
-                    id = session$ns("code_pre"),
-                    # Marks this as the outline view's buffer. The
-                    # script / Document views reuse the same id for their
-                    # VISIBLE content, and the code push would otherwise
-                    # overwrite that with plain spin text, wiping their
-                    # syntax highlighting (and showing the R script in
-                    # the Document view). Those views re-render from
-                    # spin_txt()/qmd_txt() and need no push.
-                    `data-otl-buffer` = "1",
-                    style = "display: none;",
-                    isolate(spin_txt())
-                  )
+                  NULL
                 )
               )
             }
