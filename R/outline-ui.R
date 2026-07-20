@@ -38,7 +38,8 @@ outline_js <- function(ns) {
     paste0(
       "var TOGGLE = '%s', OPEN = '%s', MOVE = '%s', EDIT = '%s', ",
       "REN = '%s', RENSTACK = '%s', SAVE = '%s', CANCEL = '%s', ",
-      "ADD = '%s', RM = '%s';"
+      "ADD = '%s', RM = '%s', CHAP = '%s', NEWCHAP = '%s', ",
+      "TOSTACK = '%s';"
     ),
     ns("outline_toggle"),
     ns("outline_open"),
@@ -49,7 +50,10 @@ outline_js <- function(ns) {
     ns("desc_save"),
     ns("desc_cancel"),
     ns("outline_add"),
-    ns("outline_rm")
+    ns("outline_rm"),
+    ns("outline_chapter"),
+    ns("outline_newchapter"),
+    ns("outline_tostack")
   )
 
   tags$script(HTML(paste0(
@@ -149,9 +153,10 @@ outline_js <- function(ns) {
       }
       function clearDrop() {
         document.querySelectorAll('.blockr-otl-grow.drop-before, ' +
-          '.blockr-otl-grow.drop-after').forEach(function(r) {
-          r.classList.remove('drop-before', 'drop-after');
-        });
+          '.blockr-otl-grow.drop-after, .blockr-otl-chap.drop-chap')
+          .forEach(function(r) {
+            r.classList.remove('drop-before', 'drop-after', 'drop-chap');
+          });
       }
       document.addEventListener('mouseover', function(ev) {
         var row = rowOf(ev.target);
@@ -224,6 +229,15 @@ outline_js <- function(ns) {
         computeLegal();
       });
       document.addEventListener('dragover', function(ev) {
+        // A chapter heading is a membership target: dropping a chip on it
+        // moves the block into that chapter.
+        var chap = ev.target.closest && ev.target.closest('.blockr-otl-chap');
+        if (chap && dragId) {
+          ev.preventDefault();
+          clearDrop();
+          chap.classList.add('drop-chap');
+          return;
+        }
         var row = rowOf(ev.target);
         if (!row || !dragId) return;
         clearDrop();
@@ -233,6 +247,17 @@ outline_js <- function(ns) {
         row.classList.add(side === 'after' ? 'drop-after' : 'drop-before');
       });
       document.addEventListener('drop', function(ev) {
+        var chap = ev.target.closest && ev.target.closest('.blockr-otl-chap');
+        if (chap && dragId) {
+          ev.preventDefault();
+          clearDrop();
+          clearLegal();
+          Shiny.setInputValue(TOSTACK, {
+            id: dragId, stack: chap.dataset.stack
+          }, {priority: 'event'});
+          dragId = null;
+          return;
+        }
         var row = rowOf(ev.target);
         clearDrop();
         if (!row || !dragId) return;
@@ -296,6 +321,23 @@ outline_js <- function(ns) {
         }
       });
       document.addEventListener('click', function(ev) {
+        var chapAct = ev.target.closest &&
+          ev.target.closest('.blockr-otl-chapact');
+        if (chapAct) {
+          Shiny.setInputValue(CHAP, {
+            stack: chapAct.closest('.blockr-otl-chap').dataset.stack,
+            act: chapAct.dataset.act
+          }, {priority: 'event'});
+          return;
+        }
+        var newChap = ev.target.closest &&
+          ev.target.closest('.blockr-otl-newchap');
+        if (newChap) {
+          Shiny.setInputValue(NEWCHAP, {
+            id: newChap.closest('.blockr-otl-addrow').dataset.blk
+          }, {priority: 'event'});
+          return;
+        }
         var add = ev.target.closest && ev.target.closest('.blockr-otl-addrow');
         if (add) {
           Shiny.setInputValue(ADD, {
@@ -526,6 +568,29 @@ outline_tags <- function(sects, ns, editing = NULL) {
           span(class = "blockr-otl-chevwrap", outline_chevron()),
           span(class = "blockr-otl-chlabel", run_labels[r]),
           span(
+            class = "blockr-otl-chapacts",
+            if (r > 1L) {
+              span(
+                class = "blockr-otl-chapact",
+                `data-act` = "merge",
+                title = "Merge into the chapter above",
+                "merge up"
+              )
+            },
+            span(
+              class = "blockr-otl-chapact",
+              `data-act` = "ungroup",
+              title = "Dissolve this chapter; its blocks keep their order",
+              "ungroup"
+            ),
+            span(
+              class = "blockr-otl-chapact",
+              `data-act` = if (all(sects$report[idx])) "exclude" else "include",
+              title = "Include or exclude every block of this chapter",
+              if (all(sects$report[idx])) "exclude all" else "include all"
+            )
+          ),
+          span(
             class = "blockr-otl-chapicons",
             lapply(idx, function(i) {
               span(
@@ -619,7 +684,20 @@ outline_tags <- function(sects, ns, editing = NULL) {
             )
           )),
           "Add block"
-        )
+        ),
+        # WITHHELD: "New chapter" (the create half of section management).
+        # The server handler is in place, but a `stacks add` payload sent
+        # from an extension is silently ignored by the dock's update path,
+        # so the gesture only detached the block from its old chapter --
+        # a half-applied action. Re-enable once the add path is understood
+        # (see 6-outline-extension.md, open items).
+        if (FALSE) {
+          span(
+            class = "blockr-otl-addlink blockr-otl-newchap",
+            title = "Start a new chapter at this block",
+            "New chapter"
+          )
+        }
       )
 
       div(

@@ -483,6 +483,211 @@ outline_ext_srv <- function(annotations, block_order, title,
           }
         )
 
+        # ---- section (stack) management -------------------------------
+        # Sections are defined by where they START: "New chapter" takes the
+        # clicked block plus the rest of its current run into a fresh
+        # stack. Chapter actions merge it into the one above, dissolve it,
+        # or flip every member's report flag. Dropping a chip on a chapter
+        # heading moves that block into it.
+        run_of <- function(blk_id) {
+          s <- sections()
+          i <- match(blk_id, s$ids)
+          if (is.na(i)) {
+            return(character())
+          }
+          stk <- s$stack_ids[i]
+          j <- i
+          while (j < length(s$ids) && identical(s$stack_ids[j + 1L], stk)) {
+            j <- j + 1L
+          }
+          s$ids[i:j]
+        }
+
+        stack_members <- function(stk_id) {
+          stks <- blockr.core::board_stacks(board$board)
+          if (stk_id %in% names(stks)) {
+            blockr.core::stack_blocks(stks[[stk_id]])
+          } else {
+            character()
+          }
+        }
+
+        # Apply a whole new membership map at once: every touched stack is
+        # modified, emptied stacks are dropped, so the partition invariant
+        # (a block sits in at most one stack) always holds on commit.
+        commit_stacks <- function(members) {
+
+          stks <- blockr.core::board_stacks(board$board)
+          mod <- list()
+          rm <- character()
+
+          for (s in names(members)) {
+            if (!s %in% names(stks)) {
+              next
+            }
+            if (length(members[[s]])) {
+              mod[[s]] <- list(blocks = members[[s]])
+            } else {
+              rm <- c(rm, s)
+            }
+          }
+
+          payload <- list()
+          if (length(mod)) payload$mod <- mod
+          if (length(rm)) payload$rm <- rm
+
+          if (length(payload)) {
+            update(list(stacks = payload))
+          }
+        }
+
+        observeEvent(
+          input$outline_newchapter,
+          {
+            blk_id <- input$outline_newchapter$id
+            req(is.character(blk_id))
+
+            members <- run_of(blk_id)
+            req(length(members))
+
+            stks <- blockr.core::board_stacks(board$board)
+            old <- Filter(
+              function(s) blk_id %in% blockr.core::stack_blocks(stks[[s]]),
+              names(stks)
+            )
+
+            keep <- list()
+            if (length(old)) {
+              keep[[old[[1L]]]] <- setdiff(stack_members(old[[1L]]), members)
+            }
+
+            new_id <- paste0(
+              "chap_",
+              substr(gsub("[^a-z0-9]", "", tolower(blk_id)), 1L, 8L),
+              length(stks) + 1L
+            )
+
+            colors <- tryCatch(
+              blockr.dock::suggest_new_colors(),
+              error = function(e) "#6b7280"
+            )
+
+            # One payload: the detach (mod / rm of the old stack) and the
+            # new stack must land in the same update, or the intermediate
+            # state violates "a block sits in at most one stack" and two
+            # separate updates in one flush do not compose.
+            payload <- list(
+              add = blockr.core::stacks(
+                setNames(
+                  list(
+                    blockr.dock::new_dock_stack(
+                      members,
+                      name = "New chapter",
+                      color = colors[[1L]]
+                    )
+                  ),
+                  new_id
+                )
+              )
+            )
+
+            if (length(keep)) {
+
+              stk_id <- names(keep)[[1L]]
+
+              if (length(keep[[1L]])) {
+                payload$mod <- setNames(list(list(blocks = keep[[1L]])), stk_id)
+              } else {
+                payload$rm <- stk_id
+              }
+            }
+
+            update(list(stacks = payload))
+          }
+        )
+
+        observeEvent(
+          input$outline_chapter,
+          {
+            act <- input$outline_chapter
+            req(is.character(act$stack), is.character(act$act))
+
+            s <- sections()
+            idx <- which(s$stack_ids %in% act$stack)
+            req(length(idx))
+
+            if (act$act %in% c("include", "exclude")) {
+
+              ann <- rv_ann()
+              want <- identical(act$act, "include")
+
+              for (bid in s$ids[idx]) {
+                entry <- coal(ann[[bid]], list())
+                entry$report <- want
+                ann[[bid]] <- entry
+              }
+
+              rv_ann(ann)
+              return()
+            }
+
+            if (identical(act$act, "ungroup")) {
+              commit_stacks(setNames(list(character()), act$stack))
+              return()
+            }
+
+            if (identical(act$act, "merge")) {
+
+              # The chapter above in the DOCUMENT, which may be another run
+              # of the same stack (a split chapter) -- then there is
+              # nothing to merge.
+              above <- s$stack_ids[seq_len(min(idx) - 1L)]
+              above <- above[!is.na(above) & above != act$stack]
+              req(length(above))
+
+              target <- above[[length(above)]]
+
+              commit_stacks(
+                setNames(
+                  list(
+                    union(stack_members(target), stack_members(act$stack)),
+                    character()
+                  ),
+                  c(target, act$stack)
+                )
+              )
+            }
+          }
+        )
+
+        observeEvent(
+          input$outline_tostack,
+          {
+            mv <- input$outline_tostack
+            req(is.character(mv$id), is.character(mv$stack))
+
+            stks <- blockr.core::board_stacks(board$board)
+            req(mv$stack %in% names(stks))
+
+            if (mv$id %in% stack_members(mv$stack)) {
+              return()
+            }
+
+            members <- list()
+
+            for (s in names(stks)) {
+              cur <- blockr.core::stack_blocks(stks[[s]])
+              if (mv$id %in% cur) {
+                members[[s]] <- setdiff(cur, mv$id)
+              }
+            }
+
+            members[[mv$stack]] <- c(stack_members(mv$stack), mv$id)
+
+            commit_stacks(members)
+          }
+        )
+
         # Remove a block through the dock's own remove action (which
         # confirms and cleans up links / panels).
         observeEvent(
