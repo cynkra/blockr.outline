@@ -161,9 +161,9 @@ outline_js <- function(ns) {
         cells(row).forEach(function(c) { if (c) c.classList.remove('hot'); });
       });
       document.addEventListener('dragstart', function(ev) {
-        var chip = ev.target.closest && ev.target.closest('.blockr-otl-chip');
-        if (!chip) return;
-        dragId = rowOf(chip).dataset.blk;
+        var grip = ev.target.closest && ev.target.closest('.blockr-otl-grip');
+        if (!grip) return;
+        dragId = rowOf(grip).dataset.blk;
         ev.dataTransfer.effectAllowed = 'move';
         ev.dataTransfer.setData('text/plain', dragId);
       });
@@ -354,8 +354,22 @@ outline_tags <- function(sects, ns, editing = NULL) {
 
     div(
       class = "blockr-otl-chip",
-      draggable = "true",
-      title = "Drag to reorder · double-click the name to rename",
+      title = "Double-click the name to rename",
+      span(
+        class = "blockr-otl-grip",
+        draggable = "true",
+        title = "Drag to reorder",
+        HTML(paste0(
+          "<svg viewBox=\"0 0 10 16\" width=\"8\" height=\"13\" ",
+          "fill=\"currentColor\" aria-hidden=\"true\">",
+          "<circle cx=\"2.5\" cy=\"3\" r=\"1.3\"/>",
+          "<circle cx=\"7.5\" cy=\"3\" r=\"1.3\"/>",
+          "<circle cx=\"2.5\" cy=\"8\" r=\"1.3\"/>",
+          "<circle cx=\"7.5\" cy=\"8\" r=\"1.3\"/>",
+          "<circle cx=\"2.5\" cy=\"13\" r=\"1.3\"/>",
+          "<circle cx=\"7.5\" cy=\"13\" r=\"1.3\"/></svg>"
+        ))
+      ),
       span(class = "blockr-otl-tile", tile),
       span(class = "blockr-otl-rname", sects$names[i]),
       span(class = "blockr-otl-sw")

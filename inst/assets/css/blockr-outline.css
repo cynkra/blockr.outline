@@ -85,8 +85,12 @@
 .blockr-otl-grow.drop-before .blockr-otl-gsect { box-shadow: 0 -2px 0 0 var(--accent, #2563eb); }
 .blockr-otl-grow.drop-after .blockr-otl-gutter,
 .blockr-otl-grow.drop-after .blockr-otl-gsect { box-shadow: 0 2px 0 0 var(--accent, #2563eb); }
-.blockr-otl-chip[draggable] { cursor: grab; }
-.blockr-otl-chip[draggable]:active { cursor: grabbing; }
+.blockr-otl-grip { position: absolute; left: -4px; top: 50%; transform: translateY(-50%);
+                   width: 12px; height: 18px; display: flex; align-items: center;
+                   justify-content: center; color: var(--blockr-grey-400, #9ca3af);
+                   opacity: 0; transition: opacity 0.12s ease; cursor: grab; }
+.blockr-otl-grip:active { cursor: grabbing; }
+.blockr-otl-chip:hover .blockr-otl-grip { opacity: 1; }
 .blockr-otl-rname-input { width: 100%; font-size: 0.75rem; border: 1px solid var(--blockr-blue-100, #dbeafe);
                           border-radius: 4px; padding: 1px 4px; outline: none; font-family: inherit; }
 
