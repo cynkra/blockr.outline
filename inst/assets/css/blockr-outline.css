@@ -93,7 +93,7 @@
                    justify-content: center; color: var(--blockr-grey-400, #9ca3af);
                    opacity: 0; transition: opacity 0.12s ease; cursor: grab; }
 .blockr-otl-grip:active { cursor: grabbing; }
-.blockr-otl-chip:hover .blockr-otl-grip { opacity: 1; }
+.blockr-otl-grow:hover .blockr-otl-grip { opacity: 1; }
 .blockr-otl-rname-input { width: 100%; font-size: 0.75rem; border: 1px solid var(--blockr-blue-100, #dbeafe);
                           border-radius: 4px; padding: 1px 4px; outline: none; font-family: inherit; }
 
@@ -185,6 +185,6 @@
                  border-radius: 4px; color: var(--blockr-grey-400, #9ca3af); cursor: pointer;
                  opacity: 0; flex-shrink: 0;
                  transition: opacity 0.15s ease, color 0.15s ease, background 0.15s ease; }
-.blockr-otl-chip:hover .blockr-otl-rm { opacity: 1; }
+.blockr-otl-grow:hover .blockr-otl-rm { opacity: 1; }
 .blockr-otl-rm:hover { color: var(--blockr-color-danger, #dc2626);
                        background: rgba(220, 53, 69, 0.08); }
