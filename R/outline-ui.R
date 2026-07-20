@@ -669,7 +669,7 @@ outline_tags <- function(sects, ns, editing = NULL) {
     prose <- if (sects$report[i] && nzchar(sects$descriptions[i])) {
       div(
         class = "blockr-otl-prose",
-        HTML(commonmark::markdown_html(sects$descriptions[i]))
+        HTML(commonmark::markdown_html(sects$descriptions[i], extensions = TRUE))
       )
     }
 
@@ -803,7 +803,7 @@ outline_tags <- function(sects, ns, editing = NULL) {
               div(
                 class = "blockr-otl-prose",
                 if (nzchar(stack_desc)) {
-                  HTML(commonmark::markdown_html(stack_desc))
+                  HTML(commonmark::markdown_html(stack_desc, extensions = TRUE))
                 } else {
                   span(
                     class = "blockr-otl-placeholder",
