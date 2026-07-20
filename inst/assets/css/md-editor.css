@@ -1,0 +1,96 @@
+/* blockr.md Milkdown document editor */
+
+.blockr-md-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.blockr-md-toolbar {
+  position: relative;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.blockr-md-ref-menu {
+  position: absolute;
+  z-index: 1060;
+  top: 100%;
+  left: 0;
+  margin-top: 2px;
+  max-height: 18rem;
+  overflow-y: auto;
+  min-width: 14rem;
+  background: var(--bs-body-bg, #fff);
+  border: 1px solid var(--bs-border-color, #dee2e6);
+  border-radius: 0.375rem;
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+  padding: 0.25rem;
+}
+
+.blockr-md-ref-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  padding: 0.3rem 0.5rem;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  font-size: 0.9em;
+}
+
+.blockr-md-ref-item:hover {
+  background: var(--bs-tertiary-bg, #f1f3f5);
+}
+
+.blockr-md-ref-empty {
+  padding: 0.3rem 0.5rem;
+  color: var(--bs-secondary-color, #6c757d);
+  font-size: 0.85em;
+}
+
+.blockr-md-editor-host {
+  border: 1px solid var(--bs-border-color, #dee2e6);
+  border-radius: 0.375rem;
+  padding: 0.5rem 0.85rem;
+  min-height: 10rem;
+  background: var(--bs-body-bg, #fff);
+}
+
+.blockr-md-editor-host .ProseMirror {
+  outline: none;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+/* Block-reference chip (the WYSIWYG view of ![](blockr://id)) */
+.blockr-md-ref-chip {
+  display: inline-block;
+  padding: 0.1em 0.5em;
+  margin: 0 0.1em;
+  border-radius: 0.5rem;
+  background: var(--bs-success-bg-subtle, #d1e7dd);
+  color: var(--bs-success-text-emphasis, #0a3622);
+  border: 1px solid var(--bs-success-border-subtle, #a3cfbb);
+  font-size: 0.9em;
+  white-space: nowrap;
+  cursor: default;
+  user-select: none;
+}
+
+.blockr-md-source {
+  font-size: 0.9em;
+}
+
+.blockr-md-source > summary {
+  cursor: pointer;
+  color: var(--bs-secondary-color, #6c757d);
+  user-select: none;
+}
+
+.blockr-md-source-ta {
+  margin-top: 0.4rem;
+  font-family: var(--bs-font-monospace, monospace);
+  font-size: 0.85em;
+}

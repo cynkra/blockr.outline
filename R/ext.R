@@ -47,6 +47,7 @@ outline_ext_ui <- function(id, board, ...) {
   div(
     class = "blockr-otl-panel",
     outline_dep(),
+    md_editor_dep(),
     div(
       class = "blockr-otl-toolbar",
       shinyWidgets::radioGroupButtons(

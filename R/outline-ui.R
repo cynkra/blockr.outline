@@ -3,7 +3,22 @@ outline_dep <- function() {
     "blockr-outline",
     pkg_version(),
     src = pkg_file("assets", "css"),
-    stylesheet = c("blockr-outline.css", "syntax-highlight.css")
+    stylesheet = c("blockr-outline.css", "syntax-highlight.css", "md-editor.css")
+  )
+}
+
+# The Milkdown WYSIWYG markdown editor, vendored from blockr.md's
+# feat/milkdown-editor prototype (commit d72f9e2; markdown stays canonical,
+# auto-inits .blockr-md-editor[data-input-id] nodes via MutationObserver,
+# debounced commit to the named Shiny input). Recorded follow-up: extract
+# it as a shared markdown-input component consumed by blockr.md, the
+# prose-block and this package, instead of three vendored copies.
+md_editor_dep <- function() {
+  htmlDependency(
+    "blockr-outline-md-editor",
+    pkg_version(),
+    src = pkg_file("js"),
+    script = "md-editor.js"
   )
 }
 
@@ -188,19 +203,25 @@ outline_tags <- function(sects, ns, editing = NULL) {
   sect_ui <- function(i) {
 
     if (identical(editing, sects$ids[i])) {
+      # Milkdown WYSIWYG editor. The bundle auto-initializes this node on
+      # insertion and writes debounced markdown to the input named in
+      # data-input-id -- the same desc_edit input the save observer reads.
+      # The element id carries a per-open nonce because the bundle keeps an
+      # instance registry keyed by id (a reused id would be skipped).
       return(
         div(
           class = "blockr-otl-sect blockr-otl-editor",
-          textAreaInput(
-            ns("desc_edit"),
-            label = NULL,
-            value = sects$descriptions[i],
-            rows = 5L,
-            width = "100%",
-            placeholder = "Block description (markdown)"
+          div(
+            id = ns(paste0(
+              "desc_milkdown_", sects$ids[i], "_",
+              format(Sys.time(), "%H%M%OS3")
+            )),
+            class = "blockr-md-editor",
+            `data-input-id` = ns("desc_edit"),
+            `data-initial` = sects$descriptions[i]
           ),
           div(
-            class = "d-flex gap-2 justify-content-end",
+            class = "d-flex gap-2 justify-content-end mt-2",
             actionButton(
               ns("desc_cancel"), "Cancel",
               class = "btn-sm btn-light"

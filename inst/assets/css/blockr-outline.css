@@ -95,3 +95,12 @@
 .blockr-otl-chip[draggable]:active { cursor: grabbing; }
 .blockr-otl-rname-input { width: 100%; font-size: 0.75rem; border: 1px solid var(--blockr-blue-100, #dbeafe);
                           border-radius: 4px; padding: 1px 4px; outline: none; font-family: inherit; }
+
+/* Milkdown editor inside a description section: hide the "+ Block" embed
+   toolbar (blockr:// chips are a blockr.md document concept; the outline's
+   render pipeline does not resolve them yet) and keep the editor compact. */
+.blockr-otl-editor .blockr-md-toolbar { display: none; }
+.blockr-otl-editor .blockr-md-editor-host { min-height: 90px; max-height: 320px; overflow-y: auto;
+                                            border: 1px solid var(--blockr-grey-200, #e5e7eb);
+                                            border-radius: 6px; padding: 6px 10px; background: #fff; }
+.blockr-otl-editor .blockr-md-editor-host .ProseMirror { outline: none; }
