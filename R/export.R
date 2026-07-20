@@ -30,9 +30,19 @@ wrap_block_expr <- function(exprs, args, types) {
   }
 
   if (length(args) && identical(types, "quoted")) {
-    call("with", args, exprs)
-  } else {
+    # The expression refers to its inputs by name, so the names have to
+    # be bound. Folding this into a pipe is blockr.code's job.
+    return(call("with", args, exprs))
+  }
+
+  # local() only earns its place around a braced block, where it keeps
+  # intermediate variables from leaking. Around a single call it is pure
+  # noise -- `data <- local(datasets::iris)` says nothing that
+  # `data <- datasets::iris` does not.
+  if (is.call(exprs) && identical(exprs[[1L]], as.name("{"))) {
     call("local", exprs)
+  } else {
+    exprs
   }
 }
 
