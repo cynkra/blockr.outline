@@ -138,8 +138,7 @@ preferred_ordering <- function(ids, board, preference = character()) {
 
 outline_sections <- function(expressions, board, annotations,
                              preference = character(),
-                             stack_annotations = list(),
-                             kinds = character()) {
+                             stack_annotations = list()) {
 
   # Only project blocks that reported an expression this flush (see the
   # defensive read in the extension server); a block mid-removal or
@@ -307,9 +306,22 @@ outline_sections <- function(expressions, board, annotations,
     icons = chr_ply(seq_along(blks), function(i) block_icon_html(blks[[i]])),
     descriptions = chr_ply(ids, function(i) ann_description(annotations, i)),
     report = lgl_ply(ids, function(i) ann_report(annotations, i)),
+    # Exhibit kind from the block's CLASS, not its result: results are
+    # gated by evaluation and visibility, so a runtime probe reads NULL
+    # for most blocks and the caption would appear only sometimes. The
+    # class is always there. A block that is neither plot nor data gets
+    # no prefix -- a wrong fig- would leave a broken cross-reference.
     kinds = vapply(
-      ids,
-      function(i) if (i %in% names(kinds)) kinds[[i]] else "",
+      blks,
+      function(b) {
+        if (inherits(b, "plot_block")) {
+          "fig"
+        } else if (inherits(b, c("data_block", "transform_block"))) {
+          "tbl"
+        } else {
+          ""
+        }
+      },
       character(1L)
     ),
     stack_ids = stack_ids,
