@@ -1,0 +1,12 @@
+README.html
+..Rcheck/
+*.Rcheck/
+docs/
+/doc/
+/Meta/
+vignettes/*.html
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+node_modules/

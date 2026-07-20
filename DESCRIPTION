@@ -13,8 +13,14 @@ Description: A dock extension that renders a blockr board as a linked
     topological sort), and rendering of the inverted document to html,
     pptx or pdf via quarto with an rmarkdown fallback. Uses only exported
     blockr.core and blockr.dock API; no forks required.
+URL: https://github.com/cynkra/blockr.outline
+BugReports: https://github.com/cynkra/blockr.outline/issues
 License: GPL (>= 3)
 Encoding: UTF-8
+Remotes:
+    BristolMyersSquibb/blockr.core,
+    BristolMyersSquibb/blockr.dock,
+    BristolMyersSquibb/blockr.dag
 Imports:
     blockr.core,
     blockr.dock,
