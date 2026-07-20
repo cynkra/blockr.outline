@@ -415,14 +415,36 @@ outline_tags <- function(sects, ns, editing = NULL) {
     grouped <- !is.na(stk_id)
     continued <- grepl("\\(continued\\)$", coal(run_labels[r], ""))
 
+    # Chapter heading row: the stack's thread (decision: document-styling
+    # variant B, revised) starts at the chapter's gutter cell and runs as
+    # ONE line down to the run's last block. Collapsed chapters show the
+    # hidden blocks' icons inline (pre-rendered, CSS-revealed).
     chapter <- if (grouped) {
-      div(
-        class = "blockr-otl-chap",
-        `data-stack` = stk_id,
-        style = paste0("--accent: ", accent, ";"),
-        span(class = "blockr-otl-chevwrap", outline_chevron()),
-        span(class = "blockr-otl-gbar"),
-        span(class = "blockr-otl-chlabel", run_labels[r])
+      tagList(
+        div(
+          class = "blockr-otl-gutter spine-start blockr-otl-chapgutter",
+          style = paste0("--accent: ", accent, ";")
+        ),
+        div(
+          class = "blockr-otl-chap",
+          `data-stack` = stk_id,
+          style = paste0("--accent: ", accent, ";"),
+          span(class = "blockr-otl-chevwrap", outline_chevron()),
+          span(class = "blockr-otl-chlabel", run_labels[r]),
+          span(
+            class = "blockr-otl-chapicons",
+            lapply(idx, function(i) {
+              span(
+                class = "blockr-otl-minitile",
+                if (is.na(sects$icons[i])) {
+                  toupper(substr(sects$names[i], 1L, 1L))
+                } else {
+                  HTML(sects$icons[i])
+                }
+              )
+            })
+          )
+        )
       )
     }
 
@@ -432,48 +454,56 @@ outline_tags <- function(sects, ns, editing = NULL) {
       ""
     }
 
+    # Chapter intro: plain body prose, exactly what quarto renders (no
+    # standfirst, no tint). The gutter cell continues the thread.
     intro <- if (grouped && !continued) {
-      if (identical(editing, paste0("stack:", stk_id))) {
+      tagList(
         div(
-          class = "blockr-otl-gsect blockr-otl-introrow",
+          class = "blockr-otl-gutter blockr-otl-introrow",
           `data-stack` = stk_id,
-          style = paste0("--accent: ", accent, ";"),
-          desc_editor_ui(ns, paste0("stack:", stk_id), stack_desc)
-        )
-      } else {
-        # Always rendered (placeholder when empty) so there is a
-        # double-click target for the chapter intro.
-        div(
-          class = "blockr-otl-gsect blockr-otl-introrow",
-          `data-stack` = stk_id,
-          style = paste0("--accent: ", accent, ";"),
+          style = paste0("--accent: ", accent, ";")
+        ),
+        if (identical(editing, paste0("stack:", stk_id))) {
           div(
-            class = "blockr-otl-prose blockr-otl-chapintro",
+            class = "blockr-otl-gsect blockr-otl-introrow",
             `data-stack` = stk_id,
-            title = "Double-click to edit the chapter intro",
-            if (nzchar(stack_desc)) {
-              HTML(commonmark::markdown_html(stack_desc))
-            } else {
-              span(
-                class = "blockr-otl-placeholder",
-                "Chapter intro (double-click to add)"
-              )
-            }
+            desc_editor_ui(ns, paste0("stack:", stk_id), stack_desc)
           )
-        )
-      }
+        } else {
+          # Always rendered (placeholder when empty) so there is a
+          # double-click target for the chapter intro.
+          div(
+            class = "blockr-otl-gsect blockr-otl-introrow",
+            `data-stack` = stk_id,
+            div(
+              class = "blockr-otl-sect blockr-otl-chapintro",
+              `data-stack` = stk_id,
+              title = "Double-click to edit the chapter intro",
+              div(
+                class = "blockr-otl-prose",
+                if (nzchar(stack_desc)) {
+                  HTML(commonmark::markdown_html(stack_desc))
+                } else {
+                  span(
+                    class = "blockr-otl-placeholder",
+                    "Chapter intro (double-click to add)"
+                  )
+                }
+              )
+            )
+          )
+        }
+      )
     }
 
     rows <- lapply(seq_along(idx), function(j) {
 
       i <- idx[j]
 
+      # The thread starts at the chapter's gutter cell, so block rows only
+      # continue it; the run's last block closes it.
       spine <- if (!grouped) {
         "nospine"
-      } else if (length(idx) == 1L) {
-        "spine-only"
-      } else if (j == 1L) {
-        "spine-start"
       } else if (j == length(idx)) {
         "spine-end"
       }
