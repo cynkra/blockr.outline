@@ -1,0 +1,444 @@
+Third-party components bundled in inst/js/md-editor.js
+=======================================================
+
+blockr.outline itself is licensed GPL (>= 3); see LICENSE.md.
+
+The file inst/js/md-editor.js is a pre-built JavaScript bundle produced by
+esbuild from srcjs/md-editor/ (see package.json, `npm run build`). It embeds
+the npm packages listed below. Their licenses are reproduced verbatim in
+inst/licenses/; all are permissive and compatible with GPL-3.
+
+This file is generated -- do not edit by hand. Regenerate with:
+
+    npm ci && npm run build:meta && npm run licenses
+
+Summary
+-------
+
+  MIT: 84 packages
+
+  Total: 84 bundled packages.
+
+Packages
+--------
+
+@milkdown/core 7.21.2
+  License: MIT
+  Source:  https://github.com/Milkdown/milkdown
+  Text:    inst/licenses/milkdown-core-MIT.txt
+
+@milkdown/ctx 7.21.2
+  License: MIT
+  Source:  https://github.com/Milkdown/milkdown
+  Text:    inst/licenses/milkdown-core-MIT.txt
+
+@milkdown/exception 7.21.2
+  License: MIT
+  Source:  https://github.com/Milkdown/milkdown
+  Text:    inst/licenses/milkdown-core-MIT.txt
+
+@milkdown/kit 7.21.2
+  License: MIT
+  Source:  https://github.com/Milkdown/milkdown
+  Text:    inst/licenses/milkdown-core-MIT.txt
+
+@milkdown/plugin-listener 7.21.2
+  License: MIT
+  Source:  https://github.com/Milkdown/milkdown
+  Text:    inst/licenses/milkdown-core-MIT.txt
+
+@milkdown/preset-commonmark 7.21.2
+  License: MIT
+  Source:  https://github.com/Milkdown/milkdown
+  Text:    inst/licenses/milkdown-core-MIT.txt
+
+@milkdown/preset-gfm 7.21.2
+  License: MIT
+  Source:  https://github.com/Milkdown/milkdown
+  Text:    inst/licenses/milkdown-core-MIT.txt
+
+@milkdown/prose 7.21.2
+  License: MIT
+  Source:  https://github.com/Milkdown/milkdown
+  Text:    inst/licenses/milkdown-core-MIT.txt
+
+@milkdown/transformer 7.21.2
+  License: MIT
+  Source:  https://github.com/Milkdown/milkdown
+  Text:    inst/licenses/milkdown-core-MIT.txt
+
+@milkdown/utils 7.21.2
+  License: MIT
+  Source:  https://github.com/Milkdown/milkdown
+  Text:    inst/licenses/milkdown-core-MIT.txt
+
+bail 2.0.2
+  License: MIT
+  Source:  wooorm/bail
+  Text:    inst/licenses/bail-MIT.txt
+
+ccount 2.0.1
+  License: MIT
+  Source:  wooorm/ccount
+  Text:    inst/licenses/bail-MIT.txt
+
+decode-named-character-reference 1.3.0
+  License: MIT
+  Source:  wooorm/decode-named-character-reference
+  Text:    inst/licenses/decode-named-character-reference-MIT.txt
+
+devlop 1.1.0
+  License: MIT
+  Source:  wooorm/devlop
+  Text:    inst/licenses/devlop-MIT.txt
+
+escape-string-regexp 5.0.0
+  License: MIT
+  Source:  sindresorhus/escape-string-regexp
+  Text:    inst/licenses/escape-string-regexp-MIT.txt
+
+extend 3.0.2
+  License: MIT
+  Source:  https://github.com/justmoon/node-extend
+  Text:    inst/licenses/extend-MIT.txt
+
+is-plain-obj 4.1.0
+  License: MIT
+  Source:  sindresorhus/is-plain-obj
+  Text:    inst/licenses/escape-string-regexp-MIT.txt
+
+lodash-es 4.18.1
+  License: MIT
+  Source:  https://lodash.com/custom-builds
+  Text:    inst/licenses/lodash-es-MIT.txt
+
+longest-streak 3.1.0
+  License: MIT
+  Source:  wooorm/longest-streak
+  Text:    inst/licenses/longest-streak-MIT.txt
+
+markdown-table 3.0.4
+  License: MIT
+  Source:  wooorm/markdown-table
+  Text:    inst/licenses/decode-named-character-reference-MIT.txt
+
+mdast-util-definitions 6.0.0
+  License: MIT
+  Source:  syntax-tree/mdast-util-definitions
+  Text:    inst/licenses/mdast-util-definitions-MIT.txt
+
+mdast-util-find-and-replace 3.0.2
+  License: MIT
+  Source:  syntax-tree/mdast-util-find-and-replace
+  Text:    inst/licenses/decode-named-character-reference-MIT.txt
+
+mdast-util-from-markdown 2.0.3
+  License: MIT
+  Source:  syntax-tree/mdast-util-from-markdown
+  Text:    inst/licenses/decode-named-character-reference-MIT.txt
+
+mdast-util-gfm 3.1.0
+  License: MIT
+  Source:  syntax-tree/mdast-util-gfm
+  Text:    inst/licenses/decode-named-character-reference-MIT.txt
+
+mdast-util-gfm-autolink-literal 2.0.1
+  License: MIT
+  Source:  syntax-tree/mdast-util-gfm-autolink-literal
+  Text:    inst/licenses/mdast-util-gfm-autolink-literal-MIT.txt
+
+mdast-util-gfm-footnote 2.1.0
+  License: MIT
+  Source:  syntax-tree/mdast-util-gfm-footnote
+  Text:    inst/licenses/decode-named-character-reference-MIT.txt
+
+mdast-util-gfm-strikethrough 2.0.0
+  License: MIT
+  Source:  syntax-tree/mdast-util-gfm-strikethrough
+  Text:    inst/licenses/mdast-util-gfm-autolink-literal-MIT.txt
+
+mdast-util-gfm-table 2.0.0
+  License: MIT
+  Source:  syntax-tree/mdast-util-gfm-table
+  Text:    inst/licenses/mdast-util-gfm-autolink-literal-MIT.txt
+
+mdast-util-gfm-task-list-item 2.0.0
+  License: MIT
+  Source:  syntax-tree/mdast-util-gfm-task-list-item
+  Text:    inst/licenses/mdast-util-gfm-autolink-literal-MIT.txt
+
+mdast-util-phrasing 4.1.0
+  License: MIT
+  Source:  syntax-tree/mdast-util-phrasing
+  Text:    inst/licenses/mdast-util-phrasing-MIT.txt
+
+mdast-util-to-markdown 2.1.2
+  License: MIT
+  Source:  syntax-tree/mdast-util-to-markdown
+  Text:    inst/licenses/decode-named-character-reference-MIT.txt
+
+mdast-util-to-string 4.0.0
+  License: MIT
+  Source:  syntax-tree/mdast-util-to-string
+  Text:    inst/licenses/bail-MIT.txt
+
+micromark 4.0.2
+  License: MIT
+  Source:  https://github.com/micromark/micromark/tree/main/packages/micromark
+  Text:    inst/licenses/decode-named-character-reference-MIT.txt
+
+micromark-core-commonmark 2.0.3
+  License: MIT
+  Source:  https://github.com/micromark/micromark/tree/main/packages/micromark-core-commonmark
+  Text:    inst/licenses/decode-named-character-reference-MIT.txt
+
+micromark-extension-gfm 3.0.0
+  License: MIT
+  Source:  micromark/micromark-extension-gfm
+  Text:    inst/licenses/mdast-util-gfm-autolink-literal-MIT.txt
+
+micromark-extension-gfm-autolink-literal 2.1.0
+  License: MIT
+  Source:  micromark/micromark-extension-gfm-autolink-literal
+  Text:    inst/licenses/mdast-util-gfm-autolink-literal-MIT.txt
+
+micromark-extension-gfm-footnote 2.1.0
+  License: MIT
+  Source:  micromark/micromark-extension-gfm-footnote
+  Text:    inst/licenses/micromark-extension-gfm-footnote-MIT.txt
+
+micromark-extension-gfm-strikethrough 2.1.0
+  License: MIT
+  Source:  micromark/micromark-extension-gfm-strikethrough
+  Text:    inst/licenses/mdast-util-gfm-autolink-literal-MIT.txt
+
+micromark-extension-gfm-table 2.1.1
+  License: MIT
+  Source:  micromark/micromark-extension-gfm-table
+  Text:    inst/licenses/decode-named-character-reference-MIT.txt
+
+micromark-extension-gfm-tagfilter 2.0.0
+  License: MIT
+  Source:  micromark/micromark-extension-gfm-tagfilter
+  Text:    inst/licenses/mdast-util-gfm-autolink-literal-MIT.txt
+
+micromark-extension-gfm-task-list-item 2.1.0
+  License: MIT
+  Source:  micromark/micromark-extension-gfm-task-list-item
+  Text:    inst/licenses/mdast-util-gfm-autolink-literal-MIT.txt
+
+micromark-factory-destination 2.0.1
+  License: MIT
+  Source:  https://github.com/micromark/micromark/tree/main/packages/micromark-factory-destination
+  Text:    inst/licenses/decode-named-character-reference-MIT.txt
+
+micromark-factory-label 2.0.1
+  License: MIT
+  Source:  https://github.com/micromark/micromark/tree/main/packages/micromark-factory-label
+  Text:    inst/licenses/decode-named-character-reference-MIT.txt
+
+micromark-factory-space 2.0.1
+  License: MIT
+  Source:  https://github.com/micromark/micromark/tree/main/packages/micromark-factory-space
+  Text:    inst/licenses/decode-named-character-reference-MIT.txt
+
+micromark-factory-title 2.0.1
+  License: MIT
+  Source:  https://github.com/micromark/micromark/tree/main/packages/micromark-factory-title
+  Text:    inst/licenses/decode-named-character-reference-MIT.txt
+
+micromark-factory-whitespace 2.0.1
+  License: MIT
+  Source:  https://github.com/micromark/micromark/tree/main/packages/micromark-factory-whitespace
+  Text:    inst/licenses/decode-named-character-reference-MIT.txt
+
+micromark-util-character 2.1.1
+  License: MIT
+  Source:  https://github.com/micromark/micromark/tree/main/packages/micromark-util-character
+  Text:    inst/licenses/decode-named-character-reference-MIT.txt
+
+micromark-util-chunked 2.0.1
+  License: MIT
+  Source:  https://github.com/micromark/micromark/tree/main/packages/micromark-util-chunked
+  Text:    inst/licenses/decode-named-character-reference-MIT.txt
+
+micromark-util-classify-character 2.0.1
+  License: MIT
+  Source:  https://github.com/micromark/micromark/tree/main/packages/micromark-util-classify-character
+  Text:    inst/licenses/decode-named-character-reference-MIT.txt
+
+micromark-util-combine-extensions 2.0.1
+  License: MIT
+  Source:  https://github.com/micromark/micromark/tree/main/packages/micromark-util-combine-extensions
+  Text:    inst/licenses/decode-named-character-reference-MIT.txt
+
+micromark-util-decode-numeric-character-reference 2.0.2
+  License: MIT
+  Source:  https://github.com/micromark/micromark/tree/main/packages/micromark-util-decode-numeric-character-reference
+  Text:    inst/licenses/decode-named-character-reference-MIT.txt
+
+micromark-util-decode-string 2.0.1
+  License: MIT
+  Source:  https://github.com/micromark/micromark/tree/main/packages/micromark-util-decode-string
+  Text:    inst/licenses/decode-named-character-reference-MIT.txt
+
+micromark-util-encode 2.0.1
+  License: MIT
+  Source:  https://github.com/micromark/micromark/tree/main/packages/micromark-util-encode
+  Text:    inst/licenses/decode-named-character-reference-MIT.txt
+
+micromark-util-html-tag-name 2.0.1
+  License: MIT
+  Source:  https://github.com/micromark/micromark/tree/main/packages/micromark-util-html-tag-name
+  Text:    inst/licenses/decode-named-character-reference-MIT.txt
+
+micromark-util-normalize-identifier 2.0.1
+  License: MIT
+  Source:  https://github.com/micromark/micromark/tree/main/packages/micromark-util-normalize-identifier
+  Text:    inst/licenses/decode-named-character-reference-MIT.txt
+
+micromark-util-resolve-all 2.0.1
+  License: MIT
+  Source:  https://github.com/micromark/micromark/tree/main/packages/micromark-util-resolve-all
+  Text:    inst/licenses/decode-named-character-reference-MIT.txt
+
+micromark-util-sanitize-uri 2.0.1
+  License: MIT
+  Source:  https://github.com/micromark/micromark/tree/main/packages/micromark-util-sanitize-uri
+  Text:    inst/licenses/decode-named-character-reference-MIT.txt
+
+micromark-util-subtokenize 2.1.0
+  License: MIT
+  Source:  https://github.com/micromark/micromark/tree/main/packages/micromark-util-subtokenize
+  Text:    inst/licenses/decode-named-character-reference-MIT.txt
+
+nanoid 5.1.16
+  License: MIT
+  Source:  ai/nanoid
+  Text:    inst/licenses/nanoid-MIT.txt
+
+orderedmap 2.1.1
+  License: MIT
+  Source:  https://github.com/marijnh/orderedmap#readme
+  Text:    inst/licenses/orderedmap-MIT.txt
+
+prosemirror-commands 1.7.1
+  License: MIT
+  Source:  git://github.com/prosemirror/prosemirror-commands
+  Text:    inst/licenses/prosemirror-commands-MIT.txt
+
+prosemirror-inputrules 1.5.1
+  License: MIT
+  Source:  git://github.com/prosemirror/prosemirror-inputrules
+  Text:    inst/licenses/prosemirror-commands-MIT.txt
+
+prosemirror-keymap 1.2.3
+  License: MIT
+  Source:  git://github.com/prosemirror/prosemirror-keymap
+  Text:    inst/licenses/prosemirror-commands-MIT.txt
+
+prosemirror-model 1.25.11
+  License: MIT
+  Source:  https://code.haverbeke.berlin/prosemirror/prosemirror-model
+  Text:    inst/licenses/prosemirror-commands-MIT.txt
+
+prosemirror-safari-ime-span 1.0.2
+  License: MIT
+  Source:  https://github.com/ocavue/prosemirror-safari-ime-span#readme
+  Text:    inst/licenses/prosemirror-safari-ime-span-MIT.txt
+
+prosemirror-schema-list 1.5.1
+  License: MIT
+  Source:  git://github.com/prosemirror/prosemirror-schema-list
+  Text:    inst/licenses/prosemirror-commands-MIT.txt
+
+prosemirror-state 1.4.4
+  License: MIT
+  Source:  git://github.com/prosemirror/prosemirror-state
+  Text:    inst/licenses/prosemirror-commands-MIT.txt
+
+prosemirror-tables 1.8.5
+  License: MIT
+  Source:  https://github.com/ProseMirror/prosemirror-tables
+  Text:    inst/licenses/prosemirror-tables-MIT.txt
+
+prosemirror-transform 1.12.0
+  License: MIT
+  Source:  git://github.com/prosemirror/prosemirror-transform
+  Text:    inst/licenses/prosemirror-commands-MIT.txt
+
+prosemirror-view 1.42.1
+  License: MIT
+  Source:  https://code.haverbeke.berlin/prosemirror/prosemirror-view
+  Text:    inst/licenses/prosemirror-commands-MIT.txt
+
+remark-gfm 4.0.1
+  License: MIT
+  Source:  remarkjs/remark-gfm
+  Text:    inst/licenses/decode-named-character-reference-MIT.txt
+
+remark-inline-links 7.0.0
+  License: MIT
+  Source:  remarkjs/remark-inline-links
+  Text:    inst/licenses/bail-MIT.txt
+
+remark-parse 11.0.0
+  License: MIT
+  Source:  https://remark.js.org
+  Text:    inst/licenses/remark-parse-MIT.txt
+
+remark-stringify 11.0.0
+  License: MIT
+  Source:  https://remark.js.org
+  Text:    inst/licenses/remark-parse-MIT.txt
+
+trough 2.2.0
+  License: MIT
+  Source:  wooorm/trough
+  Text:    inst/licenses/trough-MIT.txt
+
+unified 11.0.5
+  License: MIT
+  Source:  https://unifiedjs.com
+  Text:    inst/licenses/unified-MIT.txt
+
+unist-util-is 6.0.1
+  License: MIT
+  Source:  syntax-tree/unist-util-is
+  Text:    inst/licenses/unist-util-is-MIT.txt
+
+unist-util-stringify-position 4.0.0
+  License: MIT
+  Source:  syntax-tree/unist-util-stringify-position
+  Text:    inst/licenses/unist-util-stringify-position-MIT.txt
+
+unist-util-visit 5.1.0
+  License: MIT
+  Source:  syntax-tree/unist-util-visit
+  Text:    inst/licenses/bail-MIT.txt
+
+unist-util-visit-parents 6.0.2
+  License: MIT
+  Source:  syntax-tree/unist-util-visit-parents
+  Text:    inst/licenses/unist-util-stringify-position-MIT.txt
+
+vfile 6.0.3
+  License: MIT
+  Source:  vfile/vfile
+  Text:    inst/licenses/unified-MIT.txt
+
+vfile-message 4.0.3
+  License: MIT
+  Source:  vfile/vfile-message
+  Text:    inst/licenses/decode-named-character-reference-MIT.txt
+
+w3c-keyname 2.2.8
+  License: MIT
+  Source:  https://github.com/marijnh/w3c-keyname#readme
+  Text:    inst/licenses/orderedmap-MIT.txt
+
+zwitch 2.0.4
+  License: MIT
+  Source:  wooorm/zwitch
+  Text:    inst/licenses/unist-util-stringify-position-MIT.txt
+

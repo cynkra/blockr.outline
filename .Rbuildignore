@@ -7,3 +7,7 @@
 ^docs$
 ^doc$
 ^Meta$
+^srcjs$
+^tools$
+^node_modules$
+^package(-lock)?\.json$

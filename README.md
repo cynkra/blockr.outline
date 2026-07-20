@@ -66,11 +66,27 @@ Rscript blockr.outline/dev/example-outline.R
 
 ## Bundled JavaScript
 
-`inst/js/md-editor.js` is a pre-built [Milkdown](https://milkdown.dev) editor
-bundle (MIT) copied from
-[blockr.md](https://github.com/BristolMyersSquibb/blockr.md), where the
-`srcjs/` sources and the esbuild step live. It cannot be rebuilt from this
-repository.
+The markdown editor is a [Milkdown](https://milkdown.dev) (ProseMirror) bundle,
+vendored here in full: sources in `srcjs/md-editor/`, dependencies pinned by
+`package-lock.json`, built to `inst/js/md-editor.js`.
+
+```sh
+npm ci
+npm run build
+```
+
+The built bundle is committed, so installing the R package needs no Node
+toolchain. Rebuild only when you change `srcjs/` or bump a dependency.
+
+`LICENSE.note` lists the 84 npm packages embedded in the bundle — all MIT, all
+GPL-3 compatible — with their license texts reproduced verbatim under
+`inst/licenses/`. Both are generated from the build itself, so they cannot
+drift from what actually ships:
+
+```sh
+npm run build:meta   # build, recording which modules were bundled
+npm run licenses     # regenerate LICENSE.note + inst/licenses/
+```
 
 ## License
 

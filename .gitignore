@@ -10,3 +10,4 @@ vignettes/*.html
 .RData
 .Ruserdata
 node_modules/
+tools/meta.json
