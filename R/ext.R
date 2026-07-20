@@ -401,6 +401,28 @@ outline_ext_srv <- function(annotations, block_order, title,
           }
         )
 
+        # Remove a block through the dock's own remove action (which
+        # confirms and cleans up links / panels).
+        observeEvent(
+          input$outline_rm,
+          {
+            blk_id <- input$outline_rm$id
+            req(is.character(blk_id))
+
+            rm_act <- if (is.list(actions)) actions[["remove_block_action"]]
+
+            if (is.null(rm_act)) {
+              showNotification(
+                "Removing blocks needs the dock's remove action.",
+                type = "warning"
+              )
+              return()
+            }
+
+            rm_act(blk_id)
+          }
+        )
+
         # Reveal the block's panel in the active view, exactly like
         # clicking a dag node (focus-or-add, never switch views).
         observeEvent(

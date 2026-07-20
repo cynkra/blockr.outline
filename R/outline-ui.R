@@ -38,7 +38,7 @@ outline_js <- function(ns) {
     paste0(
       "var TOGGLE = '%s', OPEN = '%s', MOVE = '%s', EDIT = '%s', ",
       "REN = '%s', RENSTACK = '%s', SAVE = '%s', CANCEL = '%s', ",
-      "ADD = '%s';"
+      "ADD = '%s', RM = '%s';"
     ),
     ns("outline_toggle"),
     ns("outline_open"),
@@ -48,7 +48,8 @@ outline_js <- function(ns) {
     ns("outline_rename_stack"),
     ns("desc_save"),
     ns("desc_cancel"),
-    ns("outline_add")
+    ns("outline_add"),
+    ns("outline_rm")
   )
 
   tags$script(HTML(paste0(
@@ -326,6 +327,10 @@ outline_js <- function(ns) {
         if (!row) return;
         if (ev.target.closest('.blockr-otl-rname-input')) return;
         var id = row.dataset.blk;
+        if (ev.target.closest('.blockr-otl-rm')) {
+          Shiny.setInputValue(RM, {id: id}, {priority: 'event'});
+          return;
+        }
         if (ev.target.closest('.blockr-otl-sw')) {
           Shiny.setInputValue(TOGGLE, {
             id: id, report: !row.classList.contains('on')
@@ -422,6 +427,16 @@ outline_tags <- function(sects, ns, editing = NULL) {
       span(class = "blockr-otl-tile", tile),
       span(class = "blockr-otl-rname", sects$names[i]),
       span(class = "blockr-otl-sw"),
+      tags$button(
+        class = "blockr-otl-rm",
+        type = "button",
+        title = "Remove this block",
+        HTML(paste0(
+          "<svg viewBox=\"0 0 16 16\" width=\"11\" height=\"11\" fill=\"none\" ",
+          "stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\">",
+          "<path d=\"M4 4l8 8M12 4l-8 8\"/></svg>"
+        ))
+      ),
       if (sects$movable[i]) span(
         class = "blockr-otl-grip",
         draggable = "true",

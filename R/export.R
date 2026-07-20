@@ -100,7 +100,29 @@ preferred_ordering <- function(ids, board, preference = character()) {
     }
   })
 
-  pref <- c(intersect(preference, ids), setdiff(base, preference))
+  # Merge the stored order with the freshly computed base order: ids the
+  # user has never sorted (a block just added) must keep their BASE
+  # neighbourhood -- appending them to the end of the preference list
+  # would rank them last and push every new block to the end of the
+  # document, however it is wired.
+  pref <- intersect(preference, ids)
+
+  for (id in base) {
+
+    if (id %in% pref) {
+      next
+    }
+
+    before <- base[seq_len(match(id, base) - 1L)]
+    anchor <- rev(intersect(before, pref))
+
+    pref <- if (length(anchor)) {
+      append(pref, id, after = match(anchor[[1L]], pref))
+    } else {
+      c(id, pref)
+    }
+  }
+
   prank <- setNames(seq_along(pref), pref)
 
   # Pass 2: user preference as the tie-break.

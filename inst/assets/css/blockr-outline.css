@@ -176,3 +176,15 @@
                       font-size: 0.75rem; transition: color 0.15s ease; }
 .blockr-otl-addlink:hover { color: var(--blockr-blue-600, #2563eb); }
 .blockr-otl-addicon { display: inline-flex; align-items: center; }
+
+/* Remove button, blockr.dplyr row-remove style: hover-revealed x that
+   turns danger-red. Sits inside the chip, so it reserves its own space
+   consistently on every row. */
+.blockr-otl-rm { display: flex; align-items: center; justify-content: center;
+                 width: 18px; height: 18px; padding: 0; background: none; border: none;
+                 border-radius: 4px; color: var(--blockr-grey-400, #9ca3af); cursor: pointer;
+                 opacity: 0; flex-shrink: 0;
+                 transition: opacity 0.15s ease, color 0.15s ease, background 0.15s ease; }
+.blockr-otl-chip:hover .blockr-otl-rm { opacity: 1; }
+.blockr-otl-rm:hover { color: var(--blockr-color-danger, #dc2626);
+                       background: rgba(220, 53, 69, 0.08); }
