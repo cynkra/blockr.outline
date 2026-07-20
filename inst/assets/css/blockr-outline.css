@@ -164,3 +164,15 @@
 .blockr-otl-grow.drop-legal .blockr-otl-gsect {
   outline: 1px dashed color-mix(in srgb, var(--accent, #2563eb) 45%, white);
   outline-offset: 2px; border-radius: 6px; }
+
+/* Insert affordance (outline-insert-proposals.html variant A, revised):
+   revealed on the block's own hover, sitting BELOW its section, styled
+   like blockr.dplyr's add links (grey text link, primary on hover). */
+.blockr-otl-addrow { display: flex; align-items: center; min-height: 22px; padding: 2px 0 0 10px;
+                     font-size: 13px; user-select: none; color: var(--blockr-grey-400, #9ca3af);
+                     opacity: 0; transition: opacity 0.12s ease; }
+.blockr-otl-grow:hover .blockr-otl-addrow { opacity: 1; }
+.blockr-otl-addlink { display: inline-flex; align-items: center; gap: 4px; cursor: pointer;
+                      font-size: 0.75rem; transition: color 0.15s ease; }
+.blockr-otl-addlink:hover { color: var(--blockr-blue-600, #2563eb); }
+.blockr-otl-addicon { display: inline-flex; align-items: center; }

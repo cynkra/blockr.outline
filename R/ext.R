@@ -100,7 +100,7 @@ outline_ext_ui <- function(id, board, ...) {
 outline_ext_srv <- function(annotations, block_order, title,
                             stack_annotations = list()) {
 
-  function(id, board, update, session, parent, ...) {
+  function(id, board, update, session, parent, actions = NULL, ...) {
     moduleServer(
       id,
       function(input, output, session) {
@@ -374,6 +374,30 @@ outline_ext_srv <- function(annotations, block_order, title,
                 )
               )
             )
+          }
+        )
+
+        # Append after a block: hand the block id to the dock's own append
+        # action, which opens the block browser scoped to that source and
+        # commits the new block plus its link. Graph surgery beyond a
+        # straight append stays in the Workflow (dag) view.
+        observeEvent(
+          input$outline_add,
+          {
+            blk_id <- input$outline_add$id
+            req(is.character(blk_id))
+
+            append <- if (is.list(actions)) actions[["append_block_action"]]
+
+            if (is.null(append)) {
+              showNotification(
+                "Adding blocks needs the dock's append action.",
+                type = "warning"
+              )
+              return()
+            }
+
+            append(blk_id)
           }
         )
 

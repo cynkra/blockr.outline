@@ -37,7 +37,8 @@ outline_js <- function(ns) {
   consts <- sprintf(
     paste0(
       "var TOGGLE = '%s', OPEN = '%s', MOVE = '%s', EDIT = '%s', ",
-      "REN = '%s', RENSTACK = '%s', SAVE = '%s', CANCEL = '%s';"
+      "REN = '%s', RENSTACK = '%s', SAVE = '%s', CANCEL = '%s', ",
+      "ADD = '%s';"
     ),
     ns("outline_toggle"),
     ns("outline_open"),
@@ -46,7 +47,8 @@ outline_js <- function(ns) {
     ns("outline_rename"),
     ns("outline_rename_stack"),
     ns("desc_save"),
-    ns("desc_cancel")
+    ns("desc_cancel"),
+    ns("outline_add")
   )
 
   tags$script(HTML(paste0(
@@ -293,6 +295,13 @@ outline_js <- function(ns) {
         }
       });
       document.addEventListener('click', function(ev) {
+        var add = ev.target.closest && ev.target.closest('.blockr-otl-addrow');
+        if (add) {
+          Shiny.setInputValue(ADD, {
+            id: add.dataset.blk
+          }, {priority: 'event'});
+          return;
+        }
         // Clicking outside an open editor commits (text-commit
         // convention: blur applies); a pristine editor just closes.
         var ed = openEditor();
@@ -578,6 +587,26 @@ outline_tags <- function(sects, ns, editing = NULL) {
         "spine-end"
       }
 
+      # Insert affordance (decision: outline-insert-proposals.html variant
+      # A, revised -- revealed on the block's own hover and placed BELOW
+      # it, styled like blockr.dplyr's add links). Appends after this
+      # block through the dock's own append flow.
+      add_link <- div(
+        class = "blockr-otl-addrow",
+        `data-blk` = sects$ids[i],
+        span(
+          class = "blockr-otl-addlink",
+          span(class = "blockr-otl-addicon", HTML(
+            paste0(
+              "<svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" ",
+              "fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" ",
+              "stroke-linecap=\"round\"><path d=\"M8 3v10M3 8h10\"/></svg>"
+            )
+          )),
+          "Add block"
+        )
+      )
+
       div(
         class = paste(
           "blockr-otl-grow",
@@ -592,7 +621,7 @@ outline_tags <- function(sects, ns, editing = NULL) {
           class = paste("blockr-otl-gutter", spine),
           chip_ui(i)
         ),
-        div(class = "blockr-otl-gsect", sect_ui(i))
+        div(class = "blockr-otl-gsect", sect_ui(i), add_link)
       )
     })
 
