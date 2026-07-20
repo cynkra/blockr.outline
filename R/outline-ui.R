@@ -32,12 +32,72 @@ md_editor_dep <- function() {
 # document stays valid across renderUI re-renders; the script is part of
 # the static extension UI and runs once.
 outline_js <- function(ns) {
-  tags$script(HTML(sprintf(
-    "$(function() {
-      var TOGGLE = '%s', OPEN = '%s', MOVE = '%s', EDIT = '%s', REN = '%s';
-      var COLLAPSE = '%s', RENSTACK = '%s';
+  # The id constants are the only dynamic part; the body stays a plain
+  # string (sprintf caps its format at 8192 chars).
+  consts <- sprintf(
+    paste0(
+      "var TOGGLE = '%s', OPEN = '%s', MOVE = '%s', EDIT = '%s', ",
+      "REN = '%s', RENSTACK = '%s', SAVE = '%s', CANCEL = '%s';"
+    ),
+    ns("outline_toggle"),
+    ns("outline_open"),
+    ns("outline_move"),
+    ns("outline_edit"),
+    ns("outline_rename"),
+    ns("outline_rename_stack"),
+    ns("desc_save"),
+    ns("desc_cancel")
+  )
+
+  tags$script(HTML(paste0(
+    "$(function() {",
+    consts,
+    "
       var dragId = null;
       var collapseTimer = null;
+      var openTimer = null;
+      // Collapse is CLIENT-ONLY: no server round trip, no redraw. The set
+      // survives renderUI re-renders via the shiny:value re-apply below.
+      var collapsedStacks = new Set();
+      function applyCollapsed() {
+        document.querySelectorAll('.blockr-otl-chap[data-stack]')
+          .forEach(function(ch) {
+            ch.classList.toggle(
+              'collapsed', collapsedStacks.has(ch.dataset.stack)
+            );
+          });
+        document.querySelectorAll(
+          '.blockr-otl-grow[data-stack], .blockr-otl-introrow[data-stack]'
+        ).forEach(function(el) {
+          el.classList.toggle(
+            'blockr-otl-hidden', collapsedStacks.has(el.dataset.stack)
+          );
+        });
+      }
+      $(document).on('shiny:value', function(ev) {
+        if (ev.name && /outline_out$/.test(ev.name)) {
+          setTimeout(applyCollapsed, 0);
+        }
+      });
+      function fire(id) {
+        Shiny.setInputValue(id, Math.random(), {priority: 'event'});
+      }
+      function openEditor() {
+        return document.querySelector('.blockr-otl-editor');
+      }
+      // Dirty tracking: any input inside the editor shows the Enter chip.
+      document.addEventListener('input', function(ev) {
+        var ed = ev.target.closest && ev.target.closest('.blockr-otl-editor');
+        if (ed) ed.classList.add('dirty');
+      });
+      document.addEventListener('keydown', function(ev) {
+        if (ev.key !== 'Escape') return;
+        var ed = ev.target.closest && ev.target.closest('.blockr-otl-editor');
+        if (ed) {
+          ev.stopPropagation();
+          fire(CANCEL);
+        }
+      }, true);
       function inlineRename(holder, cur, commit) {
         if (holder.querySelector('input')) return;
         holder.innerHTML = '';
@@ -121,6 +181,7 @@ outline_js <- function(ns) {
         dragId = null;
       });
       document.addEventListener('dblclick', function(ev) {
+        clearTimeout(openTimer);
         var name = ev.target.closest && ev.target.closest('.blockr-otl-rname');
         if (name) {
           var row = rowOf(name);
@@ -143,24 +204,50 @@ outline_js <- function(ns) {
               stack: chap.dataset.stack, name: val
             }, {priority: 'event'});
           });
+          return;
+        }
+        if (ev.target.closest('.blockr-otl-editor')) return;
+        var intro = ev.target.closest &&
+          ev.target.closest('.blockr-otl-chapintro');
+        if (intro) {
+          Shiny.setInputValue(EDIT, {
+            id: 'stack:' + intro.dataset.stack
+          }, {priority: 'event'});
+          return;
+        }
+        var sect = ev.target.closest && ev.target.closest('.blockr-otl-sect');
+        if (sect) {
+          var row = rowOf(sect);
+          if (row) {
+            Shiny.setInputValue(EDIT, {
+              id: row.dataset.blk
+            }, {priority: 'event'});
+          }
         }
       });
       document.addEventListener('click', function(ev) {
+        // Enter chip commits the open editor.
+        if (ev.target.closest && ev.target.closest('.blockr-otl-confirm')) {
+          fire(SAVE);
+          return;
+        }
+        // Clicking outside an open editor commits (text-commit
+        // convention: blur applies); a pristine editor just closes.
+        var ed = openEditor();
+        if (ed && !ed.contains(ev.target)) {
+          fire(ed.classList.contains('dirty') ? SAVE : CANCEL);
+          return;
+        }
         var chap = ev.target.closest && ev.target.closest('.blockr-otl-chap');
         if (chap) {
           if (ev.target.closest('.blockr-otl-rname-input')) return;
-          if (ev.target.closest('.blockr-otl-chap-pencil')) {
-            Shiny.setInputValue(EDIT, {
-              id: 'stack:' + chap.dataset.stack
-            }, {priority: 'event'});
-            return;
-          }
           // Delay so a double-click (rename) can cancel the collapse.
           clearTimeout(collapseTimer);
           collapseTimer = setTimeout(function() {
-            Shiny.setInputValue(COLLAPSE, {
-              stack: chap.dataset.stack
-            }, {priority: 'event'});
+            var s = chap.dataset.stack;
+            if (collapsedStacks.has(s)) collapsedStacks.delete(s);
+            else collapsedStacks.add(s);
+            applyCollapsed();
           }, 250);
           return;
         }
@@ -174,21 +261,14 @@ outline_js <- function(ns) {
           }, {priority: 'event'});
           return;
         }
-        if (ev.target.closest('.blockr-otl-pencil')) {
-          Shiny.setInputValue(EDIT, {id: id}, {priority: 'event'});
-          return;
-        }
         if (ev.target.closest('.blockr-otl-editor')) return;
-        Shiny.setInputValue(OPEN, {id: id}, {priority: 'event'});
+        // Delay so a double-click (edit / rename) can cancel the open.
+        clearTimeout(openTimer);
+        openTimer = setTimeout(function() {
+          Shiny.setInputValue(OPEN, {id: id}, {priority: 'event'});
+        }, 250);
       });
-    });",
-    ns("outline_toggle"),
-    ns("outline_open"),
-    ns("outline_move"),
-    ns("outline_edit"),
-    ns("outline_rename"),
-    ns("outline_collapse"),
-    ns("outline_rename_stack")
+    });"
   )))
 }
 
@@ -197,7 +277,11 @@ outline_js <- function(ns) {
 # chapter rows. `editing` holds the id of the block whose description is
 # currently in edit mode (or NULL).
 # Milkdown editor block shared by block descriptions and chapter intros.
-# The element id carries a nonce because the bundle keeps an instance
+# Commit follows the text-commit convention (blockr.docs target,
+# text-commit-proposals.html): an Enter chip appears while dirty; chip
+# click or clicking outside commits, Escape cancels. No buttons, no raw
+# source view (the R script / Document views show the markdown). The
+# element id carries a nonce because the bundle keeps an instance
 # registry keyed by id (a reused id would be skipped).
 desc_editor_ui <- function(ns, key, value) {
   div(
@@ -211,21 +295,29 @@ desc_editor_ui <- function(ns, key, value) {
       `data-input-id` = ns("desc_edit"),
       `data-initial` = value
     ),
-    div(
-      class = "d-flex gap-2 justify-content-end mt-2",
-      actionButton(
-        ns("desc_cancel"), "Cancel",
-        class = "btn-sm btn-light"
-      ),
-      actionButton(
-        ns("desc_save"), "Save",
-        class = "btn-sm btn-primary"
-      )
+    tags$button(
+      class = "blockr-otl-confirm",
+      type = "button",
+      title = "Apply (or click outside); Esc discards",
+      HTML("&#9166;"),
+      "Enter"
     )
   )
 }
 
-outline_tags <- function(sects, ns, editing = NULL, collapsed = character()) {
+# Collapse chevron, blockr.viz structured-table style (html-table.R
+# section_chevron_svg): rotation is purely CSS off the chapter's
+# .collapsed class; collapsing itself is client-side only.
+outline_chevron <- function() {
+  HTML(paste0(
+    "<svg class=\"blockr-otl-chev\" viewBox=\"0 0 24 24\" fill=\"none\" ",
+    "stroke=\"currentColor\" stroke-width=\"2.4\" stroke-linecap=\"round\" ",
+    "stroke-linejoin=\"round\" aria-hidden=\"true\">",
+    "<path d=\"M6 9l6 6 6-6\"/></svg>"
+  ))
+}
+
+outline_tags <- function(sects, ns, editing = NULL) {
 
   accent_of <- function(stk_id) {
     if (is.na(stk_id) || !stk_id %in% names(sects$stack_colors)) {
@@ -303,12 +395,7 @@ outline_tags <- function(sects, ns, editing = NULL, collapsed = character()) {
 
     div(
       class = "blockr-otl-sect",
-      tags$button(
-        class = "blockr-otl-pencil",
-        type = "button",
-        title = "Edit description",
-        icon("pen")
-      ),
+      title = "Double-click to edit the description",
       if (!sects$report[i]) {
         span(
           class = "blockr-otl-offchip",
@@ -326,7 +413,6 @@ outline_tags <- function(sects, ns, editing = NULL, collapsed = character()) {
     stk_id <- sects$stack_ids[idx[1L]]
     accent <- accent_of(stk_id)
     grouped <- !is.na(stk_id)
-    is_collapsed <- grouped && stk_id %in% collapsed
     continued <- grepl("\\(continued\\)$", coal(run_labels[r], ""))
 
     chapter <- if (grouped) {
@@ -334,24 +420,9 @@ outline_tags <- function(sects, ns, editing = NULL, collapsed = character()) {
         class = "blockr-otl-chap",
         `data-stack` = stk_id,
         style = paste0("--accent: ", accent, ";"),
-        span(
-          class = "blockr-otl-caret",
-          if (is_collapsed) HTML("&#9656;") else HTML("&#9662;")
-        ),
+        span(class = "blockr-otl-chevwrap", outline_chevron()),
         span(class = "blockr-otl-gbar"),
-        span(class = "blockr-otl-chlabel", run_labels[r]),
-        if (is_collapsed) {
-          span(
-            class = "blockr-otl-collapsed-count",
-            paste(length(idx), "blocks")
-          )
-        },
-        tags$button(
-          class = "blockr-otl-pencil blockr-otl-chap-pencil",
-          type = "button",
-          title = "Edit chapter intro",
-          icon("pen")
-        )
+        span(class = "blockr-otl-chlabel", run_labels[r])
       )
     }
 
@@ -361,25 +432,36 @@ outline_tags <- function(sects, ns, editing = NULL, collapsed = character()) {
       ""
     }
 
-    intro <- if (grouped && !continued && !is_collapsed) {
+    intro <- if (grouped && !continued) {
       if (identical(editing, paste0("stack:", stk_id))) {
         div(
-          class = "blockr-otl-gsect",
+          class = "blockr-otl-gsect blockr-otl-introrow",
+          `data-stack` = stk_id,
+          style = paste0("--accent: ", accent, ";"),
           desc_editor_ui(ns, paste0("stack:", stk_id), stack_desc)
         )
-      } else if (nzchar(stack_desc)) {
+      } else {
+        # Always rendered (placeholder when empty) so there is a
+        # double-click target for the chapter intro.
         div(
-          class = "blockr-otl-gsect",
+          class = "blockr-otl-gsect blockr-otl-introrow",
+          `data-stack` = stk_id,
+          style = paste0("--accent: ", accent, ";"),
           div(
             class = "blockr-otl-prose blockr-otl-chapintro",
-            HTML(commonmark::markdown_html(stack_desc))
+            `data-stack` = stk_id,
+            title = "Double-click to edit the chapter intro",
+            if (nzchar(stack_desc)) {
+              HTML(commonmark::markdown_html(stack_desc))
+            } else {
+              span(
+                class = "blockr-otl-placeholder",
+                "Chapter intro (double-click to add)"
+              )
+            }
           )
         )
       }
-    }
-
-    if (is_collapsed) {
-      return(tagList(chapter))
     }
 
     rows <- lapply(seq_along(idx), function(j) {
@@ -402,6 +484,7 @@ outline_tags <- function(sects, ns, editing = NULL, collapsed = character()) {
           if (sects$report[i]) "on"
         ),
         `data-blk` = sects$ids[i],
+        `data-stack` = if (grouped) stk_id,
         style = paste0("--accent: ", accent, ";"),
         div(
           class = paste("blockr-otl-gutter", spine),

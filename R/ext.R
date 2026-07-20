@@ -113,8 +113,6 @@ outline_ext_srv <- function(annotations, block_order, title,
             "Board report"
         )
         editing <- reactiveVal(NULL)
-        # Session-only UI state: collapsed chapter stack ids.
-        rv_collapsed <- reactiveVal(character())
 
         # Garbage-collect annotations / order entries for removed blocks;
         # the id-keyed map must follow the board's block lifecycle.
@@ -210,9 +208,7 @@ outline_ext_srv <- function(annotations, block_order, title,
             if (identical(view, "outline")) {
               return(
                 tagList(
-                  outline_tags(
-                    sections(), session$ns, editing(), rv_collapsed()
-                  ),
+                  outline_tags(sections(), session$ns, editing()),
                   # Hidden full script so the copy button works here too.
                   tags$pre(
                     id = session$ns("code_pre"),
@@ -294,19 +290,6 @@ outline_ext_srv <- function(annotations, block_order, title,
             }
 
             editing(NULL)
-          }
-        )
-
-        observeEvent(
-          input$outline_collapse,
-          {
-            stk <- input$outline_collapse$stack
-            req(is.character(stk))
-
-            cur <- rv_collapsed()
-            rv_collapsed(
-              if (stk %in% cur) setdiff(cur, stk) else c(cur, stk)
-            )
           }
         )
 
