@@ -422,7 +422,7 @@ outline_tags <- function(sects, ns, editing = NULL) {
     chapter <- if (grouped) {
       tagList(
         div(
-          class = "blockr-otl-gutter spine-start blockr-otl-chapgutter",
+          class = "blockr-otl-gutter blockr-otl-chapgutter",
           style = paste0("--accent: ", accent, ";")
         ),
         div(

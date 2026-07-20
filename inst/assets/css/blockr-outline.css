@@ -130,10 +130,9 @@
    chapters reveal their blocks' mini icons. */
 .blockr-otl-chapgutter { padding: 24px 0 0; }
 .blockr-otl-chap { grid-column: 2; display: flex; align-items: center; gap: 8px;
-                   padding: 24px 0 2px; cursor: pointer; position: relative; }
+                   padding: 24px 0 2px 11px; cursor: pointer; position: relative; }
 .blockr-otl-chlabel { font-size: 1.1rem; font-weight: 600; letter-spacing: -0.01em;
                       color: var(--blockr-grey-900, #111827); }
-.blockr-otl-chapgutter::before { top: auto; height: 26px; bottom: 0; border-radius: 2px 2px 0 0; }
 .blockr-otl-chevwrap { position: absolute; left: -20px; bottom: 6px; top: auto; transform: none;
                        width: 16px; height: 16px; display: flex; align-items: center;
                        justify-content: center; color: var(--blockr-grey-400, #9ca3af); }
@@ -147,3 +146,10 @@
                        border: 1px solid var(--blockr-grey-200, #e5e7eb); opacity: 0.85; }
 .blockr-otl-minitile img, .blockr-otl-minitile svg { max-width: 100%; max-height: 100%; }
 .blockr-otl-chapintro { padding-top: 2px; }
+
+/* The chapter's thread segment: starts beside the title (below the
+   chapter's top padding) and runs to the cell's bottom edge, meeting the
+   intro / row cells so the line is continuous through the whole stack.
+   Collapsing hides the cells below, leaving a title-height stub. */
+.blockr-otl-chapgutter::before { top: 26px; bottom: 0; height: auto;
+                                 border-radius: 2px 2px 0 0; }
