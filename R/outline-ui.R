@@ -642,6 +642,7 @@ outline_tags <- function(sects, ns, editing = NULL) {
           style = paste0("--accent: ", accent, ";"),
           span(
             class = "blockr-otl-chapgrip",
+            draggable = "true",
             title = "Drag to move this chapter",
             HTML(paste0(
               "<svg viewBox=\"0 0 10 16\" width=\"8\" height=\"13\" ",
