@@ -251,7 +251,25 @@ outline_ext_srv <- function(annotations, block_order, title,
               envir = expr_cache
             )
 
-            out[!vapply(out, is.null, logical(1L))]
+            # A block that has not reported yet still takes its place in
+            # the document, holding a placeholder expression. Otherwise
+            # the block set grows as blocks report in (the ggplot block
+            # trails the others by about a second at startup), each
+            # arrival is a structural change, and the outline visibly
+            # redraws after its first paint. With placeholders the
+            # skeleton is complete from the first projection and the real
+            # code arrives as a push.
+            pending <- names(out)[vapply(out, is.null, logical(1L))]
+
+            for (id in pending) {
+              # NOT quote(NULL): NULL is self-evaluating, so quote(NULL)
+              # IS NULL and assigning it deletes the element instead of
+              # filling it. Any non-NULL call works -- it is never
+              # deparsed, since a pending cell renders as a placeholder.
+              out[[id]] <- quote(invisible(NULL))
+            }
+
+            structure(out, pending = pending)
           }
         )
 
@@ -336,6 +354,10 @@ outline_ext_srv <- function(annotations, block_order, title,
 
             skel <- full
             skel$code <- NULL
+            # Pending-ness only changes the code cell, so it rides with
+            # the pushed code map. In the skeleton it would redraw the
+            # outline the moment a block reports.
+            skel$pending <- NULL
 
             if (!identical(skel, isolate(skel_store()))) {
               skel_store(skel)

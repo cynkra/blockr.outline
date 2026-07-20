@@ -225,3 +225,12 @@
   border-top: 1px dashed var(--blockr-grey-300, #d1d5db); }
 .blockr-otl-grow.chap-endhot .blockr-otl-gsect::after {
   border-top: 2px solid var(--accent, #2563eb); }
+
+/* Placeholder for a block that has not reported an expression yet. */
+.blockr-otl-pending {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8125rem;
+  font-style: italic;
+  color: var(--bs-secondary-color, #6c757d);
+  opacity: 0.7;
+}

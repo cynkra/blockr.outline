@@ -153,6 +153,9 @@ outline_sections <- function(expressions, board, annotations,
   # Only project blocks that reported an expression this flush (see the
   # defensive read in the extension server); a block mid-removal or
   # mid-relink is simply absent until it recovers.
+  # Read before any subsetting: `[` drops non-standard attributes.
+  pending_ids <- coal(attr(expressions, "pending"), character())
+
   known <- intersect(blockr.core::board_block_ids(board), names(expressions))
 
   if (!length(known)) {
@@ -332,6 +335,7 @@ outline_sections <- function(expressions, board, annotations,
 
   list(
     ids = ids,
+    pending = ids %in% pending_ids,
     movable = movable,
     drop_lo = drop_lo,
     drop_hi = drop_hi,

@@ -66,16 +66,28 @@ outline_js <- function(ns) {
       // pushes the changed chunks instead of re-rendering the whole
       // outline. Keeps the DOM (and any open editor, scroll and hover
       // state) intact. Structural changes still go through renderUI.
-      Shiny.addCustomMessageHandler('blockr-outline-code', function(msg) {
-        (msg.items || []).forEach(function(it) {
-          var el = document.getElementById(it.id);
-          // A push can race a skeleton redraw that dropped the block.
-          if (el) el.innerHTML = it.html;
+      // Latest code markup per node id. Held client-side because a push
+      // can arrive before the node it targets exists: at startup the
+      // server projects again as blocks report in, and that second push
+      // can beat the first renderUI insert. Applying blind would drop it
+      // silently with nothing to re-send it, leaving cells stuck on
+      // their placeholder. Same re-apply pattern as collapsedStacks.
+      var codeById = {};
+      var scriptText = null, scriptId = null;
+      function applyCode() {
+        Object.keys(codeById).forEach(function(id) {
+          var el = document.getElementById(id);
+          if (el && el.innerHTML !== codeById[id]) el.innerHTML = codeById[id];
         });
-        if (msg.script_id) {
-          var pre = document.getElementById(msg.script_id);
-          if (pre) pre.textContent = msg.script;
+        if (scriptId) {
+          var pre = document.getElementById(scriptId);
+          if (pre && pre.textContent !== scriptText) pre.textContent = scriptText;
         }
+      }
+      Shiny.addCustomMessageHandler('blockr-outline-code', function(msg) {
+        (msg.items || []).forEach(function(it) { codeById[it.id] = it.html; });
+        if (msg.script_id) { scriptId = msg.script_id; scriptText = msg.script; }
+        applyCode();
       });
 
       var dragId = null;
@@ -102,6 +114,10 @@ outline_js <- function(ns) {
       $(document).on('shiny:value', function(ev) {
         if (ev.name && /outline_out$/.test(ev.name)) {
           setTimeout(applyCollapsed, 0);
+          // Fill in any push that landed before this render inserted its
+          // nodes. renderUI carries current code, so this is a no-op
+          // whenever the two are already in step.
+          setTimeout(applyCode, 0);
         }
       });
       function fire(id) {
@@ -495,6 +511,16 @@ outline_js <- function(ns) {
 # markup (that flip also redraws the skeleton, which is what shows the
 # prose and the include=FALSE chip).
 sect_code_html <- function(sects, i) {
+
+  # Not reported yet: hold the row with a muted placeholder rather than
+  # deparsing the stand-in expression, which would flash `x <- NULL`.
+  if (isTRUE(sects$pending[i])) {
+    return(
+      as.character(
+        div(class = "blockr-otl-pending", "Evaluating\u2026")
+      )
+    )
+  }
 
   chunk <- paste(
     c(
