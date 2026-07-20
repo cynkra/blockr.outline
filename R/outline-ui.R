@@ -81,7 +81,12 @@ outline_js <- function(ns) {
         });
         if (scriptId) {
           var pre = document.getElementById(scriptId);
-          if (pre && pre.textContent !== scriptText) pre.textContent = scriptText;
+          // Only the outline view's hidden copy buffer -- see the
+          // data-otl-buffer note in ext.R.
+          if (pre && pre.dataset.otlBuffer &&
+              pre.textContent !== scriptText) {
+            pre.textContent = scriptText;
+          }
         }
       }
       Shiny.addCustomMessageHandler('blockr-outline-code', function(msg) {

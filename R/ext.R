@@ -441,6 +441,14 @@ outline_ext_srv <- function(annotations, block_order, title,
                   # keeps this node's text current instead.
                   tags$pre(
                     id = session$ns("code_pre"),
+                    # Marks this as the outline view's buffer. The
+                    # script / Document views reuse the same id for their
+                    # VISIBLE content, and the code push would otherwise
+                    # overwrite that with plain spin text, wiping their
+                    # syntax highlighting (and showing the R script in
+                    # the Document view). Those views re-render from
+                    # spin_txt()/qmd_txt() and need no push.
+                    `data-otl-buffer` = "1",
                     style = "display: none;",
                     isolate(spin_txt())
                   )
@@ -450,9 +458,12 @@ outline_ext_srv <- function(annotations, block_order, title,
 
             txt <- if (identical(view, "qmd")) qmd_txt() else spin_txt()
 
-            hl <- if (identical(view, "script")) {
-              highlight_r_code(txt)
-            }
+            hl <- switch(
+              view,
+              script = highlight_r_code(txt),
+              qmd = highlight_qmd_code(txt),
+              NULL
+            )
 
             if (is.null(hl)) {
               tags$pre(
