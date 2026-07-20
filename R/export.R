@@ -127,11 +127,19 @@ outline_sections <- function(expressions, board, annotations,
   stks <- blockr.core::board_stacks(board)
   stack_ids <- rep(NA_character_, length(ids))
   stack_names <- rep(NA_character_, length(ids))
+  stack_colors <- character()
 
   for (stk_id in names(stks)) {
     hit <- ids %in% blockr.core::stack_blocks(stks[[stk_id]])
     stack_ids[hit] <- stk_id
     stack_names[hit] <- blockr.core::stack_name(stks[[stk_id]])
+    stack_colors[stk_id] <- coal(
+      tryCatch(
+        blockr.dock::stack_color(stks[[stk_id]]),
+        error = function(e) NULL
+      ),
+      "#2563eb"
+    )
   }
 
   list(
@@ -142,10 +150,30 @@ outline_sections <- function(expressions, board, annotations,
       collapse = "\n"
     ),
     names = chr_ply(blks, blockr.core::block_name),
+    icons = chr_ply(seq_along(blks), function(i) block_icon_html(blks[[i]])),
     descriptions = chr_ply(ids, function(i) ann_description(annotations, i)),
     report = lgl_ply(ids, function(i) ann_report(annotations, i)),
     stack_ids = stack_ids,
-    stack_names = stack_names
+    stack_names = stack_names,
+    stack_colors = stack_colors
+  )
+}
+
+# The registry icon exactly as the dock's block card shows it. The two
+# helpers are blockr.dock internals (recorded follow-up: export them);
+# resolved dynamically with a letter-tile fallback so a dock without them
+# degrades instead of breaking.
+block_icon_html <- function(blk) {
+  tryCatch(
+    {
+      meta <- utils::getFromNamespace("blks_metadata", "blockr.dock")(blk)
+      uri <- utils::getFromNamespace("blk_icon_data_uri", "blockr.dock")(
+        meta$icon, meta$color,
+        mode = "inline"
+      )
+      as.character(uri)
+    },
+    error = function(e) NA_character_
   )
 }
 

@@ -137,7 +137,7 @@ outline_ext_srv <- function(annotations, block_order, title) {
           )
         )
 
-        sections <- reactive(
+        sections_calc <- reactive(
           {
             req(length(board_exprs()) > 0L)
 
@@ -163,6 +163,28 @@ outline_ext_srv <- function(annotations, block_order, title) {
           }
         )
 
+        # Identical-skip store: board updates that do not change the
+        # projected sections (e.g. the views-delta a click-to-open commits)
+        # must not redraw the outline. The renderUI below depends on this
+        # store, never on board reactives directly.
+        sections_store <- reactiveVal(NULL)
+
+        observe(
+          {
+            new <- sections_calc()
+            if (!identical(new, isolate(sections_store()))) {
+              sections_store(new)
+            }
+          }
+        )
+
+        sections <- reactive(
+          {
+            req(!is.null(sections_store()))
+            sections_store()
+          }
+        )
+
         spin_txt <- reactive(export_spin(sections()))
         qmd_txt <- reactive(export_qmd(sections(), rv_title()))
 
@@ -173,9 +195,7 @@ outline_ext_srv <- function(annotations, block_order, title) {
             if (identical(view, "outline")) {
               return(
                 tagList(
-                  outline_tags(
-                    sections(), board$board, session$ns, editing()
-                  ),
+                  outline_tags(sections(), session$ns, editing()),
                   # Hidden full script so the copy button works here too.
                   tags$pre(
                     id = session$ns("code_pre"),
@@ -250,24 +270,55 @@ outline_ext_srv <- function(annotations, block_order, title) {
           }
         )
 
-        # Reorder: swap with the neighbour in the *displayed* order and
-        # store the whole permutation; the Kahn tie-break snaps invalid
-        # wishes back to the nearest valid order.
+        # Reorder by drag: remove the dragged id from the displayed order
+        # and reinsert before / after the drop target, storing the whole
+        # permutation; the Kahn tie-break snaps invalid wishes back to the
+        # nearest valid order.
         observeEvent(
           input$outline_move,
           {
             mv <- input$outline_move
-            req(is.character(mv$id), is.character(mv$dir))
+            req(is.character(mv$id), is.character(mv$target))
+            req(!identical(mv$id, mv$target))
 
-            disp <- sections()$ids
-            i <- match(mv$id, disp)
-            req(!is.na(i))
+            disp <- setdiff(sections()$ids, mv$id)
+            at <- match(mv$target, disp)
+            req(!is.na(at))
 
-            j <- if (identical(mv$dir, "up")) i - 1L else i + 1L
-            req(j >= 1L, j <= length(disp))
+            if (isTRUE(mv$after)) {
+              at <- at + 1L
+            }
 
-            disp[c(i, j)] <- disp[c(j, i)]
-            rv_order(disp)
+            rv_order(append(disp, mv$id, after = at - 1L))
+          }
+        )
+
+        # Rename on double-click: block_name is externally controllable on
+        # every block, so the standard blocks-mod update applies it.
+        observeEvent(
+          input$outline_rename,
+          {
+            ren <- input$outline_rename
+            req(is.character(ren$id), is.character(ren$name))
+            req(nzchar(trimws(ren$name)))
+
+            blk <- blockr.core::board_blocks(board$board)[[ren$id]]
+            req(!is.null(blk))
+
+            if (identical(blockr.core::block_name(blk), ren$name)) {
+              return()
+            }
+
+            update(
+              list(
+                blocks = list(
+                  mod = setNames(
+                    list(list(block_name = ren$name)),
+                    ren$id
+                  )
+                )
+              )
+            )
           }
         )
 
