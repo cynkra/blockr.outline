@@ -11,9 +11,73 @@
 .blockr-otl-toolbar-right { display: flex; align-items: center; gap: 8px; }
 .blockr-otl-toolbar-right .form-group,
 .blockr-otl-toolbar-right .shiny-input-container { margin-bottom: 0; }
-.blockr-otl-raw { font-size: 0.78rem; background: var(--blockr-grey-100, #f3f4f6);
-                      padding: 12px; border-radius: 6px; white-space: pre-wrap;
-                      word-break: break-word; }
+/* Code preview: ONE frame. The panel is already a card, so the old
+   grey rounded box inside it read as a box in a box. Decision record:
+   design-system/target/outline-code-preview-proposals.html (C + the
+   header). The block bleeds to the panel edges -- hence the negative
+   margins cancelling .blockr-otl-panel's padding -- and carries a sticky
+   header naming the file, with copy on the code rather than up in the
+   toolbar. */
+.blockr-otl-fileblock { margin: 4px -16px -12px; border-top: 1px solid
+                        var(--blockr-grey-200, #e5e7eb); }
+.blockr-otl-filehead { position: sticky; top: 0; z-index: 2;
+                       display: flex; align-items: center;
+                       justify-content: space-between; gap: 10px;
+                       padding: 7px 16px;
+                       background: var(--blockr-grey-100, #f3f4f6);
+                       border-bottom: 1px solid var(--blockr-grey-200, #e5e7eb); }
+.blockr-otl-filename { font-family: var(--blockr-font-mono, 'SF Mono', Consolas, monospace);
+                       font-size: 0.75rem; color: var(--blockr-grey-500, #6b7280); }
+.blockr-otl-headbtn { display: inline-flex; align-items: center; gap: 5px;
+                      font: inherit; font-size: 0.75rem; cursor: pointer;
+                      border: 1px solid transparent; border-radius: 6px;
+                      padding: 3px 8px; background: transparent;
+                      color: var(--blockr-grey-500, #6b7280); }
+.blockr-otl-headbtn:hover { background: #fff;
+                            border-color: var(--blockr-grey-200, #e5e7eb);
+                            color: var(--blockr-grey-900, #111827); }
+
+.blockr-otl-raw { font-size: 0.78rem; padding: 14px 16px;
+                      background: var(--blockr-grey-50, #f9fafb);
+                      white-space: pre-wrap; word-break: break-word; }
+/* downlit's wrapper paints its own chroma background, which on top of
+   the surface tint reads as one more nested box -- the very thing this
+   layout removes. The surface owns the tint; the wrapper only carries
+   token colors. */
+.blockr-otl-raw pre.chroma { background: none; margin: 0; padding: 0;
+                             border: 0; border-radius: 0; }
+
+/* Toolbar, matched to the proposal page: a light segmented control and
+   two small neutral buttons, replacing the default bootstrap chrome. */
+.blockr-otl-toolbar .btn-group { border: 1px solid var(--blockr-grey-200, #e5e7eb);
+                                 border-radius: 7px; overflow: hidden; }
+.blockr-otl-toolbar .btn-group > .btn.radiobtn { border: 0; border-radius: 0;
+                                 background: #fff; box-shadow: none;
+                                 font-size: 0.75rem; padding: 5px 11px;
+                                 color: var(--blockr-grey-700, #374151); }
+.blockr-otl-toolbar .btn-group > .btn.radiobtn.active,
+.blockr-otl-toolbar .btn-group > .btn.radiobtn:has(input:checked) {
+                                 background: var(--blockr-grey-100, #f3f4f6);
+                                 font-weight: 500;
+                                 color: var(--blockr-grey-900, #111827); }
+.blockr-otl-tbbtn { font: inherit; font-size: 0.75rem; cursor: pointer;
+                    border: 1px solid var(--blockr-grey-200, #e5e7eb);
+                    border-radius: 6px; padding: 4px 9px; background: #fff;
+                    color: var(--blockr-grey-700, #374151); }
+.blockr-otl-tbbtn:hover { border-color: var(--blockr-grey-300, #d1d5db);
+                          color: var(--blockr-grey-900, #111827); }
+.blockr-otl-renderbtn { border-color: #86efac; background: #f0fdf4;
+                        color: #166534; }
+.blockr-otl-renderbtn:hover { border-color: #4ade80; background: #dcfce7;
+                              color: #166534; }
+/* The file header carries copy in the raw views; only the outline view,
+   which shows no code surface, needs the toolbar's button. */
+.blockr-otl-panel.has-filehead .blockr-otl-copybtn { display: none; }
+/* Format picker, sized to sit level with the buttons beside it. */
+.blockr-otl-toolbar-right .selectize-input { min-height: 0; padding: 3px 9px;
+                    font-size: 0.75rem; border-color: var(--blockr-grey-200, #e5e7eb);
+                    border-radius: 6px; box-shadow: none;
+                    color: var(--blockr-grey-700, #374151); }
 
 .blockr-otl { display: grid; grid-template-columns: 168px 1fr; column-gap: 14px; }
 .blockr-otl-grow { display: contents; }

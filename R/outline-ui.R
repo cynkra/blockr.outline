@@ -119,6 +119,18 @@ outline_js <- function(ns) {
       $(document).on('shiny:value', function(ev) {
         if (ev.name && /outline_out$/.test(ev.name)) {
           setTimeout(applyCollapsed, 0);
+          // The raw views carry copy in their file header, so the
+          // toolbar's button would be a duplicate. Keyed off the header
+          // being present rather than off the view name, so the two can
+          // never disagree.
+          setTimeout(function() {
+            var panel = document.querySelector('.blockr-otl-panel');
+            if (panel) {
+              panel.classList.toggle(
+                'has-filehead', !!panel.querySelector('.blockr-otl-fileblock')
+              );
+            }
+          }, 0);
           // Fill in any push that landed before this render inserted its
           // nodes. renderUI carries current code, so this is a no-op
           // whenever the two are already in step.

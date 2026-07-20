@@ -75,11 +75,12 @@ outline_ext_ui <- function(id, board, ...) {
         downloadButton(
           ns("code_render"),
           "Render",
-          class = "btn-sm btn-outline-success"
+          class = "blockr-otl-tbbtn blockr-otl-renderbtn"
         ),
         tags$button(
+          id = ns("code_copy"),
           type = "button",
-          class = "btn btn-sm btn-light",
+          class = "blockr-otl-tbbtn blockr-otl-copybtn",
           title = "Copy code to clipboard",
           onclick = sprintf(
             paste0(
@@ -465,7 +466,7 @@ outline_ext_srv <- function(annotations, block_order, title,
               NULL
             )
 
-            if (is.null(hl)) {
+            body <- if (is.null(hl)) {
               tags$pre(
                 class = "blockr-otl-raw",
                 tags$code(id = session$ns("code_pre"), txt)
@@ -477,6 +478,36 @@ outline_ext_srv <- function(annotations, block_order, title,
                 HTML(hl)
               )
             }
+
+            # One frame, not two: the header replaces the nested card and
+            # names the file, which neither view stated before. Copy moves
+            # onto the code it copies; the toolbar's button hides itself
+            # while this header is on screen (see outline_js).
+            div(
+              class = "blockr-otl-fileblock",
+              div(
+                class = "blockr-otl-filehead",
+                span(
+                  class = "blockr-otl-filename",
+                  if (identical(view, "qmd")) "report.qmd" else "report.R"
+                ),
+                tags$button(
+                  type = "button",
+                  class = "blockr-otl-headbtn",
+                  title = "Copy to clipboard",
+                  onclick = sprintf(
+                    paste0(
+                      "navigator.clipboard.writeText(",
+                      "document.getElementById('%s').innerText);"
+                    ),
+                    session$ns("code_pre")
+                  ),
+                  HTML("&#10697;"),
+                  "Copy"
+                )
+              ),
+              body
+            )
           }
         )
 
