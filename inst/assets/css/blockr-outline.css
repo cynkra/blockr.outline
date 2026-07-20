@@ -99,8 +99,6 @@
                                             border-radius: 6px; padding: 6px 10px; background: #fff; }
 .blockr-otl-editor .blockr-md-editor-host .ProseMirror { outline: none; }
 
-/* chapters: collapsible, renamable, with intro prose */
-.blockr-otl-chap:hover 
 /* text-commit convention: Enter chip while dirty; no buttons, no raw
    source view (R script / Document views show the markdown). */
 .blockr-otl-editor .blockr-md-source { display: none; }

@@ -85,11 +85,23 @@ outline_js <- function(ns) {
       function openEditor() {
         return document.querySelector('.blockr-otl-editor');
       }
-      // Dirty tracking: any input inside the editor shows the Enter chip.
-      document.addEventListener('input', function(ev) {
+      // Dirty tracking: any edit inside the editor shows the Enter chip.
+      // ProseMirror handles some edits through beforeinput/transactions, so
+      // key/paste/cut are tracked alongside plain input events.
+      function markDirty(ev) {
         var ed = ev.target.closest && ev.target.closest('.blockr-otl-editor');
         if (ed) ed.classList.add('dirty');
-      });
+      }
+      document.addEventListener('input', markDirty);
+      document.addEventListener('paste', markDirty, true);
+      document.addEventListener('cut', markDirty, true);
+      document.addEventListener('keydown', function(ev) {
+        if (ev.key && (ev.key.length === 1 ||
+            ev.key === 'Backspace' || ev.key === 'Delete' ||
+            ev.key === 'Enter')) {
+          markDirty(ev);
+        }
+      }, true);
       document.addEventListener('keydown', function(ev) {
         if (ev.key !== 'Escape') return;
         var ed = ev.target.closest && ev.target.closest('.blockr-otl-editor');
