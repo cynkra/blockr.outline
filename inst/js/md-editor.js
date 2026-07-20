@@ -22276,21 +22276,6 @@
     };
     return plugin;
   }
-  function $view(type, view) {
-    const plugin = (ctx) => async () => {
-      await ctx.wait(SchemaReady);
-      const v = view(ctx);
-      if (type.type(ctx) instanceof NodeType) ctx.update(nodeViewCtx, (ps) => [...ps, [type.id, v]]);
-      else ctx.update(markViewCtx, (ps) => [...ps, [type.id, v]]);
-      plugin.view = v;
-      plugin.type = type;
-      return () => {
-        if (type.type(ctx) instanceof NodeType) ctx.update(nodeViewCtx, (ps) => ps.filter((x) => x[0] !== type.id));
-        else ctx.update(markViewCtx, (ps) => ps.filter((x) => x[0] !== type.id));
-      };
-    };
-    return plugin;
-  }
   function $ctx(value, name) {
     const slice = createSlice(value, name);
     const plugin = (ctx) => {
@@ -30020,33 +30005,9 @@
     displayName: "Listener"
   };
 
-  // srcjs/md-editor/blockref.js
-  var PREFIX = "blockr://";
-  function blockRefView(getTitle) {
-    return $view(imageSchema.node, () => (node2) => {
-      const src = node2.attrs.src || "";
-      if (src.startsWith(PREFIX)) {
-        const id2 = src.slice(PREFIX.length);
-        const dom = document.createElement("span");
-        dom.className = "blockr-md-ref-chip";
-        dom.dataset.blockId = id2;
-        dom.title = src;
-        const label = getTitle(id2) || node2.attrs.alt || id2;
-        dom.textContent = "\u25A6 " + label;
-        return { dom };
-      }
-      const img = document.createElement("img");
-      img.src = src;
-      if (node2.attrs.alt) img.alt = node2.attrs.alt;
-      if (node2.attrs.title) img.title = node2.attrs.title;
-      return { dom: img };
-    });
-  }
-  var blockRefSrc = (id2) => PREFIX + id2;
-
   // srcjs/md-editor/index.js
   var COMMIT_DELAY = 300;
-  var instances = /* @__PURE__ */ new Map();
+  var initialized = /* @__PURE__ */ new WeakSet();
   function setShinyInput(id2, value) {
     if (window.Shiny && Shiny.setInputValue) {
       Shiny.setInputValue(id2, value, { priority: "event" });
@@ -30057,8 +30018,6 @@
       this.el = el;
       this.inputId = el.dataset.inputId;
       this.markdown = el.dataset.initial || "";
-      this.blocks = [];
-      this.titles = {};
       this._applyingExternal = false;
       this._commitTimer = null;
       this.editor = null;
@@ -30067,21 +30026,6 @@
     }
     _buildDom() {
       this.el.classList.add("blockr-md-editor");
-      this.toolbar = document.createElement("div");
-      this.toolbar.className = "blockr-md-toolbar";
-      this.refBtn = document.createElement("button");
-      this.refBtn.type = "button";
-      this.refBtn.className = "btn btn-sm btn-outline-secondary";
-      this.refBtn.textContent = "+ Block";
-      this.refMenu = document.createElement("div");
-      this.refMenu.className = "blockr-md-ref-menu";
-      this.refMenu.hidden = true;
-      this.refBtn.addEventListener("click", (e) => {
-        e.preventDefault();
-        this.refMenu.hidden = !this.refMenu.hidden;
-      });
-      this.toolbar.appendChild(this.refBtn);
-      this.toolbar.appendChild(this.refMenu);
       this.editorHost = document.createElement("div");
       this.editorHost.className = "blockr-md-editor-host";
       this.details = document.createElement("details");
@@ -30095,7 +30039,6 @@
       this.textarea.addEventListener("input", () => this._onRawEdit());
       this.details.appendChild(summary);
       this.details.appendChild(this.textarea);
-      this.el.appendChild(this.toolbar);
       this.el.appendChild(this.editorHost);
       this.el.appendChild(this.details);
     }
@@ -30105,7 +30048,7 @@
         ctx.set(rootCtx, this.editorHost);
         ctx.set(defaultValueCtx, this.markdown);
         ctx.get(listenerCtx).markdownUpdated((_ctx, md) => self2._onWysiwygUpdate(md));
-      }).use(commonmark).use(gfm2).use(listener).use(blockRefView((id2) => self2.titles[id2])).create();
+      }).use(commonmark).use(gfm2).use(listener).create();
       setShinyInput(this.inputId, this.markdown);
     }
     _onWysiwygUpdate(md) {
@@ -30130,59 +30073,15 @@
         });
       }
     }
-    setMarkdown(md) {
-      if (md === this.markdown) return;
-      this.markdown = md;
-      if (this.textarea.value !== md) this.textarea.value = md;
-      this._applyToWysiwyg(md);
-    }
     _commit() {
       clearTimeout(this._commitTimer);
       this._commitTimer = setTimeout(() => setShinyInput(this.inputId, this.markdown), COMMIT_DELAY);
     }
-    setBlocks(blocks) {
-      this.blocks = blocks || [];
-      this.titles = {};
-      for (const b of this.blocks) this.titles[b.id] = b.title;
-      this._renderRefMenu();
-    }
-    _renderRefMenu() {
-      this.refMenu.innerHTML = "";
-      if (!this.blocks.length) {
-        const empty3 = document.createElement("div");
-        empty3.className = "blockr-md-ref-empty";
-        empty3.textContent = "No blocks on the board";
-        this.refMenu.appendChild(empty3);
-        return;
-      }
-      for (const b of this.blocks) {
-        const item = document.createElement("button");
-        item.type = "button";
-        item.className = "blockr-md-ref-item";
-        item.textContent = b.title || b.id;
-        item.addEventListener("click", (e) => {
-          e.preventDefault();
-          this._insertRef(b);
-          this.refMenu.hidden = true;
-        });
-        this.refMenu.appendChild(item);
-      }
-    }
-    _insertRef(b) {
-      if (!this.editor) return;
-      this.editor.action((ctx) => {
-        const view = ctx.get(editorViewCtx);
-        const type = view.state.schema.nodes.image;
-        if (!type) return;
-        const node2 = type.create({ src: blockRefSrc(b.id), alt: b.title || b.id, title: "" });
-        view.dispatch(view.state.tr.replaceSelectionWith(node2).scrollIntoView());
-        view.focus();
-      });
-    }
   };
   function initEl(el) {
-    if (!el || !el.id || instances.has(el.id)) return;
-    instances.set(el.id, new MdEditor(el));
+    if (!el || initialized.has(el)) return;
+    initialized.add(el);
+    new MdEditor(el);
   }
   function scan(root3) {
     (root3 || document).querySelectorAll(".blockr-md-editor[data-input-id]").forEach(initEl);
@@ -30199,16 +30098,6 @@
       }
     });
     mo.observe(document.body, { childList: true, subtree: true });
-    if (window.Shiny && Shiny.addCustomMessageHandler) {
-      Shiny.addCustomMessageHandler("md-set", (msg) => {
-        const inst = instances.get(msg.id);
-        if (inst) inst.setMarkdown(msg.markdown || "");
-      });
-      Shiny.addCustomMessageHandler("md-blocks", (msg) => {
-        const inst = instances.get(msg.id);
-        if (inst) inst.setBlocks(msg.blocks || []);
-      });
-    }
   }
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", register);
