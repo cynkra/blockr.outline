@@ -238,11 +238,6 @@ outline_js <- function(ns) {
         }
       });
       document.addEventListener('click', function(ev) {
-        // Enter chip commits the open editor.
-        if (ev.target.closest && ev.target.closest('.blockr-otl-confirm')) {
-          fire(SAVE);
-          return;
-        }
         // Clicking outside an open editor commits (text-commit
         // convention: blur applies); a pristine editor just closes.
         var ed = openEditor();
@@ -289,15 +284,16 @@ outline_js <- function(ns) {
 # chapter rows. `editing` holds the id of the block whose description is
 # currently in edit mode (or NULL).
 # Milkdown editor block shared by block descriptions and chapter intros.
-# Commit follows the text-commit convention (blockr.docs target,
-# text-commit-proposals.html): an Enter chip appears while dirty; chip
-# click or clicking outside commits, Escape cancels. No buttons, no raw
-# source view (the R script / Document views show the markdown). The
-# element id carries a nonce because the bundle keeps an instance
-# registry keyed by id (a reused id would be skipped).
+# Edit-mode chrome matches the inline rename inputs: a small border, no
+# wash. Clicking outside commits (blur applies, the way every text field
+# in blockr commits), Escape discards. No buttons, no raw source view
+# (the R script / Document views show the markdown). The element id
+# carries a nonce because the bundle keeps an instance registry keyed by
+# id (a reused id would be skipped).
 desc_editor_ui <- function(ns, key, value) {
   div(
     class = "blockr-otl-sect blockr-otl-editor",
+    title = "Click outside to apply; Esc discards",
     div(
       id = ns(paste0(
         "desc_milkdown_", gsub("[^a-zA-Z0-9]", "_", key), "_",
@@ -306,13 +302,6 @@ desc_editor_ui <- function(ns, key, value) {
       class = "blockr-md-editor",
       `data-input-id` = ns("desc_edit"),
       `data-initial` = value
-    ),
-    tags$button(
-      class = "blockr-otl-confirm",
-      type = "button",
-      title = "Apply (or click outside); Esc discards",
-      HTML("&#9166;"),
-      "Enter"
     )
   )
 }

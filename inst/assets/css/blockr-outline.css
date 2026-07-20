@@ -94,20 +94,11 @@
    toolbar (blockr:// chips are a blockr.md document concept; the outline's
    render pipeline does not resolve them yet) and keep the editor compact. */
 .blockr-otl-editor .blockr-md-toolbar { display: none; }
-.blockr-otl-editor .blockr-md-editor-host { min-height: 90px; max-height: 320px; overflow-y: auto;
-                                            border: 1px solid var(--blockr-grey-200, #e5e7eb);
-                                            border-radius: 6px; padding: 6px 10px; background: #fff; }
 .blockr-otl-editor .blockr-md-editor-host .ProseMirror { outline: none; }
 
 /* text-commit convention: Enter chip while dirty; no buttons, no raw
    source view (R script / Document views show the markdown). */
 .blockr-otl-editor .blockr-md-source { display: none; }
-.blockr-otl-confirm { display: none; align-items: center; gap: 3px; padding: 2px 8px; height: 24px;
-                      margin-top: 6px; background: rgba(37,99,235,0.08);
-                      border: 1px solid rgba(37,99,235,0.3); border-radius: 4px; color: #2563eb;
-                      cursor: pointer; font-size: 10px; font-weight: 500; letter-spacing: 0.02em; }
-.blockr-otl-confirm:hover { background: rgba(37,99,235,0.15); border-color: rgba(37,99,235,0.5); }
-.blockr-otl-editor.dirty .blockr-otl-confirm { display: inline-flex; }
 .blockr-otl-placeholder { color: var(--blockr-grey-400, #9ca3af); font-style: italic; }
 
 /* chapters, revised: chevron hangs LEFT of the text (titles stay aligned
@@ -151,3 +142,11 @@
    Collapsing hides the cells below, leaving a title-height stub. */
 .blockr-otl-chapgutter::before { top: 26px; bottom: 0; height: auto;
                                  border-radius: 2px 2px 0 0; }
+
+/* Edit mode, calm: no section wash, the content area gets the same small
+   border the inline rename inputs use. */
+.blockr-otl-editor, .blockr-otl-editor:hover, .blockr-otl-editor.hot {
+  background: none; border-color: transparent; cursor: default; }
+.blockr-otl-editor .blockr-md-editor-host { min-height: 60px; max-height: 320px; overflow-y: auto;
+                                            border: 1px solid var(--blockr-blue-100, #dbeafe);
+                                            border-radius: 4px; padding: 4px 8px; background: #fff; }
