@@ -113,6 +113,12 @@ outline_ext_srv <- function(annotations, block_order, title,
             "Board report"
         )
         editing <- reactiveVal(NULL)
+        # "Insert after X" intent: the id the add link was clicked on, and
+        # the block ids last seen on the board. A new block must land where
+        # the user pointed -- the topological order alone cannot know that
+        # (stack contiguity would keep the source's run together first).
+        pending_after <- reactiveVal(NULL)
+        known_ids <- reactiveVal(NULL)
 
         # Garbage-collect annotations / order entries for removed blocks;
         # the id-keyed map must follow the board's block lifecycle.
@@ -138,6 +144,34 @@ outline_ext_srv <- function(annotations, block_order, title,
             skeep <- intersect(names(sann), stk_ids)
             if (!identical(names(sann), skeep)) {
               rv_stack_ann(sann[skeep])
+            }
+
+            # Place a block that has just been added right after the block
+            # its add link was clicked on. Always a valid order: the new
+            # block is a successor of that source.
+            prev <- known_ids()
+            known_ids(ids)
+
+            src <- pending_after()
+            added <- if (is.null(prev)) character() else setdiff(ids, prev)
+
+            if (length(added) && !is.null(src) && src %in% ids) {
+
+              cur <- rv_order()
+
+              if (!length(cur)) {
+                shown <- sections_store()
+                cur <- if (is.null(shown)) prev else shown$ids
+              }
+
+              cur <- setdiff(cur, added)
+              at <- match(src, cur)
+
+              if (!is.na(at)) {
+                rv_order(append(cur, added, after = at))
+              }
+
+              pending_after(NULL)
             }
           }
         )
@@ -388,6 +422,8 @@ outline_ext_srv <- function(annotations, block_order, title,
             req(is.character(blk_id))
 
             append <- if (is.list(actions)) actions[["append_block_action"]]
+
+            pending_after(blk_id)
 
             if (is.null(append)) {
               showNotification(
