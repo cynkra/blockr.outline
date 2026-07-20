@@ -85,10 +85,12 @@
 .blockr-otl-grow.drop-before .blockr-otl-gsect { box-shadow: 0 -2px 0 0 var(--accent, #2563eb); }
 .blockr-otl-grow.drop-after .blockr-otl-gutter,
 .blockr-otl-grow.drop-after .blockr-otl-gsect { box-shadow: 0 2px 0 0 var(--accent, #2563eb); }
-.blockr-otl-grip { flex-shrink: 0; width: 14px; height: 18px; padding: 0 3px;
-                   margin-left: 2px; box-sizing: content-box; display: flex;
-                   align-items: center; justify-content: center;
-                   color: var(--blockr-grey-400, #9ca3af);
+/* Overlay grip (reorder decision, variant B): floats in the column gap
+   outside the chip, occupying NO flex space, so the switch column aligns
+   identically on movable and pinned rows. Hover-revealed, drag source. */
+.blockr-otl-grip { position: absolute; right: -16px; top: 50%; transform: translateY(-50%);
+                   width: 16px; height: 20px; display: flex; align-items: center;
+                   justify-content: center; color: var(--blockr-grey-400, #9ca3af);
                    opacity: 0; transition: opacity 0.12s ease; cursor: grab; }
 .blockr-otl-grip:active { cursor: grabbing; }
 .blockr-otl-chip:hover .blockr-otl-grip { opacity: 1; }
