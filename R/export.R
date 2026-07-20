@@ -138,7 +138,8 @@ preferred_ordering <- function(ids, board, preference = character()) {
 
 outline_sections <- function(expressions, board, annotations,
                              preference = character(),
-                             stack_annotations = list()) {
+                             stack_annotations = list(),
+                             kinds = character()) {
 
   # Only project blocks that reported an expression this flush (see the
   # defensive read in the extension server); a block mid-removal or
@@ -306,6 +307,11 @@ outline_sections <- function(expressions, board, annotations,
     icons = chr_ply(seq_along(blks), function(i) block_icon_html(blks[[i]])),
     descriptions = chr_ply(ids, function(i) ann_description(annotations, i)),
     report = lgl_ply(ids, function(i) ann_report(annotations, i)),
+    kinds = vapply(
+      ids,
+      function(i) if (i %in% names(kinds)) kinds[[i]] else "",
+      character(1L)
+    ),
     stack_ids = stack_ids,
     stack_names = stack_names,
     stack_colors = stack_colors,
@@ -399,7 +405,6 @@ export_spin <- function(sects) {
         if (length(intro)) {
           c(paste0("#' ", strsplit(intro, "\n")[[1L]]), "#' ")
         },
-        paste0("#' ## ", sects$names[i]),
         if (nzchar(desc)) paste0("#' ", strsplit(desc, "\n")[[1L]])
       )
     }
@@ -433,14 +438,30 @@ export_qmd <- function(sects, title = "Board report") {
       c(
         if (!is.na(chapters[i])) c(paste0("# ", chapters[i]), ""),
         if (length(intro)) c(intro, ""),
-        paste0("## ", sects$names[i]),
-        if (nzchar(desc)) c("", desc)
+        # No `## block name` heading: the title reaches the document as
+        # the exhibit caption below the output instead.
+        if (nzchar(desc)) desc
       )
+    }
+
+    # A block that is in the report shows its output, so it IS an
+    # exhibit: its title becomes the CAPTION (numbered, cross-
+    # referenceable) rather than a heading -- stacks head sections,
+    # blocks are exhibits. The prefix comes from the result's class;
+    # an unclassifiable result gets a bare label, since a wrong fig-
+    # prefix would leave a broken cross-reference target.
+    kind <- sects$kinds[i]
+    lbl <- gsub("[^a-zA-Z0-9_-]", "-", sects$ids[i])
+
+    cap <- if (sects$report[i] && nzchar(kind)) {
+      lbl <- paste0(kind, "-", lbl)
+      paste0("#| ", kind, "-cap: \"", gsub("\"", "'", sects$names[i]), "\"")
     }
 
     chunk <- c(
       "```{r}",
-      paste0("#| label: ", gsub("[^a-zA-Z0-9_-]", "-", sects$ids[i])),
+      paste0("#| label: ", lbl),
+      cap,
       if (!sects$report[i]) "#| include: false",
       sects$code[i],
       if (sects$report[i]) sects$ids[i],

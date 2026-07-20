@@ -216,6 +216,32 @@ outline_ext_srv <- function(annotations, block_order, title,
           }
         )
 
+        # Exhibit kind per block, from the RESULT's runtime class -- no code
+        # analysis needed. A block that is in the report shows its output,
+        # so it is an exhibit; the class only decides which kind, and an
+        # unclassifiable result gets no label prefix at all (a wrong fig-
+        # prefix would create a broken cross-reference target).
+        board_kinds <- reactive(
+          {
+            res <- blockr.core::lst_xtr(board$blocks, "server", "result")
+
+            vapply(
+              res,
+              function(r) {
+                val <- tryCatch(blockr.core::reval(r), error = function(e) NULL)
+                if (inherits(val, c("ggplot", "recordedplot", "gg"))) {
+                  "fig"
+                } else if (inherits(val, "data.frame")) {
+                  "tbl"
+                } else {
+                  ""
+                }
+              },
+              character(1L)
+            )
+          }
+        )
+
         sections_calc <- reactive(
           {
             req(length(board_exprs()) > 0L)
@@ -229,7 +255,8 @@ outline_ext_srv <- function(annotations, block_order, title,
                 board$board,
                 rv_ann(),
                 rv_order(),
-                rv_stack_ann()
+                rv_stack_ann(),
+                board_kinds()
               ),
               error = function(e) {
                 message(
