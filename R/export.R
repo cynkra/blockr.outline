@@ -143,8 +143,37 @@ outline_sections <- function(expressions, board, annotations,
     )
   }
 
+  # A block is reorderable iff it has slack in the DAG: it may pass its
+  # displayed predecessor (which must then not be an ancestor) or its
+  # successor (which must then not be a descendant). Fully pinned blocks
+  # get no drag affordance -- no valid order could move them anyway.
+  lnks <- blockr.core::board_links(board)
+  keep <- lnks$from %in% ids & lnks$to %in% ids
+  kids <- split(lnks$to[keep], factor(lnks$from[keep], levels = ids))
+
+  reaches <- function(a, b) {
+    seen <- character()
+    todo <- a
+    while (length(todo)) {
+      cur <- todo[[1L]]
+      todo <- todo[-1L]
+      if (cur %in% seen) next
+      seen <- c(seen, cur)
+      nxt <- kids[[cur]]
+      if (b %in% nxt) return(TRUE)
+      todo <- c(todo, nxt)
+    }
+    FALSE
+  }
+
+  movable <- lgl_ply(seq_along(ids), function(i) {
+    (i > 1L && !reaches(ids[i - 1L], ids[i])) ||
+      (i < length(ids) && !reaches(ids[i], ids[i + 1L]))
+  })
+
   list(
     ids = ids,
+    movable = movable,
     code = chr_ply(
       lapply(exprs, deparse),
       paste0,

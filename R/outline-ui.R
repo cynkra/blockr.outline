@@ -358,7 +358,7 @@ outline_tags <- function(sects, ns, editing = NULL) {
       span(class = "blockr-otl-tile", tile),
       span(class = "blockr-otl-rname", sects$names[i]),
       span(class = "blockr-otl-sw"),
-      span(
+      if (sects$movable[i]) span(
         class = "blockr-otl-grip",
         draggable = "true",
         title = "Drag to reorder",
