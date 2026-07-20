@@ -160,36 +160,91 @@ outline_js <- function(ns) {
         if (!row) return;
         cells(row).forEach(function(c) { if (c) c.classList.remove('hot'); });
       });
+      // Legal landing spots: the server hands each block the gap range it
+      // may occupy (after its last ancestor, before its first descendant).
+      // On dragstart every legal gap is marked, so the drag shows where it
+      // is allowed to go; illegal targets refuse the drop outright.
+      var legal = {before: new Set(), after: new Set()};
+      function rowsInOrder() {
+        return [].slice.call(
+          document.querySelectorAll('.blockr-otl-grow[data-blk]')
+        );
+      }
+      function computeLegal() {
+        legal = {before: new Set(), after: new Set()};
+        var rows = rowsInOrder();
+        var origPos = rows.findIndex(function(r) {
+          return r.dataset.blk === dragId;
+        });
+        var rest = rows.filter(function(r) { return r.dataset.blk !== dragId; });
+        var src = rows[origPos];
+        var lo = parseInt(src.dataset.droplo, 10);
+        var hi = parseInt(src.dataset.drophi, 10);
+        rest.forEach(function(r, k) {
+          // gap k = before this row, gap k+1 = after it; origPos is the
+          // no-op gap (the block's current place).
+          if (k >= lo && k <= hi && k !== origPos) {
+            legal.before.add(r.dataset.blk);
+          }
+          if (k + 1 >= lo && k + 1 <= hi && k + 1 !== origPos) {
+            legal.after.add(r.dataset.blk);
+          }
+        });
+        rest.forEach(function(r) {
+          if (legal.before.has(r.dataset.blk) || legal.after.has(r.dataset.blk)) {
+            r.classList.add('drop-legal');
+          }
+        });
+      }
+      function clearLegal() {
+        document.querySelectorAll('.blockr-otl-grow.drop-legal')
+          .forEach(function(r) { r.classList.remove('drop-legal'); });
+      }
+      function dropSide(row, ev) {
+        var r = row.querySelector('.blockr-otl-gutter').getBoundingClientRect();
+        var below = ev.clientY > r.top + r.height / 2;
+        var id = row.dataset.blk;
+        if (below && legal.after.has(id)) return 'after';
+        if (!below && legal.before.has(id)) return 'before';
+        // Fall back to the other side of the same row when only it is
+        // legal, so a near-miss still lands.
+        if (legal.after.has(id)) return 'after';
+        if (legal.before.has(id)) return 'before';
+        return null;
+      }
       document.addEventListener('dragstart', function(ev) {
         var grip = ev.target.closest && ev.target.closest('.blockr-otl-grip');
         if (!grip) return;
         dragId = rowOf(grip).dataset.blk;
         ev.dataTransfer.effectAllowed = 'move';
         ev.dataTransfer.setData('text/plain', dragId);
+        computeLegal();
       });
       document.addEventListener('dragover', function(ev) {
         var row = rowOf(ev.target);
         if (!row || !dragId) return;
-        ev.preventDefault();
         clearDrop();
-        var r = row.querySelector('.blockr-otl-gutter').getBoundingClientRect();
-        var below = ev.clientY > r.top + r.height / 2;
-        row.classList.add(below ? 'drop-after' : 'drop-before');
+        var side = dropSide(row, ev);
+        if (!side) return;
+        ev.preventDefault();
+        row.classList.add(side === 'after' ? 'drop-after' : 'drop-before');
       });
       document.addEventListener('drop', function(ev) {
         var row = rowOf(ev.target);
         clearDrop();
         if (!row || !dragId) return;
+        var side = dropSide(row, ev);
+        if (!side) return;
         ev.preventDefault();
-        var r = row.querySelector('.blockr-otl-gutter').getBoundingClientRect();
-        var below = ev.clientY > r.top + r.height / 2;
         Shiny.setInputValue(MOVE, {
-          id: dragId, target: row.dataset.blk, after: below
+          id: dragId, target: row.dataset.blk, after: side === 'after'
         }, {priority: 'event'});
         dragId = null;
+        clearLegal();
       });
       document.addEventListener('dragend', function() {
         clearDrop();
+        clearLegal();
         dragId = null;
       });
       document.addEventListener('dblclick', function(ev) {
@@ -530,6 +585,8 @@ outline_tags <- function(sects, ns, editing = NULL) {
         ),
         `data-blk` = sects$ids[i],
         `data-stack` = if (grouped) stk_id,
+        `data-droplo` = sects$drop_lo[i],
+        `data-drophi` = sects$drop_hi[i],
         style = paste0("--accent: ", accent, ";"),
         div(
           class = paste("blockr-otl-gutter", spine),

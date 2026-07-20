@@ -157,3 +157,10 @@
 .blockr-otl-editor .blockr-md-editor-host { min-height: 60px; max-height: 320px; overflow-y: auto;
                                             border: 1px solid var(--blockr-blue-100, #dbeafe);
                                             border-radius: 4px; padding: 4px 8px; background: #fff; }
+
+/* While dragging: legal landing rows get a soft dashed guide so the drag
+   shows where it may go; the hovered edge turns solid (drop-before /
+   drop-after). Illegal rows stay untouched and refuse the drop. */
+.blockr-otl-grow.drop-legal .blockr-otl-gsect {
+  outline: 1px dashed color-mix(in srgb, var(--accent, #2563eb) 45%, white);
+  outline-offset: 2px; border-radius: 6px; }

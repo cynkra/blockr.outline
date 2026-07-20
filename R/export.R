@@ -171,9 +171,31 @@ outline_sections <- function(expressions, board, annotations,
       (i < length(ids) && !reaches(ids[i], ids[i + 1L]))
   })
 
+  # Legal landing range for a drag, as gap indices over the list without
+  # the dragged block: it must land after its last ancestor and before its
+  # first descendant. Everything in between is a valid document order.
+  n <- length(ids)
+  drop_lo <- integer(n)
+  drop_hi <- integer(n)
+
+  for (i in seq_len(n)) {
+
+    rest <- ids[-i]
+    anc <- which(lgl_ply(rest, reaches, ids[i]))
+    des <- which(lgl_ply(
+      seq_along(rest),
+      function(k) reaches(ids[i], rest[k])
+    ))
+
+    drop_lo[i] <- if (length(anc)) max(anc) else 0L
+    drop_hi[i] <- if (length(des)) min(des) - 1L else length(rest)
+  }
+
   list(
     ids = ids,
     movable = movable,
+    drop_lo = drop_lo,
+    drop_hi = drop_hi,
     code = chr_ply(
       lapply(exprs, deparse),
       paste0,
