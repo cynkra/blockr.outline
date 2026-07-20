@@ -238,11 +238,65 @@ outline_sections <- function(expressions, board, annotations,
     drop_hi[i] <- if (length(des)) min(des) - 1L else length(rest)
   }
 
+  # Chapter-level slack: the same computation one level up. A run may be
+  # placed before another run only if no block in it depends on a block it
+  # would jump, and vice versa. Targets are expressed as the anchor block
+  # of the run to precede, or "__end__" for the document end.
+  run_rle <- rle(ifelse(is.na(stack_ids), "", stack_ids))
+  run_starts <- cumsum(c(1L, head(run_rle$lengths, -1L)))
+
+  chap_targets <- lapply(seq_along(run_rle$values), function(r) {
+
+    if (!nzchar(run_rle$values[r])) {
+      return(character())
+    }
+
+    idx <- seq(run_starts[r], length.out = run_rle$lengths[r])
+    unit <- ids[idx]
+    rest <- setdiff(ids, unit)
+
+    anc <- vapply(
+      rest,
+      function(b) any(vapply(unit, function(u) reaches(b, u), logical(1L))),
+      logical(1L)
+    )
+    des <- vapply(
+      rest,
+      function(b) any(vapply(unit, function(u) reaches(u, b), logical(1L))),
+      logical(1L)
+    )
+
+    lo <- if (any(anc)) max(which(anc)) else 0L
+    hi <- if (any(des)) min(which(des)) - 1L else length(rest)
+
+    # Boundaries of the remaining runs, as gap indices over `rest`.
+    rest_stacks <- stack_ids[match(rest, ids)]
+    rest_rle <- rle(ifelse(is.na(rest_stacks), "", rest_stacks))
+    rest_starts <- cumsum(c(1L, head(rest_rle$lengths, -1L)))
+
+    out <- character()
+
+    for (k in seq_along(rest_rle$values)) {
+      gap <- rest_starts[k] - 1L
+      if (gap >= lo && gap <= hi && gap != run_starts[r] - 1L) {
+        out <- c(out, rest[rest_starts[k]])
+      }
+    }
+
+    if (length(rest) >= lo && length(rest) <= hi &&
+          length(rest) != run_starts[r] - 1L) {
+      out <- c(out, "__end__")
+    }
+
+    out
+  })
+
   list(
     ids = ids,
     movable = movable,
     drop_lo = drop_lo,
     drop_hi = drop_hi,
+    chap_targets = chap_targets,
     code = chr_ply(
       lapply(exprs, deparse),
       paste0,

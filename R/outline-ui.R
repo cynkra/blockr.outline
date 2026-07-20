@@ -39,7 +39,7 @@ outline_js <- function(ns) {
       "var TOGGLE = '%s', OPEN = '%s', MOVE = '%s', EDIT = '%s', ",
       "REN = '%s', RENSTACK = '%s', SAVE = '%s', CANCEL = '%s', ",
       "ADD = '%s', RM = '%s', CHAP = '%s', NEWCHAP = '%s', ",
-      "TOSTACK = '%s';"
+      "TOSTACK = '%s', MOVECHAP = '%s';"
     ),
     ns("outline_toggle"),
     ns("outline_open"),
@@ -53,7 +53,8 @@ outline_js <- function(ns) {
     ns("outline_rm"),
     ns("outline_chapter"),
     ns("outline_newchapter"),
-    ns("outline_tostack")
+    ns("outline_tostack"),
+    ns("outline_movechap")
   )
 
   tags$script(HTML(paste0(
@@ -220,7 +221,36 @@ outline_js <- function(ns) {
         if (legal.before.has(id)) return 'before';
         return null;
       }
+      // Chapter drag: the heading's grip moves the WHOLE chapter. Only
+      // other chapter headings (and the end marker) are legal targets --
+      // a chapter cannot land inside a chapter. Legal targets come from
+      // the server as anchor block ids.
+      var dragChap = null;
       document.addEventListener('dragstart', function(ev) {
+        var cgrip = ev.target.closest &&
+          ev.target.closest('.blockr-otl-chapgrip');
+        if (cgrip) {
+          var chap = cgrip.closest('.blockr-otl-chap');
+          dragChap = {
+            stack: chap.dataset.stack,
+            anchor: chap.dataset.anchor,
+            targets: (chap.dataset.targets || '').split(',').filter(Boolean)
+          };
+          ev.dataTransfer.effectAllowed = 'move';
+          ev.dataTransfer.setData('text/plain', dragChap.stack);
+          document.querySelectorAll('.blockr-otl-chap').forEach(function(c) {
+            if (dragChap.targets.indexOf(c.dataset.anchor) > -1) {
+              c.classList.add('chap-legal');
+            }
+          });
+          if (dragChap.targets.indexOf('__end__') > -1) {
+            var rows = rowsInOrder();
+            if (rows.length) {
+              rows[rows.length - 1].classList.add('chap-endlegal');
+            }
+          }
+          return;
+        }
         var grip = ev.target.closest && ev.target.closest('.blockr-otl-grip');
         if (!grip) return;
         dragId = rowOf(grip).dataset.blk;
@@ -228,7 +258,30 @@ outline_js <- function(ns) {
         ev.dataTransfer.setData('text/plain', dragId);
         computeLegal();
       });
+      function clearChap() {
+        document.querySelectorAll('.chap-legal, .chap-hot, .chap-endlegal, ' +
+          '.chap-endhot').forEach(function(c) {
+          c.classList.remove('chap-legal', 'chap-hot', 'chap-endlegal',
+            'chap-endhot');
+        });
+      }
       document.addEventListener('dragover', function(ev) {
+        if (dragChap) {
+          var tgt = ev.target.closest &&
+            ev.target.closest('.blockr-otl-chap.chap-legal');
+          var endRow = ev.target.closest &&
+            ev.target.closest('.blockr-otl-grow.chap-endlegal');
+          document.querySelectorAll('.chap-hot, .chap-endhot')
+            .forEach(function(c) { c.classList.remove('chap-hot', 'chap-endhot'); });
+          if (tgt) {
+            ev.preventDefault();
+            tgt.classList.add('chap-hot');
+          } else if (endRow) {
+            ev.preventDefault();
+            endRow.classList.add('chap-endhot');
+          }
+          return;
+        }
         // A chapter heading is a membership target: dropping a chip on it
         // moves the block into that chapter.
         var chap = ev.target.closest && ev.target.closest('.blockr-otl-chap');
@@ -247,6 +300,21 @@ outline_js <- function(ns) {
         row.classList.add(side === 'after' ? 'drop-after' : 'drop-before');
       });
       document.addEventListener('drop', function(ev) {
+        if (dragChap) {
+          var hot = document.querySelector('.blockr-otl-chap.chap-hot');
+          var endHot = document.querySelector('.blockr-otl-grow.chap-endhot');
+          if (hot || endHot) {
+            ev.preventDefault();
+            Shiny.setInputValue(MOVECHAP, {
+              stack: dragChap.stack,
+              anchor: dragChap.anchor,
+              before: hot ? hot.dataset.anchor : '__end__'
+            }, {priority: 'event'});
+          }
+          clearChap();
+          dragChap = null;
+          return;
+        }
         var chap = ev.target.closest && ev.target.closest('.blockr-otl-chap');
         if (chap && dragId) {
           ev.preventDefault();
@@ -273,7 +341,9 @@ outline_js <- function(ns) {
       document.addEventListener('dragend', function() {
         clearDrop();
         clearLegal();
+        clearChap();
         dragId = null;
+        dragChap = null;
       });
       document.addEventListener('dblclick', function(ev) {
         clearTimeout(openTimer);
@@ -564,7 +634,24 @@ outline_tags <- function(sects, ns, editing = NULL) {
         div(
           class = "blockr-otl-chap",
           `data-stack` = stk_id,
+          `data-anchor` = sects$ids[idx[1L]],
+          `data-targets` = paste(
+            coal(sects$chap_targets[[r]], character()),
+            collapse = ","
+          ),
           style = paste0("--accent: ", accent, ";"),
+          span(
+            class = "blockr-otl-chapgrip",
+            title = "Drag to move this chapter",
+            HTML(paste0(
+              "<svg viewBox=\"0 0 10 16\" width=\"8\" height=\"13\" ",
+              "fill=\"currentColor\" aria-hidden=\"true\">",
+              "<circle cx=\"2.5\" cy=\"3\" r=\"1.3\"/><circle cx=\"7.5\" cy=\"3\" r=\"1.3\"/>",
+              "<circle cx=\"2.5\" cy=\"8\" r=\"1.3\"/><circle cx=\"7.5\" cy=\"8\" r=\"1.3\"/>",
+              "<circle cx=\"2.5\" cy=\"13\" r=\"1.3\"/><circle cx=\"7.5\" cy=\"13\" r=\"1.3\"/>",
+              "</svg>"
+            ))
+          ),
           span(class = "blockr-otl-chevwrap", outline_chevron()),
           span(class = "blockr-otl-chlabel", run_labels[r]),
           span(

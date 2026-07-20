@@ -38,7 +38,8 @@ message("Open http://127.0.0.1:", port, "/")
 
 # All-or-nothing: load_all EVERY blockr package involved (cdex-style).
 root <- "."
-deps <- c("blockr.core", "blockr.dag", "blockr.dock", "blockr.outline")
+deps <- c("dockViewR", "blockr.core", "blockr.dag", "blockr.dock",
+          "blockr.outline")
 for (d in deps) {
   pkgload::load_all(
     file.path(root, d),
@@ -66,16 +67,23 @@ board <- new_dock_board(
     from = c("data", "head", "sub", "sub"),
     to = c("head", "sub", "plot", "audit")
   ),
+  # Two chapters fed by the same subset: order between them is a real
+  # authoring choice, so the chapter grip can swap them.
   stacks = stacks(
     prep = new_dock_stack(
-      c("data", "head", "audit"),
+      c("data", "head", "sub"),
       name = "Data prep",
       color = "#2563eb"
     ),
-    analysis = new_dock_stack(
-      c("sub", "plot"),
-      name = "Analysis",
+    charts = new_dock_stack(
+      "plot",
+      name = "Charts",
       color = "#d97706"
+    ),
+    tables = new_dock_stack(
+      "audit",
+      name = "Tables",
+      color = "#7c3aed"
     )
   ),
   extensions = list(
@@ -119,12 +127,11 @@ board <- new_dock_board(
         prep = list(
           description = paste(
             "Everything the analysis consumes: the raw data and the",
-            "row restrictions. *Chapter intro from the stack description.*"
+            "row restrictions."
           )
         ),
-        analysis = list(
-          description = "The analysis set and what we plot from it."
-        )
+        charts = list(description = "What we plot from the analysis set."),
+        tables = list(description = "Numbers behind the charts.")
       ),
       title = "Iris pilot report"
     )

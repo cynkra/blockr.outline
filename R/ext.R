@@ -424,7 +424,74 @@ outline_ext_srv <- function(annotations, block_order, title,
               at <- at + 1L
             }
 
-            rv_order(append(disp, mv$id, after = at - 1L))
+            ord <- append(disp, mv$id, after = at - 1L)
+            rv_order(ord)
+
+            # Rule 1: position implies membership. The block joins the
+            # chapter surrounding where it landed -- the one above it, or
+            # the one below when it landed first. Without this a drop
+            # inside another chapter would leave a "(continued)" split
+            # nobody asked for.
+            pos <- match(mv$id, ord)
+            neighbour <- if (pos > 1L) ord[pos - 1L] else ord[pos + 1L]
+            req(!is.na(neighbour))
+
+            stks <- blockr.core::board_stacks(board$board)
+            target <- Filter(
+              function(s) neighbour %in% blockr.core::stack_blocks(stks[[s]]),
+              names(stks)
+            )
+            target <- if (length(target)) target[[1L]] else NULL
+
+            current <- Filter(
+              function(s) mv$id %in% blockr.core::stack_blocks(stks[[s]]),
+              names(stks)
+            )
+            current <- if (length(current)) current[[1L]] else NULL
+
+            if (identical(target, current)) {
+              return()
+            }
+
+            members <- list()
+
+            if (!is.null(current)) {
+              members[[current]] <- setdiff(stack_members(current), mv$id)
+            }
+
+            if (!is.null(target)) {
+              members[[target]] <- c(stack_members(target), mv$id)
+            }
+
+            commit_stacks(members)
+          }
+        )
+
+        # Chapter drag: the whole run moves as one unit, membership
+        # untouched, landing before another chapter or at the end. The
+        # legality was computed with the sections (chapter-level DAG
+        # slack), so any arriving payload is already valid.
+        observeEvent(
+          input$outline_movechap,
+          {
+            mv <- input$outline_movechap
+            req(is.character(mv$stack), is.character(mv$before))
+
+            s <- sections()
+            unit <- s$ids[!is.na(s$stack_ids) & s$stack_ids == mv$stack]
+            req(length(unit))
+
+            rest <- setdiff(s$ids, unit)
+
+            at <- if (identical(mv$before, "__end__")) {
+              length(rest)
+            } else {
+              match(mv$before, rest) - 1L
+            }
+
+            req(!is.na(at))
+
+            rv_order(append(rest, unit, after = at))
           }
         )
 
