@@ -115,6 +115,17 @@ board <- new_dock_board(
           )
         )
       ),
+      stack_annotations = list(
+        prep = list(
+          description = paste(
+            "Everything the analysis consumes: the raw data and the",
+            "row restrictions. *Chapter intro from the stack description.*"
+          )
+        ),
+        analysis = list(
+          description = "The analysis set and what we plot from it."
+        )
+      ),
       title = "Iris pilot report"
     )
   )

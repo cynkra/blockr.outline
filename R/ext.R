@@ -18,10 +18,11 @@
 new_outline_extension <- function(annotations = list(),
                                   block_order = character(),
                                   title = "Board report",
+                                  stack_annotations = list(),
                                   ...) {
 
   blockr.dock::new_dock_extension(
-    outline_ext_srv(annotations, block_order, title),
+    outline_ext_srv(annotations, block_order, title, stack_annotations),
     outline_ext_ui,
     name = "Outline",
     description = paste(
@@ -96,7 +97,8 @@ outline_ext_ui <- function(id, board, ...) {
   )
 }
 
-outline_ext_srv <- function(annotations, block_order, title) {
+outline_ext_srv <- function(annotations, block_order, title,
+                            stack_annotations = list()) {
 
   function(id, board, update, session, parent, ...) {
     moduleServer(
@@ -104,12 +106,15 @@ outline_ext_srv <- function(annotations, block_order, title) {
       function(input, output, session) {
 
         rv_ann <- reactiveVal(sanitize_annotations(annotations))
+        rv_stack_ann <- reactiveVal(sanitize_annotations(stack_annotations))
         rv_order <- reactiveVal(as.character(unlist(block_order)))
         rv_title <- reactiveVal(
           if (is.character(title) && length(title)) title[[1L]] else
             "Board report"
         )
         editing <- reactiveVal(NULL)
+        # Session-only UI state: collapsed chapter stack ids.
+        rv_collapsed <- reactiveVal(character())
 
         # Garbage-collect annotations / order entries for removed blocks;
         # the id-keyed map must follow the board's block lifecycle.
@@ -127,6 +132,14 @@ outline_ext_srv <- function(annotations, block_order, title) {
             ord <- intersect(rv_order(), ids)
             if (!identical(rv_order(), ord)) {
               rv_order(ord)
+            }
+
+            stk_ids <- names(blockr.core::board_stacks(board$board))
+
+            sann <- rv_stack_ann()
+            skeep <- intersect(names(sann), stk_ids)
+            if (!identical(names(sann), skeep)) {
+              rv_stack_ann(sann[skeep])
             }
           }
         )
@@ -150,7 +163,8 @@ outline_ext_srv <- function(annotations, block_order, title) {
                 board_exprs(),
                 board$board,
                 rv_ann(),
-                rv_order()
+                rv_order(),
+                rv_stack_ann()
               ),
               error = function(e) {
                 message(
@@ -196,7 +210,9 @@ outline_ext_srv <- function(annotations, block_order, title) {
             if (identical(view, "outline")) {
               return(
                 tagList(
-                  outline_tags(sections(), session$ns, editing()),
+                  outline_tags(
+                    sections(), session$ns, editing(), rv_collapsed()
+                  ),
                   # Hidden full script so the copy button works here too.
                   tags$pre(
                     id = session$ns("code_pre"),
@@ -259,15 +275,70 @@ outline_ext_srv <- function(annotations, block_order, title) {
         observeEvent(
           input$desc_save,
           {
-            blk_id <- editing()
-            req(is.character(blk_id))
+            key <- editing()
+            req(is.character(key))
 
-            ann <- rv_ann()
-            entry <- coal(ann[[blk_id]], list())
-            entry$description <- coal(input$desc_edit, "")
-            ann[[blk_id]] <- entry
-            rv_ann(ann)
+            if (startsWith(key, "stack:")) {
+              stk_id <- sub("^stack:", "", key)
+              sann <- rv_stack_ann()
+              entry <- coal(sann[[stk_id]], list())
+              entry$description <- coal(input$desc_edit, "")
+              sann[[stk_id]] <- entry
+              rv_stack_ann(sann)
+            } else {
+              ann <- rv_ann()
+              entry <- coal(ann[[key]], list())
+              entry$description <- coal(input$desc_edit, "")
+              ann[[key]] <- entry
+              rv_ann(ann)
+            }
+
             editing(NULL)
+          }
+        )
+
+        observeEvent(
+          input$outline_collapse,
+          {
+            stk <- input$outline_collapse$stack
+            req(is.character(stk))
+
+            cur <- rv_collapsed()
+            rv_collapsed(
+              if (stk %in% cur) setdiff(cur, stk) else c(cur, stk)
+            )
+          }
+        )
+
+        # Rename a stack: name is a stack ctor argument, so the standard
+        # stacks-mod update rebuilds it with the new name.
+        observeEvent(
+          input$outline_rename_stack,
+          {
+            ren <- input$outline_rename_stack
+            req(is.character(ren$stack), is.character(ren$name))
+            req(nzchar(trimws(ren$name)))
+
+            stks <- blockr.core::board_stacks(board$board)
+            req(ren$stack %in% names(stks))
+
+            if (identical(
+              blockr.core::stack_name(stks[[ren$stack]]),
+              ren$name
+            )) {
+              return()
+            }
+
+            update(
+              list(
+                stacks = list(
+                  mod = setNames(
+                    list(list(name = ren$name)),
+                    ren$stack
+                  )
+                )
+              )
+            )
           }
         )
 
@@ -375,7 +446,8 @@ outline_ext_srv <- function(annotations, block_order, title) {
           state = list(
             annotations = rv_ann,
             block_order = rv_order,
-            title = rv_title
+            title = rv_title,
+            stack_annotations = rv_stack_ann
           )
         )
       }

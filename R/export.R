@@ -110,7 +110,8 @@ preferred_ordering <- function(ids, board, preference = character()) {
 }
 
 outline_sections <- function(expressions, board, annotations,
-                             preference = character()) {
+                             preference = character(),
+                             stack_annotations = list()) {
 
   exported <- blockr.core::export_code(expressions, board)
 
@@ -155,7 +156,12 @@ outline_sections <- function(expressions, board, annotations,
     report = lgl_ply(ids, function(i) ann_report(annotations, i)),
     stack_ids = stack_ids,
     stack_names = stack_names,
-    stack_colors = stack_colors
+    stack_colors = stack_colors,
+    stack_descriptions = vapply(
+      setNames(nm = names(stks)),
+      function(s) ann_description(stack_annotations, s),
+      character(1L)
+    )
   )
 }
 
@@ -210,6 +216,23 @@ section_chapters <- function(sects) {
   out
 }
 
+# Chapter intro: the stack's own description, emitted under the first
+# (non-continued) heading of that stack.
+chapter_intro <- function(sects, chapters, i) {
+
+  if (is.na(chapters[i]) || grepl("\\(continued\\)$", chapters[i])) {
+    return(character())
+  }
+
+  desc <- coal(sects$stack_descriptions[[sects$stack_ids[i]]], "")
+
+  if (!nzchar(desc)) {
+    return(character())
+  }
+
+  desc
+}
+
 export_spin <- function(sects) {
 
   chapters <- section_chapters(sects)
@@ -218,8 +241,12 @@ export_spin <- function(sects) {
 
     prose <- if (sects$report[i]) {
       desc <- sects$descriptions[i]
+      intro <- chapter_intro(sects, chapters, i)
       c(
         if (!is.na(chapters[i])) paste0("#' # ", chapters[i]),
+        if (length(intro)) {
+          c(paste0("#' ", strsplit(intro, "\n")[[1L]]), "#' ")
+        },
         paste0("#' ## ", sects$names[i]),
         if (nzchar(desc)) paste0("#' ", strsplit(desc, "\n")[[1L]])
       )
@@ -250,8 +277,10 @@ export_qmd <- function(sects, title = "Board report") {
 
     prose <- if (sects$report[i]) {
       desc <- sects$descriptions[i]
+      intro <- chapter_intro(sects, chapters, i)
       c(
         if (!is.na(chapters[i])) c(paste0("# ", chapters[i]), ""),
+        if (length(intro)) c(intro, ""),
         paste0("## ", sects$names[i]),
         if (nzchar(desc)) c("", desc)
       )

@@ -104,3 +104,17 @@
                                             border: 1px solid var(--blockr-grey-200, #e5e7eb);
                                             border-radius: 6px; padding: 6px 10px; background: #fff; }
 .blockr-otl-editor .blockr-md-editor-host .ProseMirror { outline: none; }
+
+/* chapters: collapsible, renamable, with intro prose */
+.blockr-otl-chap { cursor: pointer; position: relative; padding-right: 26px; }
+.blockr-otl-caret { font-size: 10px; color: var(--blockr-grey-400, #9ca3af); width: 12px;
+                    flex-shrink: 0; text-align: center; }
+.blockr-otl-collapsed-count { font-size: 10px; color: var(--blockr-grey-400, #9ca3af);
+                              background: var(--blockr-grey-100, #f3f4f6); border-radius: 999px;
+                              padding: 0 7px; }
+.blockr-otl-chap-pencil { top: 50%; transform: translateY(-40%); }
+.blockr-otl-chap:hover .blockr-otl-chap-pencil { opacity: 1; }
+.blockr-otl-chapintro { padding: 2px 10px 6px; border-left: 3px solid
+                        color-mix(in srgb, var(--accent, #2563eb) 30%, white);
+                        margin: 0 0 4px 0; border-radius: 0 6px 6px 0;
+                        background: color-mix(in srgb, var(--accent, #2563eb) 4%, white); }
