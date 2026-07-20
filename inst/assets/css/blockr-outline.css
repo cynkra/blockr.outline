@@ -202,16 +202,26 @@
 .blockr-otl-newchap { margin-left: 14px; }
 
 /* chapter drag: grip on the heading, headings as landing targets */
-.blockr-otl-chapgrip { position: absolute; left: -34px; top: 50%; transform: translateY(-50%);
-                       width: 14px; height: 18px; display: flex; align-items: center;
-                       justify-content: center; color: var(--blockr-grey-400, #9ca3af);
-                       opacity: 0; transition: opacity .12s ease; cursor: grab; }
+.blockr-otl-chapgrip { position: absolute; left: -38px; bottom: 5px; width: 14px; height: 16px;
+                       display: flex; align-items: center; justify-content: center;
+                       color: var(--blockr-grey-300, #d1d5db);
+                       opacity: 0; transition: opacity .12s ease, color .12s ease;
+                       cursor: grab; }
+.blockr-otl-chapgrip:hover { color: var(--blockr-grey-500, #6b7280); }
 .blockr-otl-chapgrip:active { cursor: grabbing; }
 .blockr-otl-chap:hover .blockr-otl-chapgrip { opacity: 1; }
-.blockr-otl-chap.chap-legal { outline: 1px dashed color-mix(in srgb, var(--accent) 45%, white);
-                              outline-offset: 3px; border-radius: 6px; }
-.blockr-otl-chap.chap-hot { background: color-mix(in srgb, var(--accent) 9%, white);
-                            box-shadow: 0 -2px 0 0 var(--accent); border-radius: 6px; }
-.blockr-otl-grow.chap-endlegal .blockr-otl-gsect { outline: 1px dashed var(--blockr-grey-300);
-                                                   outline-offset: 3px; border-radius: 6px; }
-.blockr-otl-grow.chap-endhot .blockr-otl-gsect { box-shadow: 0 3px 0 0 var(--accent, #2563eb); }
+.blockr-otl-chap.chap-legal::before,
+.blockr-otl-chap.chap-hot::before { content: ""; position: absolute; left: -166px; right: 0;
+                                    top: 6px; pointer-events: none; }
+.blockr-otl-chap.chap-legal::before { border-top: 1px dashed var(--blockr-grey-300, #d1d5db); }
+.blockr-otl-chap.chap-hot::before { border-top: 2px solid var(--accent); }
+.blockr-otl-grow.chap-endlegal .blockr-otl-gsect,
+.blockr-otl-grow.chap-endhot .blockr-otl-gsect { position: relative; }
+.blockr-otl-grow.chap-endlegal .blockr-otl-gsect::after,
+.blockr-otl-grow.chap-endhot .blockr-otl-gsect::after { content: ""; position: absolute;
+                                                       left: -166px; right: 0; bottom: -5px;
+                                                       pointer-events: none; }
+.blockr-otl-grow.chap-endlegal .blockr-otl-gsect::after {
+  border-top: 1px dashed var(--blockr-grey-300, #d1d5db); }
+.blockr-otl-grow.chap-endhot .blockr-otl-gsect::after {
+  border-top: 2px solid var(--accent, #2563eb); }
