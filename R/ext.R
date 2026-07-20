@@ -639,12 +639,18 @@ outline_ext_srv <- function(annotations, block_order, title,
               error = function(e) "#6b7280"
             )
 
-            # One payload: the detach (mod / rm of the old stack) and the
-            # new stack must land in the same update, or the intermediate
-            # state violates "a block sits in at most one stack" and two
-            # separate updates in one flush do not compose.
+            # Two updates, one flush apart. Core validates `add` against
+            # the CURRENT board, so a combined payload still sees the
+            # blocks in their old stack ("Blocks cannot be in multiple
+            # stacks at the same time") -- the detach has to be committed
+            # before the new stack is offered. Same onFlushed sequencing
+            # the dock's own add-stack action uses.
             payload <- list(
-              add = blockr.core::stacks(
+              # stacks() takes the stacks as `...`, one named argument per
+              # stack -- passing a single list makes one malformed entry,
+              # which the update path then drops without a word.
+              add = do.call(
+                blockr.core::stacks,
                 setNames(
                   list(
                     blockr.dock::new_dock_stack(
@@ -658,18 +664,25 @@ outline_ext_srv <- function(annotations, block_order, title,
               )
             )
 
-            if (length(keep)) {
-
-              stk_id <- names(keep)[[1L]]
-
-              if (length(keep[[1L]])) {
-                payload$mod <- setNames(list(list(blocks = keep[[1L]])), stk_id)
-              } else {
-                payload$rm <- stk_id
-              }
+            if (!length(keep)) {
+              update(list(stacks = payload))
+              return()
             }
 
-            update(list(stacks = payload))
+            stk_id <- names(keep)[[1L]]
+
+            detach <- if (length(keep[[1L]])) {
+              list(mod = setNames(list(list(blocks = keep[[1L]])), stk_id))
+            } else {
+              list(rm = stk_id)
+            }
+
+            update(list(stacks = detach))
+
+            session$onFlushed(
+              function() isolate(update(list(stacks = payload))),
+              once = TRUE
+            )
           }
         )
 

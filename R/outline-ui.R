@@ -773,19 +773,21 @@ outline_tags <- function(sects, ns, editing = NULL) {
           )),
           "Add block"
         ),
-        # WITHHELD: "New chapter" (the create half of section management).
-        # The server handler is in place, but a `stacks add` payload sent
-        # from an extension is silently ignored by the dock's update path,
-        # so the gesture only detached the block from its old chapter --
-        # a half-applied action. Re-enable once the add path is understood
-        # (see 6-outline-extension.md, open items).
-        if (FALSE) {
-          span(
-            class = "blockr-otl-addlink blockr-otl-newchap",
-            title = "Start a new chapter at this block",
-            "New chapter"
-          )
-        }
+        # Sections are defined by where they START, so the create gesture
+        # lives on a block, styled exactly like "Add block": this block
+        # and the rest of its run become a new chapter.
+        span(
+          class = "blockr-otl-addlink blockr-otl-newchap",
+          title = "Start a new chapter at this block",
+          span(class = "blockr-otl-addicon", HTML(
+            paste0(
+              "<svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" ",
+              "fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" ",
+              "stroke-linecap=\"round\"><path d=\"M8 3v10M3 8h10\"/></svg>"
+            )
+          )),
+          "New chapter"
+        )
       )
 
       div(
