@@ -39,7 +39,7 @@ message("Open http://127.0.0.1:", port, "/")
 # All-or-nothing: load_all EVERY blockr package involved (cdex-style).
 root <- "."
 deps <- c("dockViewR", "blockr.core", "blockr.dag", "blockr.dock",
-          "blockr.outline")
+          "blockr.dplyr", "blockr.ggplot", "blockr.outline")
 for (d in deps) {
   pkgload::load_all(
     file.path(root, d),
@@ -50,11 +50,35 @@ for (d in deps) {
 board <- new_dock_board(
   blocks = c(
     data = new_dataset_block("iris", block_name = "Iris data"),
-    head = new_head_block(n = 50L, block_name = "First 50 rows"),
-    sub = new_head_block(n = 25L, block_name = "Analysis subset"),
-    plot = new_scatter_block(
+    filt = blockr.dplyr::new_filter_block(
+      conditions = list(
+        list(
+          type = "values",
+          column = "Species",
+          values = list("setosa", "versicolor"),
+          mode = "include"
+        )
+      ),
+      block_name = "Two species"
+    ),
+    mut = blockr.dplyr::new_mutate_block(
+      mutations = list(
+        list(name = "ratio", expr = "Sepal.Length / Sepal.Width")
+      ),
+      block_name = "Sepal ratio"
+    ),
+    summ = blockr.dplyr::new_summarize_block(
+      summaries = list(
+        list(type = "simple", name = "avg_ratio", func = "mean", col = "ratio")
+      ),
+      by = list("Species"),
+      block_name = "Ratio by species"
+    ),
+    plot = blockr.ggplot::new_ggplot_block(
+      type = "point",
       x = "Sepal.Length",
       y = "Sepal.Width",
+      color = "Species",
       block_name = "Sepal scatter"
     ),
     audit = new_head_block(
@@ -64,14 +88,15 @@ board <- new_dock_board(
     )
   ),
   links = links(
-    from = c("data", "head", "sub", "sub"),
-    to = c("head", "sub", "plot", "audit")
+    from = c("data", "filt", "mut", "mut", "mut"),
+    to = c("filt", "mut", "summ", "plot", "audit")
   ),
-  # Two chapters fed by the same subset: order between them is a real
-  # authoring choice, so the chapter grip can swap them.
+  # Three chapters fed by the same prepared table: the order between the
+  # chart and the table chapter is a real authoring choice, so the chapter
+  # grip can swap them.
   stacks = stacks(
     prep = new_dock_stack(
-      c("data", "head", "sub"),
+      c("data", "filt", "mut"),
       name = "Data prep",
       color = "#2563eb"
     ),
@@ -81,7 +106,7 @@ board <- new_dock_board(
       color = "#d97706"
     ),
     tables = new_dock_stack(
-      "audit",
+      c("summ", "audit"),
       name = "Tables",
       color = "#7c3aed"
     )
@@ -99,39 +124,47 @@ board <- new_dock_board(
             sep = "\n"
           )
         ),
-        head = list(
-          description = "Restrict to the first 50 rows to keep the demo light.",
-          report = FALSE
+        filt = list(
+          description = paste(
+            "Drop *virginica*: the two remaining species are the ones that",
+            "overlap, which is what makes the comparison interesting."
+          )
         ),
-        sub = list(
-          description = "Narrow to the first 25 rows as the analysis set."
+        mut = list(
+          description = paste(
+            "Derive the sepal **ratio**, length over width, as a single",
+            "shape measure per flower."
+          )
+        ),
+        summ = list(
+          description = "Mean sepal ratio per species."
         ),
         plot = list(
           description = paste(
-            "Sepal length against sepal width.",
+            "Sepal length against sepal width, coloured by species.",
             "",
             "- setosa separates cleanly",
-            "- versicolor and virginica overlap",
+            "- versicolor overlaps it only at the margin",
             sep = "\n"
           )
         ),
         audit = list(
           description = paste(
-            "Last rows of the *analysis set*, as a quick QC check.",
-            "Sits in Data prep but depends on the Analysis subset,",
-            "so the Data prep chapter splits around Analysis."
-          )
+            "Last rows of the prepared table, as a quick QC check that the",
+            "ratio landed on every row."
+          ),
+          report = FALSE
         )
       ),
       stack_annotations = list(
         prep = list(
           description = paste(
-            "Everything the analysis consumes: the raw data and the",
-            "row restrictions."
+            "Everything the analysis consumes: the raw data, the species",
+            "restriction and the derived ratio."
           )
         ),
-        charts = list(description = "What we plot from the analysis set."),
-        tables = list(description = "Numbers behind the charts.")
+        charts = list(description = "What we plot from the prepared table."),
+        tables = list(description = "Numbers behind the chart.")
       ),
       title = "Iris pilot report"
     )

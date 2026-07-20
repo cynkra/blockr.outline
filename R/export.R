@@ -324,9 +324,19 @@ outline_sections <- function(expressions, board, annotations,
     kinds = vapply(
       blks,
       function(b) {
-        if (inherits(b, "plot_block")) {
+        # The registry category is the ecosystem-wide answer: every
+        # package declares it, so a ggplot_block (class ggplot_block,
+        # not plot_block) still reports "plot". Class inheritance only
+        # covers blockr.core's own hierarchy.
+        cat <- tryCatch(
+          blockr.core::block_meta_category(b),
+          error = function(e) character()
+        )
+        if (any(cat %in% c("plot", "visualization")) ||
+              inherits(b, "plot_block")) {
           "fig"
-        } else if (inherits(b, c("data_block", "transform_block"))) {
+        } else if (any(cat %in% c("data", "transform", "table")) ||
+                     inherits(b, c("data_block", "transform_block"))) {
           "tbl"
         } else {
           ""
