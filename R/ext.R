@@ -171,16 +171,49 @@ outline_ext_srv <- function(annotations, block_order, title,
                 rv_order(append(cur, added, after = at))
               }
 
+              # Inherit the source's stack: a block added from inside a
+              # chapter belongs to that chapter, so it does not split the
+              # stack's run the moment it appears.
+              stks <- blockr.core::board_stacks(board$board)
+              own <- Filter(
+                function(s) src %in% blockr.core::stack_blocks(stks[[s]]),
+                names(stks)
+              )
+
+              if (length(own)) {
+                stk_id <- own[[1L]]
+                members <- union(
+                  blockr.core::stack_blocks(stks[[stk_id]]),
+                  added
+                )
+                update(
+                  list(
+                    stacks = list(
+                      mod = setNames(list(list(blocks = members)), stk_id)
+                    )
+                  )
+                )
+              }
+
               pending_after(NULL)
             }
           }
         )
 
+        # Removing a block leaves its dependents without input for a
+        # flush, and reading such a block's expression throws. Evaluate
+        # each expression defensively: a block that cannot report one is
+        # dropped, so the outline redraws (showing the removal) instead of
+        # freezing on the last good projection.
         board_exprs <- reactive(
-          lapply(
-            blockr.core::lst_xtr(board$blocks, "server", "expr"),
-            blockr.core::reval
-          )
+          {
+            ex <- lapply(
+              blockr.core::lst_xtr(board$blocks, "server", "expr"),
+              function(e) tryCatch(blockr.core::reval(e), error = function(err) NULL)
+            )
+
+            ex[!vapply(ex, is.null, logical(1L))]
+          }
         )
 
         sections_calc <- reactive(
@@ -202,7 +235,11 @@ outline_ext_srv <- function(annotations, block_order, title,
                 message(
                   "blockr.outline: sections unavailable this flush (",
                   conditionMessage(e),
-                  ")"
+                  ") at: ",
+                  paste(
+                    utils::head(deparse(conditionCall(e)), 2L),
+                    collapse = " "
+                  )
                 )
                 req(FALSE)
               }
@@ -221,6 +258,15 @@ outline_ext_srv <- function(annotations, block_order, title,
             new <- sections_calc()
             if (!identical(new, isolate(sections_store()))) {
               sections_store(new)
+
+              # Remember the order actually shown. Without this, a block
+              # that loses its last dependency becomes unconstrained and
+              # drifts (removing a block could reshuffle the document);
+              # with it, the displayed order is sticky and only explicit
+              # drags or inserts change it.
+              if (!length(isolate(rv_order()))) {
+                rv_order(new$ids)
+              }
             }
           }
         )

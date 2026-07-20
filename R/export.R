@@ -20,7 +20,12 @@ ann_report <- function(annotations, id) {
 # folded together (one block = one assignment, the outline's anchor).
 wrap_block_expr <- function(exprs, args, types) {
 
-  if (identical(types, "bquoted")) {
+  # `args` is NULL for a block with no inputs -- which happens the moment
+  # an upstream block is removed. bquote(where = NULL) is defunct, so a
+  # removal used to abort the whole projection (and freeze the outline on
+  # its last good state). Nothing to substitute in that case anyway.
+  # blockr.core::wrap_expr has the same hazard.
+  if (identical(types, "bquoted") && length(args)) {
     exprs <- do.call(bquote, list(exprs, args))
   }
 
@@ -134,6 +139,26 @@ preferred_ordering <- function(ids, board, preference = character()) {
 outline_sections <- function(expressions, board, annotations,
                              preference = character(),
                              stack_annotations = list()) {
+
+  # Only project blocks that reported an expression this flush (see the
+  # defensive read in the extension server); a block mid-removal or
+  # mid-relink is simply absent until it recovers.
+  known <- intersect(blockr.core::board_block_ids(board), names(expressions))
+
+  if (!length(known)) {
+    stop("no block expressions available")
+  }
+
+  if (!setequal(known, blockr.core::board_block_ids(board))) {
+    board <- blockr.core::board_blocks(board) |>
+      (\(b) {
+        brd <- board
+        blockr.core::board_blocks(brd) <- b[known]
+        brd
+      })()
+  }
+
+  expressions <- expressions[known]
 
   exported <- blockr.core::export_code(expressions, board)
 
