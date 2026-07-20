@@ -18,13 +18,25 @@
    margins cancelling .blockr-otl-panel's padding -- and carries a sticky
    header naming the file, with copy on the code rather than up in the
    toolbar. */
-.blockr-otl-fileblock { margin: 4px -16px -12px; border-top: 1px solid
-                        var(--blockr-grey-200, #e5e7eb); }
+/* Inset, NOT bled to the panel edge. The dock paints its own light grey
+   (#f6f5f9) behind the panel, so a grey surface running to the margin
+   meets a grey background and the panel's boundary disappears -- the
+   mockup only read well because the page behind it was white. Keeping
+   the panel's padding as a white gutter, plus a border of its own, is
+   what makes this a defined surface rather than a flood fill. Still one
+   frame: the header lives inside that same border. */
+.blockr-otl-fileblock { margin: 4px 0 0;
+                        border: 1px solid var(--blockr-grey-200, #e5e7eb);
+                        border-radius: 8px; }
+/* No overflow:hidden on the block -- it would become the scroll
+   container and the sticky header would stop sticking. The two ends
+   carry the rounding instead. */
 .blockr-otl-filehead { position: sticky; top: 0; z-index: 2;
                        display: flex; align-items: center;
                        justify-content: space-between; gap: 10px;
-                       padding: 7px 16px;
+                       padding: 7px 14px;
                        background: var(--blockr-grey-100, #f3f4f6);
+                       border-radius: 7px 7px 0 0;
                        border-bottom: 1px solid var(--blockr-grey-200, #e5e7eb); }
 .blockr-otl-filename { font-family: var(--blockr-font-mono, 'SF Mono', Consolas, monospace);
                        font-size: 0.75rem; color: var(--blockr-grey-500, #6b7280); }
@@ -39,6 +51,7 @@
 
 .blockr-otl-raw { font-size: 0.78rem; padding: 14px 16px;
                       background: var(--blockr-grey-50, #f9fafb);
+                      border-radius: 0 0 7px 7px;
                       white-space: pre-wrap; word-break: break-word; }
 /* downlit's wrapper paints its own chroma background, which on top of
    the surface tint reads as one more nested box -- the very thing this
