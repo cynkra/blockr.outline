@@ -39,7 +39,7 @@ outline_js <- function(ns) {
       "var TOGGLE = '%s', OPEN = '%s', MOVE = '%s', EDIT = '%s', ",
       "REN = '%s', RENSTACK = '%s', SAVE = '%s', CANCEL = '%s', ",
       "ADD = '%s', RM = '%s', CHAP = '%s', NEWCHAP = '%s', ",
-      "TOSTACK = '%s', MOVECHAP = '%s';"
+      "TOSTACK = '%s', MOVECHAP = '%s', GEAR = '%s', SETTINGS = '%s';"
     ),
     ns("outline_toggle"),
     ns("outline_open"),
@@ -54,7 +54,9 @@ outline_js <- function(ns) {
     ns("outline_chapter"),
     ns("outline_newchapter"),
     ns("outline_tostack"),
-    ns("outline_movechap")
+    ns("outline_movechap"),
+    ns("otl_gear"),
+    ns("otl_settings")
   )
 
   tags$script(HTML(paste0(
@@ -73,27 +75,27 @@ outline_js <- function(ns) {
       // silently with nothing to re-send it, leaving cells stuck on
       // their placeholder. Same re-apply pattern as collapsedStacks.
       var codeById = {};
-      var scriptText = null, scriptId = null;
       function applyCode() {
         Object.keys(codeById).forEach(function(id) {
           var el = document.getElementById(id);
           if (el && el.innerHTML !== codeById[id]) el.innerHTML = codeById[id];
         });
-        if (scriptId) {
-          var pre = document.getElementById(scriptId);
-          // Only the outline view's hidden copy buffer -- see the
-          // data-otl-buffer note in ext.R.
-          if (pre && pre.dataset.otlBuffer &&
-              pre.textContent !== scriptText) {
-            pre.textContent = scriptText;
-          }
-        }
       }
       Shiny.addCustomMessageHandler('blockr-outline-code', function(msg) {
         (msg.items || []).forEach(function(it) { codeById[it.id] = it.html; });
-        if (msg.script_id) { scriptId = msg.script_id; scriptText = msg.script; }
         applyCode();
       });
+
+      // Gear toggles the settings band. Client-only, like the collapse:
+      // opening a settings panel is not board state, so no round trip.
+      var gear = document.getElementById(GEAR);
+      var settings = document.getElementById(SETTINGS);
+      if (gear && settings) {
+        gear.addEventListener('click', function() {
+          var open = settings.classList.toggle('blockr-settings--open');
+          gear.classList.toggle('blockr-gear-active', open);
+        });
+      }
 
       var dragId = null;
       var collapseTimer = null;
@@ -119,6 +121,7 @@ outline_js <- function(ns) {
       $(document).on('shiny:value', function(ev) {
         if (ev.name && /outline_out$/.test(ev.name)) {
           setTimeout(applyCollapsed, 0);
+
           // Fill in any push that landed before this render inserted its
           // nodes. renderUI carries current code, so this is a no-op
           // whenever the two are already in step.
@@ -679,7 +682,7 @@ outline_tags <- function(sects, ns, editing = NULL) {
       if (!sects$report[i]) {
         span(
           class = "blockr-otl-offchip",
-          "include=FALSE · runs, not shown"
+          "include=FALSE \u00b7 runs, not shown"
         )
       },
       prose,

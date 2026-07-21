@@ -1,6 +1,6 @@
 Package: blockr.outline
 Title: Board Outline, Code and Report Extension for 'blockr'
-Version: 0.0.43
+Version: 0.0.60
 Authors@R:
     c(person(given = "Christoph",
              family = "Sax",
@@ -20,10 +20,12 @@ Encoding: UTF-8
 Remotes:
     BristolMyersSquibb/blockr.core,
     BristolMyersSquibb/blockr.dock,
+    BristolMyersSquibb/blockr.io,
     BristolMyersSquibb/blockr.dag
 Imports:
     blockr.core,
     blockr.dock,
+    blockr.io,
     shiny,
     htmltools,
     commonmark,
@@ -37,12 +39,12 @@ Suggests:
     knitr,
     tinytex,
     blockr.dag,
+    shinytest2,
+    chromote,
+    xml2,
+    withr,
+    jsonlite,
     testthat (>= 3.0.0)
+Config/testthat/edition: 3
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3
-Collate:
-    'utils.R'
-    'export.R'
-    'render.R'
-    'outline-ui.R'
-    'ext.R'

@@ -1,4 +1,6 @@
 ^LICENSE\.md$
+^LICENSE\.note$
+^\.lintr$
 ^README\.(Rmd|html)$
 ^\.github$
 ^\.claude$

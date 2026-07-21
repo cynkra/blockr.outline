@@ -426,8 +426,14 @@ section_chapters <- function(sects) {
     idx <- seq(starts[i], length.out = runs$lengths[i])
 
     if (any(sects$report[idx])) {
-      nme <- sects$stack_names[idx[1L]]
-      out[idx[1L]] <- if (runs$values[i] %in% seen) {
+      # Anchor the heading on the first REPORTED block of the run, not
+      # blindly on idx[1L]. A stack whose first block is excluded from
+      # the report (report = FALSE) would otherwise pin the heading to a
+      # section whose prose never renders, and the chapter title would
+      # silently vanish from the output.
+      anchor <- idx[which(sects$report[idx])[1L]]
+      nme <- sects$stack_names[anchor]
+      out[anchor] <- if (runs$values[i] %in% seen) {
         paste(nme, "(continued)")
       } else {
         nme
@@ -456,20 +462,34 @@ chapter_intro <- function(sects, chapters, i) {
   desc
 }
 
-export_spin <- function(sects) {
+export_spin <- function(sects, stack_level = "#", block_level = "caption") {
 
   chapters <- section_chapters(sects)
+
+  stack_hd <- if (stack_level %in% c("#", "##")) stack_level
+  # spin has no chunk-caption mechanism, so a "caption" block title
+  # becomes a bold line above the output; a heading title is that
+  # heading. Either way the R script stays a faithful mirror.
+  block_hd <- if (block_level %in% c("#", "##", "###")) block_level
 
   one_section <- function(i) {
 
     prose <- if (sects$report[i]) {
       desc <- sects$descriptions[i]
       intro <- chapter_intro(sects, chapters, i)
+      title_line <- if (!is.null(block_hd) && nzchar(sects$names[i])) {
+        paste0("#' ", block_hd, " ", sects$names[i])
+      } else if (identical(block_level, "caption") && nzchar(sects$names[i])) {
+        paste0("#' **", sects$names[i], "**")
+      }
       c(
-        if (!is.na(chapters[i])) paste0("#' # ", chapters[i]),
+        if (!is.na(chapters[i]) && !is.null(stack_hd)) {
+          paste0("#' ", stack_hd, " ", chapters[i])
+        },
         if (length(intro)) {
           c(paste0("#' ", strsplit(intro, "\n")[[1L]]), "#' ")
         },
+        title_line,
         if (nzchar(desc)) paste0("#' ", strsplit(desc, "\n")[[1L]])
       )
     }
@@ -491,9 +511,17 @@ export_spin <- function(sects) {
   )
 }
 
-export_qmd <- function(sects, title = "Board report") {
+export_qmd <- function(sects, title = "Board report",
+                       stack_level = "#", block_level = "caption") {
 
   chapters <- section_chapters(sects)
+
+  # Heading levels come from the gear's Headings subsection. A stack /
+  # block title can be a document heading (#, ##, ###) or, for a block,
+  # the exhibit caption (default) or nothing. The block title is a
+  # heading OR a caption, never both.
+  stack_hd <- if (stack_level %in% c("#", "##")) stack_level
+  block_hd <- if (block_level %in% c("#", "##", "###")) block_level
 
   one_section <- function(i) {
 
@@ -501,25 +529,36 @@ export_qmd <- function(sects, title = "Board report") {
       desc <- sects$descriptions[i]
       intro <- chapter_intro(sects, chapters, i)
       c(
-        if (!is.na(chapters[i])) c(paste0("# ", chapters[i]), ""),
+        if (!is.na(chapters[i]) && !is.null(stack_hd)) {
+          c(paste0(stack_hd, " ", chapters[i]), "")
+        },
         if (length(intro)) c(intro, ""),
-        # No `## block name` heading: the title reaches the document as
-        # the exhibit caption below the output instead.
+        if (!is.null(block_hd) && nzchar(sects$names[i])) {
+          c(paste0(block_hd, " ", sects$names[i]), "")
+        },
         if (nzchar(desc)) desc
       )
     }
 
     # A block that is in the report shows its output, so it IS an
-    # exhibit: its title becomes the CAPTION (numbered, cross-
-    # referenceable) rather than a heading -- stacks head sections,
-    # blocks are exhibits. The prefix comes from the result's class;
-    # an unclassifiable result gets a bare label, since a wrong fig-
-    # prefix would leave a broken cross-reference target.
+    # exhibit: its title becomes the CAPTION rather than a heading --
+    # stacks head sections, blocks are exhibits. The `kind` (fig/tbl)
+    # picks the caption key so the caption sits in the right place.
+    #
+    # The label is deliberately NOT prefixed with the kind. A `tbl-`/
+    # `fig-` label makes quarto treat the output as a cross-reference
+    # FLOAT, and pandoc's pptx path cannot render a flextable inside that
+    # float -- the table silently vanishes from the slide. Dropping the
+    # prefix keeps one qmd that renders identically to html, pdf AND
+    # pptx (flextables included); the cost is losing @tbl-/@fig- cross-
+    # references, which slides do not use and reports rarely do.
     kind <- sects$kinds[i]
     lbl <- gsub("[^a-zA-Z0-9_-]", "-", sects$ids[i])
 
-    cap <- if (sects$report[i] && nzchar(kind)) {
-      lbl <- paste0(kind, "-", lbl)
+    # Caption only when the block title is set to "caption"; a heading
+    # title already carries the name, and "none" wants no title at all.
+    cap <- if (sects$report[i] && identical(block_level, "caption") &&
+                 nzchar(kind)) {
       paste0("#| ", kind, "-cap: \"", gsub("\"", "'", sects$names[i]), "\"")
     }
 

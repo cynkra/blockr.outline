@@ -12,17 +12,61 @@
 #' @param block_order Character vector of block ids: the preferred document
 #'   order, applied as the tie-break of the topological sort.
 #' @param title Document title.
+#' @param stack_annotations Named list keyed by stack id, each entry a list
+#'   with a `description` (markdown string) used as the chapter intro.
+#' @param stack_title_level How stack titles render in the document: `"#"`
+#'   or `"##"` for a heading of that level, `"none"` to omit them.
+#' @param block_title_level How block titles render: `"caption"` (the
+#'   exhibit caption), `"#"`, `"##"` or `"###"` for a heading of that
+#'   level, `"none"` to omit them. A block title is a heading or a
+#'   caption, never both.
+#' @param template Path to a pandoc reference document (`.pptx` / `.docx`)
+#'   styling the corresponding render. `""` for none.
 #' @param ... Forwarded to [blockr.dock::new_dock_extension()]
+#'
+#' @return A dock extension object, to be passed in a board's `extensions`
+#'   list (see [blockr.dock::new_dock_board()]).
+#'
+#' @examples
+#' if (interactive()) {
+#'   library(blockr.core)
+#'   library(blockr.dock)
+#'
+#'   board <- new_dock_board(
+#'     blocks = c(
+#'       data = new_dataset_block("iris"),
+#'       audit = new_head_block(n = 3L)
+#'     ),
+#'     links = links(from = "data", to = "audit"),
+#'     extensions = list(
+#'       new_outline_extension(
+#'         title = "Iris pilot report",
+#'         annotations = list(
+#'           data = list(description = "The classic **iris** dataset."),
+#'           audit = list(description = "Quick QC check.", report = FALSE)
+#'         )
+#'       )
+#'     )
+#'   )
+#'
+#'   serve(board)
+#' }
 #'
 #' @export
 new_outline_extension <- function(annotations = list(),
                                   block_order = character(),
                                   title = "Board report",
                                   stack_annotations = list(),
+                                  stack_title_level = "#",
+                                  block_title_level = "caption",
+                                  template = "",
                                   ...) {
 
   blockr.dock::new_dock_extension(
-    outline_ext_srv(annotations, block_order, title, stack_annotations),
+    outline_ext_srv(
+      annotations, block_order, title, stack_annotations,
+      stack_title_level, block_title_level, template
+    ),
     outline_ext_ui,
     name = "Outline",
     description = paste(
@@ -65,40 +109,133 @@ outline_ext_ui <- function(id, board, ...) {
       ),
       div(
         class = "blockr-otl-toolbar-right",
-        selectInput(
-          ns("code_render_format"),
-          label = NULL,
-          choices = formats,
-          selected = "html",
-          width = "110px"
-        ),
-        downloadButton(
-          ns("code_render"),
-          "Render",
-          class = "btn-sm btn-outline-success"
-        ),
-        tags$button(
-          type = "button",
-          class = "btn btn-sm btn-light",
-          title = "Copy code to clipboard",
-          onclick = sprintf(
-            paste0(
-              "navigator.clipboard.writeText(",
-              "document.getElementById('%s').innerText);"
-            ),
-            ns("code_pre")
+        # Split button (decision record:
+        # design-system/target/outline-render-group-proposals.html, A +
+        # label 2): the format picker and the action read as one control,
+        # neutral picker fused to the green action. The label is
+        # "Download", not "Render" -- render is the internal step, the
+        # file is what the user walks away with.
+        div(
+          class = "blockr-otl-rendergroup",
+          # selectize = FALSE: a native <select> can be sized to match the
+          # buttons beside it; selectize's wrapper cannot without fighting
+          # its own layout (it rendered 42px against their 28px).
+          selectInput(
+            ns("code_render_format"),
+            label = NULL,
+            choices = formats,
+            selected = "html",
+            selectize = FALSE,
+            width = "88px"
           ),
-          icon("clipboard")
+          downloadButton(
+            ns("code_render"),
+            "Download",
+            class = "blockr-otl-renderbtn"
+          )
+        ),
+        # Gear: opens the in-flow settings band below the toolbar (the
+        # blockr.viz / blockr.dplyr settings-band pattern). Output-shaping
+        # options that do not belong on the always-visible toolbar.
+        # Same cog + treatment as blockr.dplyr's .blockr-gear-btn, and the
+        # band below grows the same beak pointing back at it.
+        tags$button(
+          id = ns("otl_gear"),
+          type = "button",
+          class = "blockr-gear-btn blockr-otl-gearbtn",
+          title = "Report settings",
+          HTML(paste0(
+            "<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' ",
+            "fill='currentColor' viewBox='0 0 16 16'><path d='M9.405 1.05c-",
+            ".413-1.4-2.397-1.4-2.81 0l-.1.34a1.464 1.464 0 0 1-2.105.872l-",
+            ".31-.17c-1.283-.698-2.686.705-1.987 1.987l.169.311c.446.82.023 ",
+            "1.841-.872 2.105l-.34.1c-1.4.413-1.4 2.397 0 2.81l.34.1a1.464 ",
+            "1.464 0 0 1 .872 2.105l-.17.31c-.698 1.283.705 2.686 1.987 ",
+            "1.987l.311-.169a1.464 1.464 0 0 1 2.105.872l.1.34c.413 1.4 ",
+            "2.397 1.4 2.81 0l.1-.34a1.464 1.464 0 0 1 2.105-.872l.31.17c",
+            "1.283.698 2.686-.705 1.987-1.987l-.169-.311a1.464 1.464 0 0 1 ",
+            ".872-2.105l.34-.1c1.4-.413 1.4-2.397 0-2.81l-.34-.1a1.464 ",
+            "1.464 0 0 1-.872-2.105l.17-.31c.698-1.283-.705-2.686-1.987-",
+            "1.987l-.311.169a1.464 1.464 0 0 1-2.105-.872zM8 10.93a2.929 ",
+            "2.929 0 1 1 0-5.86 2.929 2.929 0 0 1 0 5.858z'/></svg>"
+          ))
         )
       )
     ),
+    outline_settings_band(ns),
     uiOutput(ns("outline_out")),
     outline_js(ns)
   )
 }
 
+# The gear's settings band. Uses blockr.dplyr's settings-band selectors
+# (.blockr-settings / __title / __grid / __field) -- the shared layer bound
+# for blockr.ui -- so it matches every other gear band in the ecosystem.
+# A __title spans the row, forcing each section onto its own line; Template
+# takes a --full field so it runs the whole width. Hidden until the gear
+# toggles it (outline_js). Defaults reproduce today's output.
+outline_settings_band <- function(ns) {
+  div(
+    class = "blockr-settings blockr-settings--beak",
+    id = ns("otl_settings"),
+
+    div(class = "blockr-settings__title", "Headings"),
+    div(
+      class = "blockr-settings__grid",
+      div(
+        class = "blockr-settings__field",
+        tags$label("Stack titles", `for` = ns("otl_stack_level")),
+        selectInput(
+          ns("otl_stack_level"), label = NULL,
+          choices = c("Heading 1 (#)" = "#", "Heading 2 (##)" = "##",
+                      "None" = "none"),
+          selected = "#", selectize = FALSE, width = "100%"
+        )
+      ),
+      div(
+        class = "blockr-settings__field",
+        tags$label("Block titles", `for` = ns("otl_block_level")),
+        selectInput(
+          ns("otl_block_level"), label = NULL,
+          choices = c("Caption" = "caption", "Heading 1 (#)" = "#",
+                      "Heading 2 (##)" = "##", "Heading 3 (###)" = "###",
+                      "None" = "none"),
+          selected = "caption", selectize = FALSE, width = "100%"
+        )
+      )
+    ),
+
+    div(class = "blockr-settings__title", "Template"),
+    div(
+      class = "blockr-settings__grid",
+      div(
+        class = "blockr-settings__field blockr-settings__field--full",
+        tags$label("Reference doc"),
+        # blockr.io's path picker (autocompleting, extension-filtered),
+        # not a bare text field. Its server half lives in the extension
+        # server; the dep ships with the UI. Called defensively because
+        # path_input_ui's signature has grown across blockr.io versions
+        # (`placeholder` is absent in older ones) -- pass only the
+        # arguments the installed version actually accepts.
+        io_call(
+          blockr.io::path_input_ui,
+          ns("otl_template"),
+          placeholder = "path to .pptx / .docx"
+        ),
+        div(
+          class = "blockr-settings__hint",
+          "A pandoc reference document styles the pptx / docx render."
+        )
+      )
+    )
+  )
+}
+
 outline_ext_srv <- function(annotations, block_order, title,
-                            stack_annotations = list()) {
+                            stack_annotations = list(),
+                            stack_title_level = "#",
+                            block_title_level = "caption",
+                            template = "") {
 
   function(id, board, update, session, parent, actions = NULL, ...) {
     moduleServer(
@@ -112,6 +249,9 @@ outline_ext_srv <- function(annotations, block_order, title,
           if (is.character(title) && length(title)) title[[1L]] else
             "Board report"
         )
+        rv_stack_level <- reactiveVal(coal(stack_title_level, "#"))
+        rv_block_level <- reactiveVal(coal(block_title_level, "caption"))
+        rv_template <- reactiveVal(coal(template, ""))
         editing <- reactiveVal(NULL)
         # "Insert after X" intent: the id the add link was clicked on, and
         # the block ids last seen on the board. A new block must land where
@@ -335,8 +475,53 @@ outline_ext_srv <- function(annotations, block_order, title,
           }
         )
 
-        spin_txt <- reactive(export_spin(sections()))
-        qmd_txt <- reactive(export_qmd(sections(), rv_title()))
+        spin_txt <- reactive(
+          export_spin(sections(), rv_stack_level(), rv_block_level())
+        )
+        qmd_txt <- reactive(
+          export_qmd(
+            sections(), rv_title(), rv_stack_level(), rv_block_level()
+          )
+        )
+
+        # Gear -> Headings / Template. Value-guarded so a no-op update
+        # (e.g. a re-render restoring the same choice) does not churn.
+        observeEvent(input$otl_stack_level, {
+          if (!identical(input$otl_stack_level, rv_stack_level())) {
+            rv_stack_level(input$otl_stack_level)
+          }
+        })
+        observeEvent(input$otl_block_level, {
+          if (!identical(input$otl_block_level, rv_block_level())) {
+            rv_block_level(input$otl_block_level)
+          }
+        })
+        tmpl_path <- io_call(
+          blockr.io::path_input_server,
+          "otl_template", mode = "file", extensions = c("pptx", "docx")
+        )
+        observe({
+          p <- coal(tmpl_path(), "")
+          if (!identical(p, isolate(rv_template()))) {
+            rv_template(p)
+          }
+        })
+        # path_input_ui takes no initial value, so seed the field once from
+        # the constructor / restored state (a demo default or a saved
+        # board's template). set-value fires the DOM input event, so
+        # tmpl_path() picks it up and rv_template re-syncs.
+        if (nzchar(coal(template, ""))) {
+          session$onFlushed(
+            function() {
+              session$sendCustomMessage(
+                "blockr-path-set-value",
+                list(id = session$ns("otl_template-path_text"),
+                     value = template)
+              )
+            },
+            once = TRUE
+          )
+        }
 
         # Split the projection into the structural skeleton and the
         # per-block code markup, each with its own identical-skip store.
@@ -408,11 +593,7 @@ outline_ext_srv <- function(annotations, block_order, title,
                       html = codes[[n]]
                     )
                   }
-                ),
-                # The hidden full script backs the copy button, so it has
-                # to track the pushed chunks or copying yields stale code.
-                script_id = session$ns("code_pre"),
-                script = isolate(spin_txt())
+                )
               )
             )
           }
@@ -434,24 +615,7 @@ outline_ext_srv <- function(annotations, block_order, title,
               return(
                 tagList(
                   outline_tags(sects, session$ns, editing()),
-                  # Hidden full script so the copy button works here too.
-                  # Isolated: reading it reactively would re-couple this
-                  # renderUI to every code change, which is exactly what
-                  # the skeleton/code split exists to avoid. The push
-                  # keeps this node's text current instead.
-                  tags$pre(
-                    id = session$ns("code_pre"),
-                    # Marks this as the outline view's buffer. The
-                    # script / Document views reuse the same id for their
-                    # VISIBLE content, and the code push would otherwise
-                    # overwrite that with plain spin text, wiping their
-                    # syntax highlighting (and showing the R script in
-                    # the Document view). Those views re-render from
-                    # spin_txt()/qmd_txt() and need no push.
-                    `data-otl-buffer` = "1",
-                    style = "display: none;",
-                    isolate(spin_txt())
-                  )
+                  NULL
                 )
               )
             }
@@ -465,7 +629,7 @@ outline_ext_srv <- function(annotations, block_order, title,
               NULL
             )
 
-            if (is.null(hl)) {
+            body <- if (is.null(hl)) {
               tags$pre(
                 class = "blockr-otl-raw",
                 tags$code(id = session$ns("code_pre"), txt)
@@ -477,6 +641,36 @@ outline_ext_srv <- function(annotations, block_order, title,
                 HTML(hl)
               )
             }
+
+            # One frame, not two: the header replaces the nested card and
+            # names the file, which neither view stated before. Copy moves
+            # onto the code it copies; the toolbar's button hides itself
+            # while this header is on screen (see outline_js).
+            div(
+              class = "blockr-otl-fileblock",
+              div(
+                class = "blockr-otl-filehead",
+                span(
+                  class = "blockr-otl-filename",
+                  if (identical(view, "qmd")) "report.qmd" else "report.R"
+                ),
+                tags$button(
+                  type = "button",
+                  class = "blockr-otl-headbtn",
+                  title = "Copy to clipboard",
+                  onclick = sprintf(
+                    paste0(
+                      "navigator.clipboard.writeText(",
+                      "document.getElementById('%s').innerText);"
+                    ),
+                    session$ns("code_pre")
+                  ),
+                  HTML("&#10697;"),
+                  "Copy"
+                )
+              ),
+              body
+            )
           }
         )
 
@@ -1003,7 +1197,8 @@ outline_ext_srv <- function(annotations, block_order, title,
               spin_txt(),
               input$code_render_format,
               file,
-              rv_title()
+              rv_title(),
+              template = rv_template()
             )
           }
         )
@@ -1013,7 +1208,10 @@ outline_ext_srv <- function(annotations, block_order, title,
             annotations = rv_ann,
             block_order = rv_order,
             title = rv_title,
-            stack_annotations = rv_stack_ann
+            stack_annotations = rv_stack_ann,
+            stack_title_level = rv_stack_level,
+            block_title_level = rv_block_level,
+            template = rv_template
           )
         )
       }

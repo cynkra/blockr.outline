@@ -159,7 +159,8 @@ highlight_qmd_code <- function(txt) {
 # Render the qmd (quarto) or the spin script (rmarkdown fallback) into
 # `file`. Errors surface as a notification plus a console trace; quiet
 # rendering makes failed downloads undebuggable.
-render_report <- function(qmd_txt, spin_txt, fmt, file, title) {
+render_report <- function(qmd_txt, spin_txt, fmt, file, title,
+                          template = NULL) {
 
   dir <- tempfile("blockr-outline-")
   dir.create(dir)
@@ -200,6 +201,21 @@ render_report <- function(qmd_txt, spin_txt, fmt, file, title) {
       )
     }
 
+    # Reference template (gear -> Template): pandoc reference-doc, which
+    # pptx and docx both honour. Injected the same way as embed-resources
+    # so the one Document still drives the render.
+    if (!is.null(template) && nzchar(template) && fmt %in% c("pptx", "docx")) {
+      qmd_txt <- sub(
+        "\n---\n",
+        paste0(
+          "\nformat:\n  ", fmt, ":\n    reference-doc: \"",
+          normalizePath(template, mustWork = FALSE), "\"\n---\n"
+        ),
+        qmd_txt,
+        fixed = TRUE
+      )
+    }
+
     qmd <- file.path(dir, "report.qmd")
     writeLines(qmd_txt, qmd)
 
@@ -228,7 +244,15 @@ render_report <- function(qmd_txt, spin_txt, fmt, file, title) {
       error = render_err
     )
 
-    file.copy(rendered, file.path(dir, out_name), overwrite = TRUE)
+    # rmarkdown writes report.<fmt> straight into `dir`, which is already
+    # the out_name path -- copying it onto itself errors. Only move it
+    # when render actually put it somewhere else.
+    if (!identical(
+      normalizePath(rendered, mustWork = FALSE),
+      normalizePath(file.path(dir, out_name), mustWork = FALSE)
+    )) {
+      file.copy(rendered, file.path(dir, out_name), overwrite = TRUE)
+    }
   }
 
   if (!file.exists(file.path(dir, out_name))) {

@@ -11,9 +11,128 @@
 .blockr-otl-toolbar-right { display: flex; align-items: center; gap: 8px; }
 .blockr-otl-toolbar-right .form-group,
 .blockr-otl-toolbar-right .shiny-input-container { margin-bottom: 0; }
-.blockr-otl-raw { font-size: 0.78rem; background: var(--blockr-grey-100, #f3f4f6);
-                      padding: 12px; border-radius: 6px; white-space: pre-wrap;
-                      word-break: break-word; }
+/* Code preview: ONE frame. The panel is already a card, so the old
+   grey rounded box inside it read as a box in a box. Decision record:
+   design-system/target/outline-code-preview-proposals.html (C + the
+   header). The block bleeds to the panel edges -- hence the negative
+   margins cancelling .blockr-otl-panel's padding -- and carries a sticky
+   header naming the file, with copy on the code rather than up in the
+   toolbar. */
+/* Inset, NOT bled to the panel edge. The dock paints its own light grey
+   (#f6f5f9) behind the panel, so a grey surface running to the margin
+   meets a grey background and the panel's boundary disappears -- the
+   mockup only read well because the page behind it was white. Keeping
+   the panel's padding as a white gutter, plus a border of its own, is
+   what makes this a defined surface rather than a flood fill. Still one
+   frame: the header lives inside that same border. */
+.blockr-otl-fileblock { margin: 4px 0 0;
+                        border: 1px solid var(--blockr-grey-200, #e5e7eb);
+                        border-radius: 8px; }
+/* No overflow:hidden on the block -- it would become the scroll
+   container and the sticky header would stop sticking. The two ends
+   carry the rounding instead. */
+.blockr-otl-filehead { position: sticky; top: 0; z-index: 2;
+                       display: flex; align-items: center;
+                       justify-content: space-between; gap: 10px;
+                       padding: 7px 14px;
+                       background: var(--blockr-grey-100, #f3f4f6);
+                       border-radius: 7px 7px 0 0;
+                       border-bottom: 1px solid var(--blockr-grey-200, #e5e7eb); }
+.blockr-otl-filename { font-family: var(--blockr-font-mono, 'SF Mono', Consolas, monospace);
+                       font-size: 0.75rem; color: var(--blockr-grey-500, #6b7280); }
+.blockr-otl-headbtn { display: inline-flex; align-items: center; gap: 5px;
+                      font: inherit; font-size: 0.75rem; cursor: pointer;
+                      border: 1px solid transparent; border-radius: 6px;
+                      padding: 3px 8px; background: transparent;
+                      color: var(--blockr-grey-500, #6b7280); }
+.blockr-otl-headbtn:hover { background: #fff;
+                            border-color: var(--blockr-grey-200, #e5e7eb);
+                            color: var(--blockr-grey-900, #111827); }
+
+.blockr-otl-raw { font-size: 0.78rem; padding: 14px 16px;
+                      background: var(--blockr-grey-50, #f9fafb);
+                      border-radius: 0 0 7px 7px;
+                      white-space: pre-wrap; word-break: break-word; }
+/* downlit's wrapper paints its own chroma background, which on top of
+   the surface tint reads as one more nested box -- the very thing this
+   layout removes. The surface owns the tint; the wrapper only carries
+   token colors. */
+.blockr-otl-raw pre.chroma { background: none; margin: 0; padding: 0;
+                             border: 0; border-radius: 0; }
+
+/* Toolbar. The segmented view switcher is the ecosystem's control,
+   copied from blockr.ggplot's .dd-cfg-types / .dd-type-btn (chart-type
+   strip): white segments divided by hairlines, blue-50 fill and primary
+   text on the active one. Every control on the row is --otl-ctrl-h tall
+   so the switcher, the format picker and Render share a baseline.
+
+   The active selector must be `.btn-check:checked + label`: shinyWidgets
+   renders the radio as a SIBLING of its label, so neither `.active` nor
+   `label:has(input:checked)` ever matches, which is why the active
+   segment was invisible. */
+.blockr-otl-panel { --otl-ctrl-h: 30px; }
+.blockr-otl-toolbar { align-items: center; }
+/* The switcher is a shinyWidgets input, so it ships in a .form-group
+   wrapper with a 16px bottom margin. Under align-items:center that
+   margin box centres, lifting the switcher 8px above the right group's
+   centre line. Zero it so both groups share the toolbar centre. */
+.blockr-otl-toolbar > .shiny-input-container { margin: 0; }
+.blockr-otl-toolbar .btn-group {
+  height: var(--otl-ctrl-h);
+  border: 1px solid var(--blockr-color-border, #e5e7eb);
+  border-radius: 6px; overflow: hidden; }
+.blockr-otl-toolbar .btn-group > .btn.radiobtn {
+  display: inline-flex; align-items: center;   /* centres the label, so the
+                                                  padding reads even */
+  height: 100%; margin: 0; border: 0; border-radius: 0;
+  border-right: 1px solid var(--blockr-color-border, #e5e7eb);
+  background: #fff; box-shadow: none;
+  padding: 0 12px; font-size: var(--blockr-font-size-xs, 0.75rem);
+  color: var(--blockr-grey-500, #6b7280); }
+.blockr-otl-toolbar .btn-group > .btn.radiobtn:last-of-type { border-right: 0; }
+.blockr-otl-toolbar .btn-group > .btn.radiobtn:hover {
+  background: var(--blockr-grey-50, #f9fafb); }
+.blockr-otl-toolbar .btn-check:checked + .btn.radiobtn {
+  background: var(--blockr-blue-50, #eff6ff);
+  color: var(--blockr-color-primary, #2563eb);
+  font-weight: var(--blockr-font-weight-medium, 500); }
+
+/* Split render group: the format picker (neutral) fused to the
+   Download action (green), one bordered pill divided by a hairline.
+   Both halves are --otl-ctrl-h tall; the shiny-input-container the
+   selectInput wraps the <select> in carries a default bottom margin,
+   which is what pushed this group below the left switcher's centre --
+   zero it and both groups share the toolbar's centre line. */
+.blockr-otl-rendergroup { display: inline-flex; align-items: stretch;
+  height: var(--otl-ctrl-h); }
+.blockr-otl-rendergroup > .shiny-input-container {
+  margin: 0; width: auto !important; }
+
+.blockr-otl-rendergroup select.form-control,
+.blockr-otl-rendergroup select.form-select {
+  height: var(--otl-ctrl-h); width: 88px; padding: 0 26px 0 11px;
+  font-size: var(--blockr-font-size-xs, 0.75rem);
+  color: var(--blockr-grey-700, #374151);
+  border: 1px solid var(--blockr-color-border, #e5e7eb);
+  border-right: 0; border-radius: 6px 0 0 6px;
+  background-color: #fff; box-shadow: none;
+  -webkit-appearance: none; appearance: none;
+  background-repeat: no-repeat; background-position: right 9px center;
+  background-size: 9px 6px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='6' viewBox='0 0 9 6'%3E%3Cpath d='M1 1l3.5 3.5L8 1' fill='none' stroke='%236b7280' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E"); }
+.blockr-otl-rendergroup select.form-control:hover,
+.blockr-otl-rendergroup select.form-select:hover {
+  background-color: var(--blockr-grey-50, #f9fafb); }
+
+.blockr-otl-renderbtn { display: inline-flex; align-items: center; gap: 5px;
+  height: var(--otl-ctrl-h); font: inherit;
+  font-size: var(--blockr-font-size-xs, 0.75rem);
+  font-weight: var(--blockr-font-weight-medium, 500);
+  cursor: pointer; padding: 0 12px; margin: 0;
+  border: 1px solid #86efac; border-radius: 0 6px 6px 0;
+  background: #f0fdf4; color: #166534; box-shadow: none; }
+.blockr-otl-renderbtn:hover { border-color: #4ade80; background: #dcfce7;
+  color: #166534; }
 
 .blockr-otl { display: grid; grid-template-columns: 168px 1fr; column-gap: 14px; }
 .blockr-otl-grow { display: contents; }
@@ -242,3 +361,57 @@
   color: var(--bs-secondary-color, #6c757d);
   opacity: 0.7;
 }
+
+/* Gear + settings band (blockr.viz / blockr.dplyr settings-band pattern):
+   the gear sits at the toolbar's right edge; clicking it expands a
+   full-width, in-flow band under the toolbar (no popover, no overlay) so
+   the outline below simply moves down. Client-only toggle. */
+/* Gear + settings band: the blockr.dplyr selectors (.blockr-gear-btn,
+   .blockr-settings, __title / __grid / __field) verbatim -- the shared
+   layer bound for blockr.ui -- so the outline's gear matches every other
+   block's. Rules copied from blockr.dplyr's blockr-blocks.css +
+   settings-band.css; the only local touch is fitting the gear to the
+   toolbar control height. When the shared layer lands in blockr.ui this
+   block is deleted and the classes come from there. */
+.blockr-gear-btn { display: inline-flex; align-items: center;
+  justify-content: center; height: var(--otl-ctrl-h); width: var(--otl-ctrl-h);
+  margin-left: 4px; flex-shrink: 0; padding: 0; cursor: pointer;
+  background: transparent; color: var(--blockr-grey-400, #9ca3af);
+  border: 1px solid var(--blockr-color-border, #e5e7eb); border-radius: 4px;
+  transition: color .15s ease, border-color .15s ease, background .15s ease; }
+.blockr-gear-btn:hover, .blockr-gear-btn.blockr-gear-active {
+  color: var(--blockr-color-primary, #2563eb);
+  border-color: rgba(37, 99, 235, 0.3); background: rgba(37, 99, 235, 0.04); }
+.blockr-gear-btn.blockr-gear-active { background: rgba(37, 99, 235, 0.08); }
+
+.blockr-settings { display: none; position: relative; margin: 0 0 10px;
+  border: 1px solid var(--blockr-color-border, #e5e7eb); border-radius: 8px;
+  padding: 12px 14px 16px; background: #fff; box-sizing: border-box; }
+.blockr-settings.blockr-settings--open { display: flex; flex-wrap: wrap;
+  align-items: flex-start; gap: 0 14px; }
+.blockr-settings--beak.blockr-settings--open::before {
+  content: ""; position: absolute; top: -6px; right: 13px;
+  width: 10px; height: 10px; background: #fff;
+  border-left: 1px solid var(--blockr-color-border, #e5e7eb);
+  border-top: 1px solid var(--blockr-color-border, #e5e7eb);
+  transform: rotate(45deg); }
+
+.blockr-settings__title { flex: 1 1 100%;
+  font-size: var(--blockr-font-size-xs, 0.75rem); font-weight: 500;
+  color: var(--blockr-color-text-muted, #6b7280); text-transform: uppercase;
+  letter-spacing: 0.05em; margin-bottom: 10px; }
+.blockr-settings__title:not(:first-child) { margin-top: 6px; }
+.blockr-settings__grid { flex: 1 1 100%; display: flex; flex-wrap: wrap;
+  align-items: flex-end; gap: 6px 12px; margin-bottom: 6px; }
+.blockr-settings__field { flex: 1 1 190px; min-width: 0;
+  display: flex; flex-direction: column; }
+.blockr-settings__field--full { flex: 1 1 100%; }
+.blockr-settings__field > label { font-size: var(--blockr-font-size-xs, 0.75rem);
+  color: var(--blockr-grey-700, #374151); margin: 0 0 4px; }
+.blockr-settings__field .shiny-input-container { margin: 0; width: 100% !important; }
+.blockr-settings select.form-control {
+  height: 34px; font-size: 0.8125rem; color: var(--blockr-grey-700, #374151);
+  border: 1px solid var(--blockr-color-border, #e5e7eb); border-radius: 6px;
+  box-shadow: none; padding: 0 9px; }
+.blockr-settings__hint { font-size: 0.7rem;
+  color: var(--blockr-grey-400, #9ca3af); margin-top: 4px; }
