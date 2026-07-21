@@ -510,16 +510,21 @@ export_qmd <- function(sects, title = "Board report") {
     }
 
     # A block that is in the report shows its output, so it IS an
-    # exhibit: its title becomes the CAPTION (numbered, cross-
-    # referenceable) rather than a heading -- stacks head sections,
-    # blocks are exhibits. The prefix comes from the result's class;
-    # an unclassifiable result gets a bare label, since a wrong fig-
-    # prefix would leave a broken cross-reference target.
+    # exhibit: its title becomes the CAPTION rather than a heading --
+    # stacks head sections, blocks are exhibits. The `kind` (fig/tbl)
+    # picks the caption key so the caption sits in the right place.
+    #
+    # The label is deliberately NOT prefixed with the kind. A `tbl-`/
+    # `fig-` label makes quarto treat the output as a cross-reference
+    # FLOAT, and pandoc's pptx path cannot render a flextable inside that
+    # float -- the table silently vanishes from the slide. Dropping the
+    # prefix keeps one qmd that renders identically to html, pdf AND
+    # pptx (flextables included); the cost is losing @tbl-/@fig- cross-
+    # references, which slides do not use and reports rarely do.
     kind <- sects$kinds[i]
     lbl <- gsub("[^a-zA-Z0-9_-]", "-", sects$ids[i])
 
     cap <- if (sects$report[i] && nzchar(kind)) {
-      lbl <- paste0(kind, "-", lbl)
       paste0("#| ", kind, "-cap: \"", gsub("\"", "'", sects$names[i]), "\"")
     }
 

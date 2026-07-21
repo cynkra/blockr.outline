@@ -187,16 +187,7 @@ render_report <- function(qmd_txt, spin_txt, fmt, file, title) {
 
   out_name <- paste0("report.", fmt)
 
-  # pptx always goes through rmarkdown's powerpoint_presentation, never
-  # quarto -- even when quarto is available. Quarto's pptx path is plain
-  # pandoc, which silently drops a flextable (the chunk renders to nothing
-  # on the slide); only rmarkdown's officer-backed powerpoint_presentation
-  # turns a flextable into a NATIVE, editable pptx table. That officer
-  # path is also what carries the reference_doc template. html/pdf stay on
-  # quarto, which handles their flextables and gets embed-resources.
-  use_quarto <- quarto_usable() && !identical(fmt, "pptx")
-
-  if (use_quarto) {
+  if (quarto_usable()) {
 
     # A downloaded html report is a single file, so resources (plot pngs)
     # must be embedded. The first "\n---\n" is the yaml closing fence.
