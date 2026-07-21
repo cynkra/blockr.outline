@@ -27,7 +27,17 @@ highlight_r_code <- function(txt) {
     error = function(e) NA_character_
   )
 
-  if (is.na(res)) NULL else res
+  if (is.na(res)) NULL else strip_downlit_links(res)
+}
+
+# downlit hyperlinks every known function to its rdrr.io docs. Useful in a
+# rendered document, a nuisance in the live app: the code preview sits
+# inside a Shiny session, so an incidental click navigates the tab away
+# and tears the app down (back button = reload = lost state). Strip the
+# anchors, keep the highlighting. The rendered report is unaffected -- it
+# highlights through quarto, not this path.
+strip_downlit_links <- function(x) {
+  gsub("</?a[^>]*>", "", x, perl = TRUE)
 }
 
 # Source highlighting for the Document (quarto) view.
@@ -134,7 +144,11 @@ highlight_qmd_code <- function(txt) {
         error = function(e) NA_character_
       )
 
-      hl <- if (is.na(hl)) NULL else strsplit(hl, "\n", fixed = TRUE)[[1L]]
+      hl <- if (is.na(hl)) {
+        NULL
+      } else {
+        strsplit(strip_downlit_links(hl), "\n", fixed = TRUE)[[1L]]
+      }
 
       # downlit emits one span per source line; if that ever fails to
       # hold, the chunk is still readable as escaped text rather than
