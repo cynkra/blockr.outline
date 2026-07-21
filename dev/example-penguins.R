@@ -9,7 +9,9 @@
 #
 # Uses the usual blockr.verse pieces:
 #   * blockr.stats   model + broom (tidy / glance) blocks
-#   * blockr.viz     the scatter with an lm smoother
+#   * blockr.ggplot  the scatter -- a ggplot block, whose code IS ggplot2,
+#                    so the figure reproduces in the rendered report (a
+#                    blockr.viz chart would only export a data passthrough)
 #   * blockr.extra   HTML table preview (blockr.html_table_preview option)
 #   * blockr.session project save / load / versions (manage_project plugin)
 #   * blockr.outline the narrated outline + report render
@@ -37,8 +39,8 @@ message("Open http://127.0.0.1:", port, "/")
 root <- "."
 deps <- c(
   "dockViewR", "blockr.core", "blockr.ui", "blockr.session", "blockr.dag",
-  "blockr.dock", "blockr.dplyr", "blockr.viz", "blockr.extra",
-  "blockr.stats", "blockr.outline"
+  "blockr.dock", "blockr.dplyr", "blockr.ggplot", "blockr.viz",
+  "blockr.extra", "blockr.stats", "blockr.outline"
 )
 for (d in deps) {
   pkgload::load_all(
@@ -73,6 +75,10 @@ board <- new_dock_board(
       ),
       block_name = "Complete cases"
     ),
+    # A short preview stands in for the data in the report: df-print:kable
+    # prints every row, so the full 342-row frame would be an endless
+    # table (and a giant pptx slide). Six rows tell the story.
+    peek = new_head_block(n = 6L, block_name = "First rows"),
     # Model estimation: the model block's own card carries the formula
     # widget and coefficient forest; the outline turns it into a document
     # step.
@@ -86,20 +92,24 @@ board <- new_dock_board(
     fitstats = new_broom_block(
       output = "glance", block_name = "Model fit"
     ),
-    # Visualise the relationship the model captures.
-    fit = new_chart_block(
-      chart_type = "scatter", x = "flipper_length_mm", y = "body_mass_g",
-      color = "species", series = "species", smoother = "lm",
-      block_name = "Mass vs flipper length"
+    # Visualise the relationship the model captures. blockr.ggplot, not a
+    # blockr.viz chart: the ggplot block's expression IS ggplot2 code, so
+    # the figure reproduces in the rendered document. A viz chart renders
+    # through an echarts widget in its output pane -- great in the app,
+    # but the exported code is only a data passthrough, so the report
+    # would show the data, not the plot.
+    fit = blockr.ggplot::new_ggplot_block(
+      type = "point", x = "flipper_length_mm", y = "body_mass_g",
+      color = "species", block_name = "Mass vs flipper length"
     )
   ),
   links = links(
-    from = c("peng", "clean", "mdl", "mdl", "clean"),
-    to   = c("clean", "mdl", "coefs", "fitstats", "fit")
+    from = c("peng", "clean", "clean", "mdl", "mdl", "clean"),
+    to   = c("clean", "peek", "mdl", "coefs", "fitstats", "fit")
   ),
   stacks = stacks(
     data = new_dock_stack(
-      c("peng", "clean"), name = "The data", color = "#2563eb"
+      c("peng", "clean", "peek"), name = "The data", color = "#2563eb"
     ),
     model = new_dock_stack(
       c("mdl", "coefs", "fitstats"), name = "The model", color = "#7c3aed"
@@ -117,14 +127,19 @@ board <- new_dock_board(
             "bill, flipper and body-mass measurements. A friendlier stand-in",
             "for iris, and a natural regression target -- body mass is the",
             "thing to predict."
-          )
+          ),
+          report = FALSE
         ),
         clean = list(
           description = paste(
             "A handful of birds are missing a measurement. Restrict to the",
             "complete records the model needs, so every row contributes to",
             "the fit."
-          )
+          ),
+          report = FALSE
+        ),
+        peek = list(
+          description = "The first few rows of the prepared data."
         ),
         mdl = list(
           description = paste(
@@ -150,8 +165,9 @@ board <- new_dock_board(
         fit = list(
           description = paste(
             "The relationship, drawn: body mass against flipper length,",
-            "coloured by species, each with its own linear smoother. The",
-            "parallel-ish lines are the species intercepts from the model."
+            "coloured by species. The upward trend is the flipper effect;",
+            "the colour bands are the species differences the model",
+            "estimates."
           )
         )
       ),
