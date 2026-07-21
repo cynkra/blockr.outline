@@ -12,7 +12,37 @@
 #' @param block_order Character vector of block ids: the preferred document
 #'   order, applied as the tie-break of the topological sort.
 #' @param title Document title.
+#' @param stack_annotations Named list keyed by stack id, each entry a list
+#'   with a `description` (markdown string) used as the chapter intro.
 #' @param ... Forwarded to [blockr.dock::new_dock_extension()]
+#'
+#' @return A dock extension object, to be passed in a board's `extensions`
+#'   list (see [blockr.dock::new_dock_board()]).
+#'
+#' @examples
+#' if (interactive()) {
+#'   library(blockr.core)
+#'   library(blockr.dock)
+#'
+#'   board <- new_dock_board(
+#'     blocks = c(
+#'       data = new_dataset_block("iris"),
+#'       audit = new_head_block(n = 3L)
+#'     ),
+#'     links = links(from = "data", to = "audit"),
+#'     extensions = list(
+#'       new_outline_extension(
+#'         title = "Iris pilot report",
+#'         annotations = list(
+#'           data = list(description = "The classic **iris** dataset."),
+#'           audit = list(description = "Quick QC check.", report = FALSE)
+#'         )
+#'       )
+#'     )
+#'   )
+#'
+#'   serve(board)
+#' }
 #'
 #' @export
 new_outline_extension <- function(annotations = list(),

@@ -669,7 +669,7 @@ outline_tags <- function(sects, ns, editing = NULL) {
       if (!sects$report[i]) {
         span(
           class = "blockr-otl-offchip",
-          "include=FALSE · runs, not shown"
+          "include=FALSE \u00b7 runs, not shown"
         )
       },
       prose,
