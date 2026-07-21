@@ -23,10 +23,14 @@ test_that("export_spin renders the expected script", {
   expect_snapshot(cat(export_spin(sects_fixture())))
 })
 
-test_that("report exhibits get a numbered caption, excluded blocks are hidden", {
+test_that("report exhibits get a caption, excluded blocks are hidden", {
   qmd <- export_qmd(sects_fixture())
-  # data is a report block classified "tbl" -> tbl-cap caption + tbl- label.
-  expect_match(qmd, "#\\| label: tbl-data")
+  # data is a report block classified "tbl" -> tbl-cap caption, bare label.
+  # The label carries no tbl-/fig- prefix: that would make quarto treat the
+  # output as a cross-reference float, which pandoc's pptx path cannot
+  # render a flextable inside.
+  expect_match(qmd, "#\\| label: data")
+  expect_no_match(qmd, "#\\| label: tbl-data")
   expect_match(qmd, "#\\| tbl-cap:")
   # head is excluded -> include:false and no echo of its value.
   expect_match(qmd, "#\\| include: false")

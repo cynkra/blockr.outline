@@ -14,7 +14,7 @@
       The iris data.
       
       ```{r}
-      #| label: tbl-data
+      #| label: data
       #| tbl-cap: "Dataset"
       data <- datasets::iris
       data
@@ -23,7 +23,7 @@
       Setosa only.
       
       ```{r}
-      #| label: tbl-sub
+      #| label: sub
       #| tbl-cap: "Subset"
       sub <- subset(data, Species == "setosa")
       sub
@@ -43,11 +43,13 @@
       #' # Stack
       #' Data preparation.
       #' 
+      #' **Dataset**
       #' The iris data.
       #+ data
       data <- datasets::iris
       data
       
+      #' **Subset**
       #' Setosa only.
       #+ sub
       sub <- subset(data, Species == "setosa")

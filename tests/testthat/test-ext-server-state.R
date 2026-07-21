@@ -1,6 +1,6 @@
 # R/ext.R :: outline_ext_srv -- the serialization contract and lifecycle GC.
 
-test_that("the server exposes the four state reactives", {
+test_that("the server exposes every state reactive", {
   srv <- outline_ext_srv(list(), character(), "T")
   testServer(
     srv,
@@ -8,7 +8,10 @@ test_that("the server exposes the four state reactives", {
       st <- session$getReturned()$state
       expect_named(
         st,
-        c("annotations", "block_order", "title", "stack_annotations")
+        c(
+          "annotations", "block_order", "title", "stack_annotations",
+          "stack_title_level", "block_title_level", "template"
+        )
       )
       expect_true(all(vapply(st, is.function, logical(1L))))
     },
