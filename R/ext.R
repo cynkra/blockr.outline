@@ -14,6 +14,14 @@
 #' @param title Document title.
 #' @param stack_annotations Named list keyed by stack id, each entry a list
 #'   with a `description` (markdown string) used as the chapter intro.
+#' @param stack_title_level How stack titles render in the document: `"#"`
+#'   or `"##"` for a heading of that level, `"none"` to omit them.
+#' @param block_title_level How block titles render: `"caption"` (the
+#'   exhibit caption), `"#"`, `"##"` or `"###"` for a heading of that
+#'   level, `"none"` to omit them. A block title is a heading or a
+#'   caption, never both.
+#' @param template Path to a pandoc reference document (`.pptx` / `.docx`)
+#'   styling the corresponding render. `""` for none.
 #' @param ... Forwarded to [blockr.dock::new_dock_extension()]
 #'
 #' @return A dock extension object, to be passed in a board's `extensions`

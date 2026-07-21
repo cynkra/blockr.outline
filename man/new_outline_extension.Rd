@@ -9,6 +9,9 @@ new_outline_extension(
   block_order = character(),
   title = "Board report",
   stack_annotations = list(),
+  stack_title_level = "#",
+  block_title_level = "caption",
+  template = "",
   ...
 )
 }
@@ -23,6 +26,17 @@ order, applied as the tie-break of the topological sort.}
 
 \item{stack_annotations}{Named list keyed by stack id, each entry a list
 with a \code{description} (markdown string) used as the chapter intro.}
+
+\item{stack_title_level}{How stack titles render in the document: \code{"#"}
+or \code{"##"} for a heading of that level, \code{"none"} to omit them.}
+
+\item{block_title_level}{How block titles render: \code{"caption"} (the
+exhibit caption), \code{"#"}, \code{"##"} or \code{"###"} for a heading of that
+level, \code{"none"} to omit them. A block title is a heading or a
+caption, never both.}
+
+\item{template}{Path to a pandoc reference document (\code{.pptx} / \code{.docx})
+styling the corresponding render. \code{""} for none.}
 
 \item{...}{Forwarded to \code{\link[blockr.dock:extension]{blockr.dock::new_dock_extension()}}}
 }
