@@ -72,6 +72,11 @@
    segment was invisible. */
 .blockr-otl-panel { --otl-ctrl-h: 30px; }
 .blockr-otl-toolbar { align-items: center; }
+/* The switcher is a shinyWidgets input, so it ships in a .form-group
+   wrapper with a 16px bottom margin. Under align-items:center that
+   margin box centres, lifting the switcher 8px above the right group's
+   centre line. Zero it so both groups share the toolbar centre. */
+.blockr-otl-toolbar > .shiny-input-container { margin: 0; }
 .blockr-otl-toolbar .btn-group {
   height: var(--otl-ctrl-h);
   border: 1px solid var(--blockr-color-border, #e5e7eb);
@@ -92,35 +97,42 @@
   color: var(--blockr-color-primary, #2563eb);
   font-weight: var(--blockr-font-weight-medium, 500); }
 
-.blockr-otl-tbbtn { display: inline-flex; align-items: center; gap: 5px;
-  height: var(--otl-ctrl-h); font: inherit;
-  font-size: var(--blockr-font-size-xs, 0.75rem); cursor: pointer;
-  border: 1px solid var(--blockr-color-border, #e5e7eb);
-  border-radius: 6px; padding: 0 11px; background: #fff;
-  color: var(--blockr-grey-700, #374151); }
-.blockr-otl-tbbtn:hover { border-color: var(--blockr-grey-300, #d1d5db);
-  color: var(--blockr-grey-900, #111827); }
-.blockr-otl-renderbtn { border-color: #86efac; background: #f0fdf4;
-  color: #166534; }
-.blockr-otl-renderbtn:hover { border-color: #4ade80; background: #dcfce7;
-  color: #166534; }
+/* Split render group: the format picker (neutral) fused to the
+   Download action (green), one bordered pill divided by a hairline.
+   Both halves are --otl-ctrl-h tall; the shiny-input-container the
+   selectInput wraps the <select> in carries a default bottom margin,
+   which is what pushed this group below the left switcher's centre --
+   zero it and both groups share the toolbar's centre line. */
+.blockr-otl-rendergroup { display: inline-flex; align-items: stretch;
+  height: var(--otl-ctrl-h); }
+.blockr-otl-rendergroup > .shiny-input-container {
+  margin: 0; width: auto !important; }
 
-/* Native select (selectize = FALSE), sized to the same height and given
-   the design system's chevron rather than the platform one. */
-.blockr-otl-toolbar-right select.form-control,
-.blockr-otl-toolbar-right select.form-select {
-  height: var(--otl-ctrl-h); padding: 0 26px 0 11px;
+.blockr-otl-rendergroup select.form-control,
+.blockr-otl-rendergroup select.form-select {
+  height: var(--otl-ctrl-h); width: 88px; padding: 0 26px 0 11px;
   font-size: var(--blockr-font-size-xs, 0.75rem);
   color: var(--blockr-grey-700, #374151);
   border: 1px solid var(--blockr-color-border, #e5e7eb);
-  border-radius: 6px; background-color: #fff; box-shadow: none;
+  border-right: 0; border-radius: 6px 0 0 6px;
+  background-color: #fff; box-shadow: none;
   -webkit-appearance: none; appearance: none;
   background-repeat: no-repeat; background-position: right 9px center;
   background-size: 9px 6px;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='6' viewBox='0 0 9 6'%3E%3Cpath d='M1 1l3.5 3.5L8 1' fill='none' stroke='%236b7280' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E"); }
-.blockr-otl-toolbar-right select.form-control:hover,
-.blockr-otl-toolbar-right select.form-select:hover {
-  border-color: var(--blockr-grey-300, #d1d5db); }
+.blockr-otl-rendergroup select.form-control:hover,
+.blockr-otl-rendergroup select.form-select:hover {
+  background-color: var(--blockr-grey-50, #f9fafb); }
+
+.blockr-otl-renderbtn { display: inline-flex; align-items: center; gap: 5px;
+  height: var(--otl-ctrl-h); font: inherit;
+  font-size: var(--blockr-font-size-xs, 0.75rem);
+  font-weight: var(--blockr-font-weight-medium, 500);
+  cursor: pointer; padding: 0 12px; margin: 0;
+  border: 1px solid #86efac; border-radius: 0 6px 6px 0;
+  background: #f0fdf4; color: #166534; box-shadow: none; }
+.blockr-otl-renderbtn:hover { border-color: #4ade80; background: #dcfce7;
+  color: #166534; }
 
 .blockr-otl { display: grid; grid-template-columns: 168px 1fr; column-gap: 14px; }
 .blockr-otl-grow { display: contents; }

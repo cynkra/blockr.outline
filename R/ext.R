@@ -65,23 +65,31 @@ outline_ext_ui <- function(id, board, ...) {
       ),
       div(
         class = "blockr-otl-toolbar-right",
-        # selectize = FALSE: a native <select> can be sized to match the
-        # buttons beside it; selectize's wrapper cannot without fighting
-        # its own layout (it rendered 42px against their 28px).
-        selectInput(
-          ns("code_render_format"),
-          label = NULL,
-          choices = formats,
-          selected = "html",
-          selectize = FALSE,
-          width = "92px"
-        ),
-        downloadButton(
-          ns("code_render"),
-          "Render",
-          class = "blockr-otl-tbbtn blockr-otl-renderbtn"
-        ),
-        NULL
+        # Split button (decision record:
+        # design-system/target/outline-render-group-proposals.html, A +
+        # label 2): the format picker and the action read as one control,
+        # neutral picker fused to the green action. The label is
+        # "Download", not "Render" -- render is the internal step, the
+        # file is what the user walks away with.
+        div(
+          class = "blockr-otl-rendergroup",
+          # selectize = FALSE: a native <select> can be sized to match the
+          # buttons beside it; selectize's wrapper cannot without fighting
+          # its own layout (it rendered 42px against their 28px).
+          selectInput(
+            ns("code_render_format"),
+            label = NULL,
+            choices = formats,
+            selected = "html",
+            selectize = FALSE,
+            width = "88px"
+          ),
+          downloadButton(
+            ns("code_render"),
+            "Download",
+            class = "blockr-otl-renderbtn"
+          )
+        )
       )
     ),
     uiOutput(ns("outline_out")),
