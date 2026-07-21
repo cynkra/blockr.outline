@@ -39,7 +39,7 @@ outline_js <- function(ns) {
       "var TOGGLE = '%s', OPEN = '%s', MOVE = '%s', EDIT = '%s', ",
       "REN = '%s', RENSTACK = '%s', SAVE = '%s', CANCEL = '%s', ",
       "ADD = '%s', RM = '%s', CHAP = '%s', NEWCHAP = '%s', ",
-      "TOSTACK = '%s', MOVECHAP = '%s';"
+      "TOSTACK = '%s', MOVECHAP = '%s', GEAR = '%s', SETTINGS = '%s';"
     ),
     ns("outline_toggle"),
     ns("outline_open"),
@@ -54,7 +54,9 @@ outline_js <- function(ns) {
     ns("outline_chapter"),
     ns("outline_newchapter"),
     ns("outline_tostack"),
-    ns("outline_movechap")
+    ns("outline_movechap"),
+    ns("otl_gear"),
+    ns("otl_settings")
   )
 
   tags$script(HTML(paste0(
@@ -83,6 +85,17 @@ outline_js <- function(ns) {
         (msg.items || []).forEach(function(it) { codeById[it.id] = it.html; });
         applyCode();
       });
+
+      // Gear toggles the settings band. Client-only, like the collapse:
+      // opening a settings panel is not board state, so no round trip.
+      var gear = document.getElementById(GEAR);
+      var settings = document.getElementById(SETTINGS);
+      if (gear && settings) {
+        gear.addEventListener('click', function() {
+          var open = settings.classList.toggle('blockr-otl-settings--open');
+          gear.classList.toggle('blockr-otl-gearbtn--on', open);
+        });
+      }
 
       var dragId = null;
       var collapseTimer = null;

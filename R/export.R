@@ -456,20 +456,34 @@ chapter_intro <- function(sects, chapters, i) {
   desc
 }
 
-export_spin <- function(sects) {
+export_spin <- function(sects, stack_level = "#", block_level = "caption") {
 
   chapters <- section_chapters(sects)
+
+  stack_hd <- if (stack_level %in% c("#", "##")) stack_level
+  # spin has no chunk-caption mechanism, so a "caption" block title
+  # becomes a bold line above the output; a heading title is that
+  # heading. Either way the R script stays a faithful mirror.
+  block_hd <- if (block_level %in% c("#", "##", "###")) block_level
 
   one_section <- function(i) {
 
     prose <- if (sects$report[i]) {
       desc <- sects$descriptions[i]
       intro <- chapter_intro(sects, chapters, i)
+      title_line <- if (!is.null(block_hd) && nzchar(sects$names[i])) {
+        paste0("#' ", block_hd, " ", sects$names[i])
+      } else if (identical(block_level, "caption") && nzchar(sects$names[i])) {
+        paste0("#' **", sects$names[i], "**")
+      }
       c(
-        if (!is.na(chapters[i])) paste0("#' # ", chapters[i]),
+        if (!is.na(chapters[i]) && !is.null(stack_hd)) {
+          paste0("#' ", stack_hd, " ", chapters[i])
+        },
         if (length(intro)) {
           c(paste0("#' ", strsplit(intro, "\n")[[1L]]), "#' ")
         },
+        title_line,
         if (nzchar(desc)) paste0("#' ", strsplit(desc, "\n")[[1L]])
       )
     }
@@ -491,9 +505,17 @@ export_spin <- function(sects) {
   )
 }
 
-export_qmd <- function(sects, title = "Board report") {
+export_qmd <- function(sects, title = "Board report",
+                       stack_level = "#", block_level = "caption") {
 
   chapters <- section_chapters(sects)
+
+  # Heading levels come from the gear's Headings subsection. A stack /
+  # block title can be a document heading (#, ##, ###) or, for a block,
+  # the exhibit caption (default) or nothing. The block title is a
+  # heading OR a caption, never both.
+  stack_hd <- if (stack_level %in% c("#", "##")) stack_level
+  block_hd <- if (block_level %in% c("#", "##", "###")) block_level
 
   one_section <- function(i) {
 
@@ -501,10 +523,13 @@ export_qmd <- function(sects, title = "Board report") {
       desc <- sects$descriptions[i]
       intro <- chapter_intro(sects, chapters, i)
       c(
-        if (!is.na(chapters[i])) c(paste0("# ", chapters[i]), ""),
+        if (!is.na(chapters[i]) && !is.null(stack_hd)) {
+          c(paste0(stack_hd, " ", chapters[i]), "")
+        },
         if (length(intro)) c(intro, ""),
-        # No `## block name` heading: the title reaches the document as
-        # the exhibit caption below the output instead.
+        if (!is.null(block_hd) && nzchar(sects$names[i])) {
+          c(paste0(block_hd, " ", sects$names[i]), "")
+        },
         if (nzchar(desc)) desc
       )
     }
@@ -524,7 +549,10 @@ export_qmd <- function(sects, title = "Board report") {
     kind <- sects$kinds[i]
     lbl <- gsub("[^a-zA-Z0-9_-]", "-", sects$ids[i])
 
-    cap <- if (sects$report[i] && nzchar(kind)) {
+    # Caption only when the block title is set to "caption"; a heading
+    # title already carries the name, and "none" wants no title at all.
+    cap <- if (sects$report[i] && identical(block_level, "caption") &&
+                 nzchar(kind)) {
       paste0("#| ", kind, "-cap: \"", gsub("\"", "'", sects$names[i]), "\"")
     }
 

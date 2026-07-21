@@ -159,7 +159,8 @@ highlight_qmd_code <- function(txt) {
 # Render the qmd (quarto) or the spin script (rmarkdown fallback) into
 # `file`. Errors surface as a notification plus a console trace; quiet
 # rendering makes failed downloads undebuggable.
-render_report <- function(qmd_txt, spin_txt, fmt, file, title) {
+render_report <- function(qmd_txt, spin_txt, fmt, file, title,
+                          template = NULL) {
 
   dir <- tempfile("blockr-outline-")
   dir.create(dir)
@@ -195,6 +196,21 @@ render_report <- function(qmd_txt, spin_txt, fmt, file, title) {
       qmd_txt <- sub(
         "\n---\n",
         "\nformat:\n  html:\n    embed-resources: true\n---\n",
+        qmd_txt,
+        fixed = TRUE
+      )
+    }
+
+    # Reference template (gear -> Template): pandoc reference-doc, which
+    # pptx and docx both honour. Injected the same way as embed-resources
+    # so the one Document still drives the render.
+    if (!is.null(template) && nzchar(template) && fmt %in% c("pptx", "docx")) {
+      qmd_txt <- sub(
+        "\n---\n",
+        paste0(
+          "\nformat:\n  ", fmt, ":\n    reference-doc: \"",
+          normalizePath(template, mustWork = FALSE), "\"\n---\n"
+        ),
         qmd_txt,
         fixed = TRUE
       )

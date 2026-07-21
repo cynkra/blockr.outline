@@ -49,10 +49,16 @@ new_outline_extension <- function(annotations = list(),
                                   block_order = character(),
                                   title = "Board report",
                                   stack_annotations = list(),
+                                  stack_title_level = "#",
+                                  block_title_level = "caption",
+                                  template = "",
                                   ...) {
 
   blockr.dock::new_dock_extension(
-    outline_ext_srv(annotations, block_order, title, stack_annotations),
+    outline_ext_srv(
+      annotations, block_order, title, stack_annotations,
+      stack_title_level, block_title_level, template
+    ),
     outline_ext_ui,
     name = "Outline",
     description = paste(
@@ -119,16 +125,88 @@ outline_ext_ui <- function(id, board, ...) {
             "Download",
             class = "blockr-otl-renderbtn"
           )
+        ),
+        # Gear: opens the in-flow settings band below the toolbar (the
+        # blockr.viz / blockr.dplyr settings-band pattern). Output-shaping
+        # options that do not belong on the always-visible toolbar.
+        tags$button(
+          id = ns("otl_gear"),
+          type = "button",
+          class = "blockr-otl-gearbtn",
+          title = "Report settings",
+          HTML(paste0(
+            "<svg width='15' height='15' viewBox='0 0 16 16' fill='none' ",
+            "stroke='currentColor' stroke-width='1.4'>",
+            "<circle cx='8' cy='8' r='2.2'/>",
+            "<path d='M8 1v2M8 13v2M1 8h2M13 8h2M3 3l1.4 1.4M11.6 11.6 13 13",
+            "M13 3l-1.4 1.4M4.4 11.6 3 13'/></svg>"
+          ))
         )
       )
     ),
+    outline_settings_band(ns),
     uiOutput(ns("outline_out")),
     outline_js(ns)
   )
 }
 
+# The gear's settings band: output-shaping options grouped into
+# subsections. Hidden until the gear toggles it (outline_js). Values
+# default to the current behaviour (stack "#", block "caption") so an
+# untouched board renders exactly as before.
+outline_settings_band <- function(ns) {
+  div(
+    class = "blockr-otl-settings",
+    id = ns("otl_settings"),
+    div(
+      class = "blockr-otl-setgroup",
+      div(class = "blockr-otl-setlabel", "Headings"),
+      div(
+        class = "blockr-otl-setrow",
+        tags$label("Stack titles", `for` = ns("otl_stack_level")),
+        selectInput(
+          ns("otl_stack_level"), label = NULL,
+          choices = c("Heading 1 (#)" = "#", "Heading 2 (##)" = "##",
+                      "None" = "none"),
+          selected = "#", selectize = FALSE, width = "150px"
+        )
+      ),
+      div(
+        class = "blockr-otl-setrow",
+        tags$label("Block titles", `for` = ns("otl_block_level")),
+        selectInput(
+          ns("otl_block_level"), label = NULL,
+          choices = c("Caption" = "caption", "Heading 1 (#)" = "#",
+                      "Heading 2 (##)" = "##", "Heading 3 (###)" = "###",
+                      "None" = "none"),
+          selected = "caption", selectize = FALSE, width = "150px"
+        )
+      )
+    ),
+    div(
+      class = "blockr-otl-setgroup",
+      div(class = "blockr-otl-setlabel", "Template"),
+      div(
+        class = "blockr-otl-setrow",
+        tags$label("Reference doc", `for` = ns("otl_template")),
+        textInput(
+          ns("otl_template"), label = NULL, value = "",
+          placeholder = "path to .pptx / .docx", width = "260px"
+        )
+      ),
+      div(
+        class = "blockr-otl-sethint",
+        "A pandoc reference document styles the pptx / docx render."
+      )
+    )
+  )
+}
+
 outline_ext_srv <- function(annotations, block_order, title,
-                            stack_annotations = list()) {
+                            stack_annotations = list(),
+                            stack_title_level = "#",
+                            block_title_level = "caption",
+                            template = "") {
 
   function(id, board, update, session, parent, actions = NULL, ...) {
     moduleServer(
@@ -142,6 +220,9 @@ outline_ext_srv <- function(annotations, block_order, title,
           if (is.character(title) && length(title)) title[[1L]] else
             "Board report"
         )
+        rv_stack_level <- reactiveVal(coal(stack_title_level, "#"))
+        rv_block_level <- reactiveVal(coal(block_title_level, "caption"))
+        rv_template <- reactiveVal(coal(template, ""))
         editing <- reactiveVal(NULL)
         # "Insert after X" intent: the id the add link was clicked on, and
         # the block ids last seen on the board. A new block must land where
@@ -365,8 +446,32 @@ outline_ext_srv <- function(annotations, block_order, title,
           }
         )
 
-        spin_txt <- reactive(export_spin(sections()))
-        qmd_txt <- reactive(export_qmd(sections(), rv_title()))
+        spin_txt <- reactive(
+          export_spin(sections(), rv_stack_level(), rv_block_level())
+        )
+        qmd_txt <- reactive(
+          export_qmd(
+            sections(), rv_title(), rv_stack_level(), rv_block_level()
+          )
+        )
+
+        # Gear -> Headings / Template. Value-guarded so a no-op update
+        # (e.g. a re-render restoring the same choice) does not churn.
+        observeEvent(input$otl_stack_level, {
+          if (!identical(input$otl_stack_level, rv_stack_level())) {
+            rv_stack_level(input$otl_stack_level)
+          }
+        })
+        observeEvent(input$otl_block_level, {
+          if (!identical(input$otl_block_level, rv_block_level())) {
+            rv_block_level(input$otl_block_level)
+          }
+        })
+        observeEvent(input$otl_template, {
+          if (!identical(input$otl_template, rv_template())) {
+            rv_template(input$otl_template)
+          }
+        }, ignoreNULL = FALSE)
 
         # Split the projection into the structural skeleton and the
         # per-block code markup, each with its own identical-skip store.
@@ -1042,7 +1147,8 @@ outline_ext_srv <- function(annotations, block_order, title,
               spin_txt(),
               input$code_render_format,
               file,
-              rv_title()
+              rv_title(),
+              template = rv_template()
             )
           }
         )
@@ -1052,7 +1158,10 @@ outline_ext_srv <- function(annotations, block_order, title,
             annotations = rv_ann,
             block_order = rv_order,
             title = rv_title,
-            stack_annotations = rv_stack_ann
+            stack_annotations = rv_stack_ann,
+            stack_title_level = rv_stack_level,
+            block_title_level = rv_block_level,
+            template = rv_template
           )
         )
       }

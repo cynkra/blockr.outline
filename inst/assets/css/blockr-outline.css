@@ -361,3 +361,40 @@
   color: var(--bs-secondary-color, #6c757d);
   opacity: 0.7;
 }
+
+/* Gear + settings band (blockr.viz / blockr.dplyr settings-band pattern):
+   the gear sits at the toolbar's right edge; clicking it expands a
+   full-width, in-flow band under the toolbar (no popover, no overlay) so
+   the outline below simply moves down. Client-only toggle. */
+.blockr-otl-gearbtn { display: inline-flex; align-items: center;
+  justify-content: center; height: var(--otl-ctrl-h); width: var(--otl-ctrl-h);
+  margin-left: 4px; padding: 0; cursor: pointer; background: #fff;
+  border: 1px solid var(--blockr-color-border, #e5e7eb); border-radius: 6px;
+  color: var(--blockr-grey-500, #6b7280); }
+.blockr-otl-gearbtn:hover { color: var(--blockr-grey-900, #111827);
+  border-color: var(--blockr-grey-300, #d1d5db); }
+.blockr-otl-gearbtn--on { background: var(--blockr-blue-50, #eff6ff);
+  border-color: #bfdbfe; color: var(--blockr-color-primary, #2563eb); }
+
+.blockr-otl-settings { display: none; margin: 0 0 10px;
+  border: 1px solid var(--blockr-color-border, #e5e7eb); border-radius: 8px;
+  padding: 14px 16px; background: #fff; }
+.blockr-otl-settings.blockr-otl-settings--open { display: flex;
+  flex-wrap: wrap; gap: 8px 40px; }
+.blockr-otl-setgroup { min-width: 240px; }
+.blockr-otl-setlabel { font-size: 0.7rem; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--blockr-grey-400, #9ca3af); margin-bottom: 8px; }
+.blockr-otl-setrow { display: flex; align-items: center;
+  justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+.blockr-otl-setrow > label { font-size: 0.8125rem;
+  color: var(--blockr-grey-700, #374151); margin: 0; white-space: nowrap; }
+.blockr-otl-setrow .shiny-input-container { margin: 0; }
+.blockr-otl-settings select.form-control,
+.blockr-otl-settings input.form-control {
+  height: var(--otl-ctrl-h); font-size: 0.75rem;
+  color: var(--blockr-grey-700, #374151);
+  border: 1px solid var(--blockr-color-border, #e5e7eb); border-radius: 6px;
+  box-shadow: none; padding: 0 9px; }
+.blockr-otl-sethint { font-size: 0.7rem;
+  color: var(--blockr-grey-400, #9ca3af); margin-top: 2px; }
