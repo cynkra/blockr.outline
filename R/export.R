@@ -576,7 +576,17 @@ export_qmd <- function(sects, title = "Board report",
   }
 
   yaml <- paste(
-    c("---", paste0("title: \"", gsub("\"", "\\\\\"", title), "\""), "---"),
+    c(
+      "---",
+      paste0("title: \"", gsub("\"", "\\\\\"", title), "\""),
+      # Render plain data.frames / tibbles as kable tables rather than
+      # verbatim console output, so the report reads like a document. A
+      # top-level quarto option, so it holds across html / pdf / pptx.
+      # Exhibits with their own print method (flextable, gt, htmlwidgets)
+      # are untouched -- df-print only governs bare data frames.
+      "df-print: kable",
+      "---"
+    ),
     collapse = "\n"
   )
 
