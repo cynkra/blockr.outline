@@ -187,7 +187,16 @@ render_report <- function(qmd_txt, spin_txt, fmt, file, title) {
 
   out_name <- paste0("report.", fmt)
 
-  if (quarto_usable()) {
+  # pptx always goes through rmarkdown's powerpoint_presentation, never
+  # quarto -- even when quarto is available. Quarto's pptx path is plain
+  # pandoc, which silently drops a flextable (the chunk renders to nothing
+  # on the slide); only rmarkdown's officer-backed powerpoint_presentation
+  # turns a flextable into a NATIVE, editable pptx table. That officer
+  # path is also what carries the reference_doc template. html/pdf stay on
+  # quarto, which handles their flextables and gets embed-resources.
+  use_quarto <- quarto_usable() && !identical(fmt, "pptx")
+
+  if (use_quarto) {
 
     # A downloaded html report is a single file, so resources (plot pngs)
     # must be embedded. The first "\n---\n" is the yaml closing fence.
@@ -228,7 +237,15 @@ render_report <- function(qmd_txt, spin_txt, fmt, file, title) {
       error = render_err
     )
 
-    file.copy(rendered, file.path(dir, out_name), overwrite = TRUE)
+    # rmarkdown writes report.<fmt> straight into `dir`, which is already
+    # the out_name path -- copying it onto itself errors. Only move it
+    # when render actually put it somewhere else.
+    if (!identical(
+      normalizePath(rendered, mustWork = FALSE),
+      normalizePath(file.path(dir, out_name), mustWork = FALSE)
+    )) {
+      file.copy(rendered, file.path(dir, out_name), overwrite = TRUE)
+    }
   }
 
   if (!file.exists(file.path(dir, out_name))) {
