@@ -205,8 +205,12 @@ outline_settings_band <- function(ns) {
         tags$label("Reference doc"),
         # blockr.io's path picker (autocompleting, extension-filtered),
         # not a bare text field. Its server half lives in the extension
-        # server; the dep ships with the UI.
-        blockr.io::path_input_ui(
+        # server; the dep ships with the UI. Called defensively because
+        # path_input_ui's signature has grown across blockr.io versions
+        # (`placeholder` is absent in older ones) -- pass only the
+        # arguments the installed version actually accepts.
+        io_call(
+          blockr.io::path_input_ui,
           ns("otl_template"),
           placeholder = "path to .pptx / .docx"
         ),
@@ -484,7 +488,8 @@ outline_ext_srv <- function(annotations, block_order, title,
             rv_block_level(input$otl_block_level)
           }
         })
-        tmpl_path <- blockr.io::path_input_server(
+        tmpl_path <- io_call(
+          blockr.io::path_input_server,
           "otl_template", mode = "file", extensions = c("pptx", "docx")
         )
         observe({
