@@ -7,6 +7,12 @@
 # description, so the outline renders the whole analysis as an explained
 # report (Outline / R script / Document, one-click html/pptx/pdf).
 #
+# Two ways to look at it. The Outline / Workflow panels are the authoring
+# surface; the dashboard views (Prepare / Model / Results, switched top
+# right) are the stats-101-style overview -- change the model card's
+# formula in Model and the coefficients, fit and the Results plots all
+# re-estimate live.
+#
 # Uses the usual blockr.verse pieces:
 #   * blockr.stats   model + broom (tidy / glance) blocks
 #   * blockr.ggplot  the scatter -- a ggplot block, whose code IS ggplot2,
@@ -109,11 +115,20 @@ board <- new_dock_board(
     fit = blockr.ggplot::new_ggplot_block(
       type = "point", x = "flipper_length_mm", y = "body_mass_g",
       color = "species", block_name = "Mass vs flipper length"
+    ),
+    # broom::augment appends the model's fitted values (.fitted) to the
+    # data, so predicted can be plotted against actual.
+    aug = new_broom_block(output = "augment", block_name = "Fitted values"),
+    pred_actual = blockr.ggplot::new_ggplot_block(
+      type = "point", x = "body_mass_g", y = ".fitted",
+      color = "species", block_name = "Predicted vs actual"
     )
   ),
   links = links(
-    from = c("peng", "clean", "clean", "mdl", "mdl", "fitstats", "clean"),
-    to   = c("clean", "peek", "mdl", "coefs", "fitstats", "fit_key", "fit")
+    from = c("peng", "clean", "clean", "mdl", "mdl", "fitstats",
+             "clean", "mdl", "aug"),
+    to   = c("clean", "peek", "mdl", "coefs", "fitstats", "fit_key",
+             "fit", "aug", "pred_actual")
   ),
   stacks = stacks(
     data = new_dock_stack(
@@ -123,7 +138,9 @@ board <- new_dock_board(
       c("mdl", "coefs", "fitstats", "fit_key"), name = "The model",
       color = "#7c3aed"
     ),
-    fit = new_dock_stack("fit", name = "The fit", color = "#d97706")
+    results = new_dock_stack(
+      c("fit", "aug", "pred_actual"), name = "The fit", color = "#d97706"
+    )
   ),
   extensions = list(
     blockr.dag::new_dag_extension(),
@@ -179,6 +196,15 @@ board <- new_dock_board(
             "the colour bands are the species differences the model",
             "estimates."
           )
+        ),
+        aug = list(report = FALSE),
+        pred_actual = list(
+          description = paste(
+            "Predicted body mass against the real thing. The closer the",
+            "points hug the diagonal, the better the model predicts; the",
+            "scatter around it is what flipper, bill and species leave",
+            "unexplained."
+          )
         )
       ),
       stack_annotations = list(
@@ -186,10 +212,22 @@ board <- new_dock_board(
           description = "Where the numbers come from, and the tidy-up."
         ),
         model = list(description = "The estimate, and how well it fits."),
-        fit = list(description = "The same story as a picture.")
+        results = list(description = "The same story as pictures.")
       )
     )
-  )
+  ),
+  # Dashboard views, stats-101 style: the workflow split into tabs -- data
+  # prep, the model card (play with its formula and everything downstream
+  # re-estimates live), then the results -- alongside the outline report
+  # and the DAG. Only membership; the dock arranges each view.
+  views = list(
+    Prepare  = dock_view(c("peng", "clean", "peek")),
+    Model    = dock_view(c("mdl", "coefs", "fit_key")),
+    Results  = dock_view(c("fit", "pred_actual")),
+    Report   = dock_view("outline_extension"),
+    Workflow = dock_view("dag_extension")
+  ),
+  active = "Model"
 )
 
 # blockr.session's manage_project plugin: save / load / version the
