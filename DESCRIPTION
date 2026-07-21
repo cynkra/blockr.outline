@@ -1,6 +1,6 @@
 Package: blockr.outline
 Title: Board Outline, Code and Report Extension for 'blockr'
-Version: 0.0.57
+Version: 0.0.58
 Authors@R:
     c(person(given = "Christoph",
              family = "Sax",
@@ -20,6 +20,7 @@ Encoding: UTF-8
 Remotes:
     BristolMyersSquibb/blockr.core,
     BristolMyersSquibb/blockr.dock,
+    BristolMyersSquibb/blockr.io,
     BristolMyersSquibb/blockr.dag
 Imports:
     blockr.core,
