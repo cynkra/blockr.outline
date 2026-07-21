@@ -366,47 +366,52 @@
    the gear sits at the toolbar's right edge; clicking it expands a
    full-width, in-flow band under the toolbar (no popover, no overlay) so
    the outline below simply moves down. Client-only toggle. */
-/* Gear + active state copied from blockr.dplyr's .blockr-gear-btn:
-   transparent, muted, border; hover and open both go primary blue. */
-.blockr-otl-gearbtn { display: inline-flex; align-items: center;
+/* Gear + settings band: the blockr.dplyr selectors (.blockr-gear-btn,
+   .blockr-settings, __title / __grid / __field) verbatim -- the shared
+   layer bound for blockr.ui -- so the outline's gear matches every other
+   block's. Rules copied from blockr.dplyr's blockr-blocks.css +
+   settings-band.css; the only local touch is fitting the gear to the
+   toolbar control height. When the shared layer lands in blockr.ui this
+   block is deleted and the classes come from there. */
+.blockr-gear-btn { display: inline-flex; align-items: center;
   justify-content: center; height: var(--otl-ctrl-h); width: var(--otl-ctrl-h);
-  margin-left: 4px; padding: 0; cursor: pointer; background: transparent;
-  border: 1px solid var(--blockr-color-border, #e5e7eb); border-radius: 6px;
-  color: var(--blockr-grey-400, #9ca3af);
+  margin-left: 4px; flex-shrink: 0; padding: 0; cursor: pointer;
+  background: transparent; color: var(--blockr-grey-400, #9ca3af);
+  border: 1px solid var(--blockr-color-border, #e5e7eb); border-radius: 4px;
   transition: color .15s ease, border-color .15s ease, background .15s ease; }
-.blockr-otl-gearbtn:hover { color: var(--blockr-color-primary, #2563eb);
+.blockr-gear-btn:hover, .blockr-gear-btn.blockr-gear-active {
+  color: var(--blockr-color-primary, #2563eb);
   border-color: rgba(37, 99, 235, 0.3); background: rgba(37, 99, 235, 0.04); }
-.blockr-otl-gearbtn--on { color: var(--blockr-color-primary, #2563eb);
-  border-color: rgba(37, 99, 235, 0.3); background: rgba(37, 99, 235, 0.08); }
+.blockr-gear-btn.blockr-gear-active { background: rgba(37, 99, 235, 0.08); }
 
-.blockr-otl-settings { display: none; position: relative; margin: 0 0 10px;
+.blockr-settings { display: none; position: relative; margin: 0 0 10px;
   border: 1px solid var(--blockr-color-border, #e5e7eb); border-radius: 8px;
-  padding: 14px 16px; background: #fff; }
-/* The beak: a notch on the band's top edge pointing back at the gear,
-   exactly as blockr.dplyr's .blockr-settings--beak. The gear is the last
-   toolbar element on the right, so the notch sits near the right edge. */
-.blockr-otl-settings--beak.blockr-otl-settings--open::before {
+  padding: 12px 14px 16px; background: #fff; box-sizing: border-box; }
+.blockr-settings.blockr-settings--open { display: flex; flex-wrap: wrap;
+  align-items: flex-start; gap: 0 14px; }
+.blockr-settings--beak.blockr-settings--open::before {
   content: ""; position: absolute; top: -6px; right: 13px;
   width: 10px; height: 10px; background: #fff;
   border-left: 1px solid var(--blockr-color-border, #e5e7eb);
   border-top: 1px solid var(--blockr-color-border, #e5e7eb);
   transform: rotate(45deg); }
-.blockr-otl-settings.blockr-otl-settings--open { display: flex;
-  flex-wrap: wrap; gap: 8px 40px; }
-.blockr-otl-setgroup { min-width: 240px; }
-.blockr-otl-setlabel { font-size: 0.7rem; font-weight: 600;
-  text-transform: uppercase; letter-spacing: 0.05em;
-  color: var(--blockr-grey-400, #9ca3af); margin-bottom: 8px; }
-.blockr-otl-setrow { display: flex; align-items: center;
-  justify-content: space-between; gap: 12px; margin-bottom: 6px; }
-.blockr-otl-setrow > label { font-size: 0.8125rem;
-  color: var(--blockr-grey-700, #374151); margin: 0; white-space: nowrap; }
-.blockr-otl-setrow .shiny-input-container { margin: 0; }
-.blockr-otl-settings select.form-control,
-.blockr-otl-settings input.form-control {
-  height: var(--otl-ctrl-h); font-size: 0.75rem;
-  color: var(--blockr-grey-700, #374151);
+
+.blockr-settings__title { flex: 1 1 100%;
+  font-size: var(--blockr-font-size-xs, 0.75rem); font-weight: 500;
+  color: var(--blockr-color-text-muted, #6b7280); text-transform: uppercase;
+  letter-spacing: 0.05em; margin-bottom: 10px; }
+.blockr-settings__title:not(:first-child) { margin-top: 6px; }
+.blockr-settings__grid { flex: 1 1 100%; display: flex; flex-wrap: wrap;
+  align-items: flex-end; gap: 6px 12px; margin-bottom: 6px; }
+.blockr-settings__field { flex: 1 1 190px; min-width: 0;
+  display: flex; flex-direction: column; }
+.blockr-settings__field--full { flex: 1 1 100%; }
+.blockr-settings__field > label { font-size: var(--blockr-font-size-xs, 0.75rem);
+  color: var(--blockr-grey-700, #374151); margin: 0 0 4px; }
+.blockr-settings__field .shiny-input-container { margin: 0; width: 100% !important; }
+.blockr-settings select.form-control {
+  height: 34px; font-size: 0.8125rem; color: var(--blockr-grey-700, #374151);
   border: 1px solid var(--blockr-color-border, #e5e7eb); border-radius: 6px;
   box-shadow: none; padding: 0 9px; }
-.blockr-otl-sethint { font-size: 0.7rem;
-  color: var(--blockr-grey-400, #9ca3af); margin-top: 2px; }
+.blockr-settings__hint { font-size: 0.7rem;
+  color: var(--blockr-grey-400, #9ca3af); margin-top: 4px; }

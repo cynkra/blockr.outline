@@ -92,8 +92,8 @@ outline_js <- function(ns) {
       var settings = document.getElementById(SETTINGS);
       if (gear && settings) {
         gear.addEventListener('click', function() {
-          var open = settings.classList.toggle('blockr-otl-settings--open');
-          gear.classList.toggle('blockr-otl-gearbtn--on', open);
+          var open = settings.classList.toggle('blockr-settings--open');
+          gear.classList.toggle('blockr-gear-active', open);
         });
       }
 

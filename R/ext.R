@@ -134,7 +134,7 @@ outline_ext_ui <- function(id, board, ...) {
         tags$button(
           id = ns("otl_gear"),
           type = "button",
-          class = "blockr-otl-gearbtn",
+          class = "blockr-gear-btn blockr-otl-gearbtn",
           title = "Report settings",
           HTML(paste0(
             "<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' ",
@@ -160,44 +160,48 @@ outline_ext_ui <- function(id, board, ...) {
   )
 }
 
-# The gear's settings band: output-shaping options grouped into
-# subsections. Hidden until the gear toggles it (outline_js). Values
-# default to the current behaviour (stack "#", block "caption") so an
-# untouched board renders exactly as before.
+# The gear's settings band. Uses blockr.dplyr's settings-band selectors
+# (.blockr-settings / __title / __grid / __field) -- the shared layer bound
+# for blockr.ui -- so it matches every other gear band in the ecosystem.
+# A __title spans the row, forcing each section onto its own line; Template
+# takes a --full field so it runs the whole width. Hidden until the gear
+# toggles it (outline_js). Defaults reproduce today's output.
 outline_settings_band <- function(ns) {
   div(
-    class = "blockr-otl-settings blockr-otl-settings--beak",
+    class = "blockr-settings blockr-settings--beak",
     id = ns("otl_settings"),
+
+    div(class = "blockr-settings__title", "Headings"),
     div(
-      class = "blockr-otl-setgroup",
-      div(class = "blockr-otl-setlabel", "Headings"),
+      class = "blockr-settings__grid",
       div(
-        class = "blockr-otl-setrow",
+        class = "blockr-settings__field",
         tags$label("Stack titles", `for` = ns("otl_stack_level")),
         selectInput(
           ns("otl_stack_level"), label = NULL,
           choices = c("Heading 1 (#)" = "#", "Heading 2 (##)" = "##",
                       "None" = "none"),
-          selected = "#", selectize = FALSE, width = "150px"
+          selected = "#", selectize = FALSE, width = "100%"
         )
       ),
       div(
-        class = "blockr-otl-setrow",
+        class = "blockr-settings__field",
         tags$label("Block titles", `for` = ns("otl_block_level")),
         selectInput(
           ns("otl_block_level"), label = NULL,
           choices = c("Caption" = "caption", "Heading 1 (#)" = "#",
                       "Heading 2 (##)" = "##", "Heading 3 (###)" = "###",
                       "None" = "none"),
-          selected = "caption", selectize = FALSE, width = "150px"
+          selected = "caption", selectize = FALSE, width = "100%"
         )
       )
     ),
+
+    div(class = "blockr-settings__title", "Template"),
     div(
-      class = "blockr-otl-setgroup",
-      div(class = "blockr-otl-setlabel", "Template"),
+      class = "blockr-settings__grid",
       div(
-        class = "blockr-otl-setrow blockr-otl-setrow--path",
+        class = "blockr-settings__field blockr-settings__field--full",
         tags$label("Reference doc"),
         # blockr.io's path picker (autocompleting, extension-filtered),
         # not a bare text field. Its server half lives in the extension
@@ -205,11 +209,11 @@ outline_settings_band <- function(ns) {
         blockr.io::path_input_ui(
           ns("otl_template"),
           placeholder = "path to .pptx / .docx"
+        ),
+        div(
+          class = "blockr-settings__hint",
+          "A pandoc reference document styles the pptx / docx render."
         )
-      ),
-      div(
-        class = "blockr-otl-sethint",
-        "A pandoc reference document styles the pptx / docx render."
       )
     )
   )
