@@ -63,15 +63,17 @@ board <- new_dock_board(
       block_name = "Palmer penguins"
     ),
     # Data transformation: keep the complete records the model needs.
+    # The filter block's own NA handling -- exclude the <NA> entry per
+    # column in the value picker -- rather than a hand-written expression.
+    # Generates the same !is.na(...) & !is.na(...) filter.
     clean = blockr.dplyr::new_filter_block(
       conditions = list(
-        list(
-          type = "expr",
-          expr = paste(
-            "!is.na(body_mass_g) & !is.na(flipper_length_mm)",
-            "& !is.na(bill_length_mm)"
-          )
-        )
+        list(type = "values", column = "body_mass_g",
+             values = list("<NA>"), mode = "exclude"),
+        list(type = "values", column = "flipper_length_mm",
+             values = list("<NA>"), mode = "exclude"),
+        list(type = "values", column = "bill_length_mm",
+             values = list("<NA>"), mode = "exclude")
       ),
       block_name = "Complete cases"
     ),
