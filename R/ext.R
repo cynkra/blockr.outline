@@ -129,17 +129,27 @@ outline_ext_ui <- function(id, board, ...) {
         # Gear: opens the in-flow settings band below the toolbar (the
         # blockr.viz / blockr.dplyr settings-band pattern). Output-shaping
         # options that do not belong on the always-visible toolbar.
+        # Same cog + treatment as blockr.dplyr's .blockr-gear-btn, and the
+        # band below grows the same beak pointing back at it.
         tags$button(
           id = ns("otl_gear"),
           type = "button",
           class = "blockr-otl-gearbtn",
           title = "Report settings",
           HTML(paste0(
-            "<svg width='15' height='15' viewBox='0 0 16 16' fill='none' ",
-            "stroke='currentColor' stroke-width='1.4'>",
-            "<circle cx='8' cy='8' r='2.2'/>",
-            "<path d='M8 1v2M8 13v2M1 8h2M13 8h2M3 3l1.4 1.4M11.6 11.6 13 13",
-            "M13 3l-1.4 1.4M4.4 11.6 3 13'/></svg>"
+            "<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' ",
+            "fill='currentColor' viewBox='0 0 16 16'><path d='M9.405 1.05c-",
+            ".413-1.4-2.397-1.4-2.81 0l-.1.34a1.464 1.464 0 0 1-2.105.872l-",
+            ".31-.17c-1.283-.698-2.686.705-1.987 1.987l.169.311c.446.82.023 ",
+            "1.841-.872 2.105l-.34.1c-1.4.413-1.4 2.397 0 2.81l.34.1a1.464 ",
+            "1.464 0 0 1 .872 2.105l-.17.31c-.698 1.283.705 2.686 1.987 ",
+            "1.987l.311-.169a1.464 1.464 0 0 1 2.105.872l.1.34c.413 1.4 ",
+            "2.397 1.4 2.81 0l.1-.34a1.464 1.464 0 0 1 2.105-.872l.31.17c",
+            "1.283.698 2.686-.705 1.987-1.987l-.169-.311a1.464 1.464 0 0 1 ",
+            ".872-2.105l.34-.1c1.4-.413 1.4-2.397 0-2.81l-.34-.1a1.464 ",
+            "1.464 0 0 1-.872-2.105l.17-.31c.698-1.283-.705-2.686-1.987-",
+            "1.987l-.311.169a1.464 1.464 0 0 1-2.105-.872zM8 10.93a2.929 ",
+            "2.929 0 1 1 0-5.86 2.929 2.929 0 0 1 0 5.858z'/></svg>"
           ))
         )
       )
@@ -156,7 +166,7 @@ outline_ext_ui <- function(id, board, ...) {
 # untouched board renders exactly as before.
 outline_settings_band <- function(ns) {
   div(
-    class = "blockr-otl-settings",
+    class = "blockr-otl-settings blockr-otl-settings--beak",
     id = ns("otl_settings"),
     div(
       class = "blockr-otl-setgroup",
@@ -187,11 +197,14 @@ outline_settings_band <- function(ns) {
       class = "blockr-otl-setgroup",
       div(class = "blockr-otl-setlabel", "Template"),
       div(
-        class = "blockr-otl-setrow",
-        tags$label("Reference doc", `for` = ns("otl_template")),
-        textInput(
-          ns("otl_template"), label = NULL, value = "",
-          placeholder = "path to .pptx / .docx", width = "260px"
+        class = "blockr-otl-setrow blockr-otl-setrow--path",
+        tags$label("Reference doc"),
+        # blockr.io's path picker (autocompleting, extension-filtered),
+        # not a bare text field. Its server half lives in the extension
+        # server; the dep ships with the UI.
+        blockr.io::path_input_ui(
+          ns("otl_template"),
+          placeholder = "path to .pptx / .docx"
         )
       ),
       div(
@@ -467,11 +480,31 @@ outline_ext_srv <- function(annotations, block_order, title,
             rv_block_level(input$otl_block_level)
           }
         })
-        observeEvent(input$otl_template, {
-          if (!identical(input$otl_template, rv_template())) {
-            rv_template(input$otl_template)
+        tmpl_path <- blockr.io::path_input_server(
+          "otl_template", mode = "file", extensions = c("pptx", "docx")
+        )
+        observe({
+          p <- coal(tmpl_path(), "")
+          if (!identical(p, isolate(rv_template()))) {
+            rv_template(p)
           }
-        }, ignoreNULL = FALSE)
+        })
+        # path_input_ui takes no initial value, so seed the field once from
+        # the constructor / restored state (a demo default or a saved
+        # board's template). set-value fires the DOM input event, so
+        # tmpl_path() picks it up and rv_template re-syncs.
+        if (nzchar(coal(template, ""))) {
+          session$onFlushed(
+            function() {
+              session$sendCustomMessage(
+                "blockr-path-set-value",
+                list(id = session$ns("otl_template-path_text"),
+                     value = template)
+              )
+            },
+            once = TRUE
+          )
+        }
 
         # Split the projection into the structural skeleton and the
         # per-block code markup, each with its own identical-skip store.

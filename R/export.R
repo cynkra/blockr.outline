@@ -426,8 +426,14 @@ section_chapters <- function(sects) {
     idx <- seq(starts[i], length.out = runs$lengths[i])
 
     if (any(sects$report[idx])) {
-      nme <- sects$stack_names[idx[1L]]
-      out[idx[1L]] <- if (runs$values[i] %in% seen) {
+      # Anchor the heading on the first REPORTED block of the run, not
+      # blindly on idx[1L]. A stack whose first block is excluded from
+      # the report (report = FALSE) would otherwise pin the heading to a
+      # section whose prose never renders, and the chapter title would
+      # silently vanish from the output.
+      anchor <- idx[which(sects$report[idx])[1L]]
+      nme <- sects$stack_names[anchor]
+      out[anchor] <- if (runs$values[i] %in% seen) {
         paste(nme, "(continued)")
       } else {
         nme

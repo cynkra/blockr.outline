@@ -366,19 +366,31 @@
    the gear sits at the toolbar's right edge; clicking it expands a
    full-width, in-flow band under the toolbar (no popover, no overlay) so
    the outline below simply moves down. Client-only toggle. */
+/* Gear + active state copied from blockr.dplyr's .blockr-gear-btn:
+   transparent, muted, border; hover and open both go primary blue. */
 .blockr-otl-gearbtn { display: inline-flex; align-items: center;
   justify-content: center; height: var(--otl-ctrl-h); width: var(--otl-ctrl-h);
-  margin-left: 4px; padding: 0; cursor: pointer; background: #fff;
+  margin-left: 4px; padding: 0; cursor: pointer; background: transparent;
   border: 1px solid var(--blockr-color-border, #e5e7eb); border-radius: 6px;
-  color: var(--blockr-grey-500, #6b7280); }
-.blockr-otl-gearbtn:hover { color: var(--blockr-grey-900, #111827);
-  border-color: var(--blockr-grey-300, #d1d5db); }
-.blockr-otl-gearbtn--on { background: var(--blockr-blue-50, #eff6ff);
-  border-color: #bfdbfe; color: var(--blockr-color-primary, #2563eb); }
+  color: var(--blockr-grey-400, #9ca3af);
+  transition: color .15s ease, border-color .15s ease, background .15s ease; }
+.blockr-otl-gearbtn:hover { color: var(--blockr-color-primary, #2563eb);
+  border-color: rgba(37, 99, 235, 0.3); background: rgba(37, 99, 235, 0.04); }
+.blockr-otl-gearbtn--on { color: var(--blockr-color-primary, #2563eb);
+  border-color: rgba(37, 99, 235, 0.3); background: rgba(37, 99, 235, 0.08); }
 
-.blockr-otl-settings { display: none; margin: 0 0 10px;
+.blockr-otl-settings { display: none; position: relative; margin: 0 0 10px;
   border: 1px solid var(--blockr-color-border, #e5e7eb); border-radius: 8px;
   padding: 14px 16px; background: #fff; }
+/* The beak: a notch on the band's top edge pointing back at the gear,
+   exactly as blockr.dplyr's .blockr-settings--beak. The gear is the last
+   toolbar element on the right, so the notch sits near the right edge. */
+.blockr-otl-settings--beak.blockr-otl-settings--open::before {
+  content: ""; position: absolute; top: -6px; right: 13px;
+  width: 10px; height: 10px; background: #fff;
+  border-left: 1px solid var(--blockr-color-border, #e5e7eb);
+  border-top: 1px solid var(--blockr-color-border, #e5e7eb);
+  transform: rotate(45deg); }
 .blockr-otl-settings.blockr-otl-settings--open { display: flex;
   flex-wrap: wrap; gap: 8px 40px; }
 .blockr-otl-setgroup { min-width: 240px; }

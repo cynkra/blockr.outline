@@ -26,13 +26,19 @@ message("Open http://127.0.0.1:", port, "/")
 
 root <- "."
 deps <- c("dockViewR", "blockr.core", "blockr.dag", "blockr.dock",
-          "blockr.extra", "blockr.outline")
+          "blockr.io", "blockr.extra", "blockr.outline")
 for (d in deps) {
   pkgload::load_all(
     file.path(root, d),
     helpers = FALSE, attach_testthat = FALSE, export_all = FALSE
   )
 }
+
+# The actual BMS reference template ships in blockr.topline (installed),
+# so the deck picks up its master, fonts and colours out of the box.
+bms_template <- system.file(
+  "templates", "bms-template.pptx", package = "blockr.topline"
+)
 
 ft_fn <- paste(
   "function(data) {",
@@ -66,7 +72,8 @@ board <- new_dock_board(
       stack_annotations = list(
         tables = list(description = "Tables in the deck.")
       ),
-      title = "Flextable deck test"
+      title = "Flextable deck test",
+      template = bms_template
     )
   )
 )
