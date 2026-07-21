@@ -91,8 +91,14 @@ board <- new_dock_board(
     coefs = new_broom_block(
       output = "tidy", conf_int = TRUE, block_name = "Coefficients"
     ),
-    fitstats = new_broom_block(
-      output = "glance", block_name = "Model fit"
+    # broom::glance returns twelve columns -- fine on screen, far too wide
+    # for a slide. Keep the four that matter. (pandoc pptx tables are a
+    # fixed ~18pt, so column count, not font, is the lever that fits a
+    # table to a slide.)
+    fitstats = new_broom_block(output = "glance", block_name = "Fit (raw)"),
+    fit_key = blockr.dplyr::new_select_block(
+      columns = list("r.squared", "adj.r.squared", "sigma", "nobs"),
+      block_name = "Model fit"
     ),
     # Visualise the relationship the model captures. blockr.ggplot, not a
     # blockr.viz chart: the ggplot block's expression IS ggplot2 code, so
@@ -106,15 +112,16 @@ board <- new_dock_board(
     )
   ),
   links = links(
-    from = c("peng", "clean", "clean", "mdl", "mdl", "clean"),
-    to   = c("clean", "peek", "mdl", "coefs", "fitstats", "fit")
+    from = c("peng", "clean", "clean", "mdl", "mdl", "fitstats", "clean"),
+    to   = c("clean", "peek", "mdl", "coefs", "fitstats", "fit_key", "fit")
   ),
   stacks = stacks(
     data = new_dock_stack(
       c("peng", "clean", "peek"), name = "The data", color = "#2563eb"
     ),
     model = new_dock_stack(
-      c("mdl", "coefs", "fitstats"), name = "The model", color = "#7c3aed"
+      c("mdl", "coefs", "fitstats", "fit_key"), name = "The model",
+      color = "#7c3aed"
     ),
     fit = new_dock_stack("fit", name = "The fit", color = "#d97706")
   ),
@@ -158,10 +165,11 @@ board <- new_dock_board(
             "explain."
           )
         ),
-        fitstats = list(
+        fitstats = list(report = FALSE),
+        fit_key = list(
           description = paste(
-            "One line of fit statistics -- adjusted R-squared says how much",
-            "of the mass variation the model accounts for."
+            "The fit in four numbers -- adjusted R-squared says how much of",
+            "the mass variation the model accounts for."
           )
         ),
         fit = list(
