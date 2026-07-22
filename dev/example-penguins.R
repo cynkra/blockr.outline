@@ -18,7 +18,7 @@
 #   * blockr.ggplot  the scatter -- a ggplot block, whose code IS ggplot2,
 #                    so the figure reproduces in the rendered report (a
 #                    blockr.viz chart would only export a data passthrough)
-#   * blockr.extra   HTML table preview (blockr.html_table_preview option)
+#   * blockr.extra   function / code blocks
 #   * blockr.session project save / load / versions (manage_project plugin)
 #   * blockr.outline the narrated outline + report render
 #
@@ -36,7 +36,7 @@ options(
   blockr.dock_is_locked = FALSE,
   # nice paginated / sortable HTML tables for data.frame outputs
   # (the blockr.extra table-preview glue).
-  blockr.html_table_preview = TRUE,
+  blockr.tabular_display = blockr.ui::html_table_display,
   blockr.background_construction_delay = 0
 )
 
