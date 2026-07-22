@@ -62,6 +62,27 @@ mdl_formula <- blockr.stats:::parse_formula(
   "body_mass_g ~ flipper_length_mm + bill_length_mm + species"
 )
 
+# Dashboard layout. Each view is a GRID: a bare leaf is a panel; several
+# leaves split side by side; group() is a row of columns and orientation
+# "vertical" stacks rows; sizes are relative; c(...) would tab panels
+# together. A leaf naming an extension by its key ("outline", "dag")
+# resolves to that extension's panel. views derive from the grids, so a
+# panel sits exactly where it is placed and no view is left empty.
+dash_grids <- list(
+  Prepare = dock_grid("clean", "peek", sizes = c(1, 2)),
+  # The one to play with: the model card and the predicted-vs-actual plot
+  # SIDE BY SIDE (a group() row), coefficients underneath. Edit the card's
+  # formula and the plot and the table re-estimate live, right next to it.
+  Model = dock_grid(
+    group("mdl", "pred_actual", sizes = c(1, 1)),
+    "coefs",
+    orientation = "vertical", sizes = c(2, 1)
+  ),
+  Results = dock_grid("fit", "pred_actual", sizes = c(1, 1)),
+  Report = dock_grid("outline"),
+  Workflow = dock_grid("dag")
+)
+
 board <- new_dock_board(
   blocks = c(
     peng = new_dataset_block(
@@ -216,17 +237,11 @@ board <- new_dock_board(
       )
     )
   ),
-  # Dashboard views, stats-101 style: the workflow split into tabs -- data
-  # prep, the model card (play with its formula and everything downstream
-  # re-estimates live), then the results -- alongside the outline report
-  # and the DAG. Only membership; the dock arranges each view.
-  views = list(
-    Prepare  = dock_view(c("peng", "clean", "peek")),
-    Model    = dock_view(c("mdl", "coefs", "fit_key")),
-    Results  = dock_view(c("fit", "pred_actual")),
-    Report   = dock_view("outline_extension"),
-    Workflow = dock_view("dag_extension")
-  ),
+  # Dashboard views (stats-101 / blockr.insurance style): the workflow
+  # split into tabs, each a grid (dash_grids above). views derive from the
+  # grids so membership and arrangement never disagree.
+  grids = dash_grids,
+  views = lapply(dash_grids, function(g) dock_view(layout_panel_ids(g))),
   active = "Model"
 )
 
