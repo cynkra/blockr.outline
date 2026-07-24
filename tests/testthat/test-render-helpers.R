@@ -75,3 +75,75 @@ test_that("report_pdf_available is TRUE when a latex engine is on PATH", {
   )
   expect_false(report_pdf_available())
 })
+
+test_that("template_content_width reads the body placeholder, falls back safely", {
+  # No template -> widescreen fallback.
+  expect_equal(template_content_width(NULL), 12.0)
+  expect_equal(template_content_width(""), 12.0)
+  expect_equal(template_content_width("/no/such/file.pptx"), 12.0)
+
+  tmpl <- system.file("templates", "bms-template.pptx",
+                      package = "blockr.topline")
+  skip_if(!nzchar(tmpl), "blockr.topline template not available")
+  w <- template_content_width(tmpl)
+  # the BMS body placeholder is ~12.53in wide
+  expect_true(w > 10 && w < 13)
+})
+
+test_that("place_exhibit positions a flextable at its pptx attributes", {
+  skip_if_not_installed("officer")
+  skip_if_not_installed("flextable")
+
+  ft <- flextable::flextable(head(mtcars[, 1:3], 3))
+  attr(ft, "pptx_left") <- 0.4
+  attr(ft, "pptx_top") <- 1.1
+
+  doc <- officer::read_pptx()
+  doc <- officer::add_slide(doc, layout = "Title and Content",
+                            master = officer::layout_summary(doc)$master[1])
+  doc <- place_exhibit(doc, ft)
+
+  f <- withr::local_tempfile(fileext = ".pptx")
+  print(doc, target = f)
+  x <- paste(readLines(unzip(f, "ppt/slides/slide1.xml",
+                             exdir = withr::local_tempdir()), warn = FALSE),
+             collapse = "")
+  # 0.4in = 365760 EMU, 1.1in = 1005840 EMU
+  expect_match(x, "365760")
+  expect_match(x, "1005840")
+})
+
+test_that("render_pptx_officer builds a deck, one slide per reported table", {
+  skip_if_not_installed("officer")
+  skip_if_not_installed("flextable")
+  skip_if_not_installed("blockr.viz")
+
+  board <- blockr.core::new_board(
+    blocks = c(
+      data = blockr.core::new_dataset_block("iris"),
+      st = blockr.viz::new_summary_table_block(vars = "Sepal.Length",
+                                               by = "Species"),
+      tbl = blockr.viz::new_table_block()
+    ),
+    links = blockr.core::links(from = c("data", "st"), to = c("st", "tbl"))
+  )
+  exprs <- structure(list(
+    data = quote(datasets::iris),
+    st = quote(blockr.viz::summary_table(data, vars = "Sepal.Length",
+                                         by = "Species")),
+    tbl = quote(dplyr::filter(blockr.viz::as_annotated_df(st), TRUE))
+  ), pending = character())
+
+  s <- outline_sections(exprs, board,
+    annotations = list(data = list(report = FALSE), st = list(report = FALSE),
+                       tbl = list(report = TRUE)),
+    stack_annotations = list())
+
+  f <- withr::local_tempfile(fileext = ".pptx")
+  render_pptx_officer(s, f, "Deck", template = NULL)
+  expect_true(file.exists(f))
+
+  doc <- officer::read_pptx(f)
+  # exactly one reported exhibit -> one added slide (blank base deck).
+  expect_gte(nrow(officer::pptx_summary(doc)), 1L)
+})

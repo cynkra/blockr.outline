@@ -1392,7 +1392,8 @@ outline_ext_srv <- function(annotations, block_order, title,
               input$code_render_format,
               file,
               rv_title(),
-              template = rv_template()
+              template = rv_template(),
+              sects = sections()
             )
           }
         )
