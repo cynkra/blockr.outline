@@ -31,6 +31,13 @@ options(shiny.port = port, shiny.host = "0.0.0.0")
 options(blockr.dock_is_locked = FALSE)
 options(blockr.background_construction_delay = 0)
 
+# The deck's house palette lives app-side -- blockr.viz::ft_table() carries
+# no colors of its own and reads this option. Named entries pin an arm
+# (e.g. `Placebo = "grey"`); unnamed entries cycle for the rest. Here: a
+# light-gray stub then dark-gray / blue / orange bands, the BMS look.
+options(blockr.viz.ft_header_bg = c(.stub = "#EEEEEE",
+                                    "#A59F9F", "#33D6F1", "#FDA97C"))
+
 message("Open http://127.0.0.1:", port, "/")
 
 root <- "."
