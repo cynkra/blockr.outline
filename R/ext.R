@@ -486,26 +486,65 @@ outline_ext_srv <- function(annotations, block_order, title,
 
         # Gear -> Headings / Template. Value-guarded so a no-op update
         # (e.g. a re-render restoring the same choice) does not churn.
+        #
+        # ignoreInit is load-bearing, and the reason is not obvious. The two
+        # selectInputs below declare a HARDCODED `selected` ("#" and
+        # "caption") -- outline_settings_band() takes only `ns`, so it cannot
+        # see the constructor arguments. At session start Shiny delivers that
+        # hardcoded default as the input value; without ignoreInit these
+        # observers fire immediately and overwrite rv_stack_level /
+        # rv_block_level, silently discarding whatever the caller passed to
+        # new_outline_extension() -- or whatever a saved board restored. The
+        # arguments were accepted, stored, and then thrown away one flush
+        # later. The seed below then pushes the real value back INTO the
+        # control, so the gear displays what is actually in effect; that
+        # update re-delivers the input, this time not as init, and the
+        # identical-guard makes it a no-op.
+        #
+        # `template` already had this treatment (see the onFlushed seed
+        # further down) -- these two selects were simply missed.
         observeEvent(input$otl_stack_level, {
           if (!identical(input$otl_stack_level, rv_stack_level())) {
             rv_stack_level(input$otl_stack_level)
           }
-        })
+        }, ignoreInit = TRUE)
         observeEvent(input$otl_block_level, {
           if (!identical(input$otl_block_level, rv_block_level())) {
             rv_block_level(input$otl_block_level)
           }
-        })
+        }, ignoreInit = TRUE)
+
+        # Seed both selects from state, so the gear shows the level that is
+        # actually in effect rather than the markup's placeholder. Sent
+        # directly rather than from session$onFlushed(): Shiny queues input
+        # messages and delivers them on the next flush either way, and the
+        # direct call is observable under testServer(), where MockShinySession
+        # never runs onFlushed callbacks at all.
+        updateSelectInput(
+          session, "otl_stack_level", selected = isolate(rv_stack_level())
+        )
+        updateSelectInput(
+          session, "otl_block_level", selected = isolate(rv_block_level())
+        )
         tmpl_path <- io_call(
           blockr.io::path_input_server,
           "otl_template", mode = "file", extensions = c("pptx", "docx")
         )
-        observe({
+        # ignoreInit for the same reason as the selects above, by a different
+        # route. path_input_server() reports "" until the DOM has echoed a
+        # path back, and the seed below only fires on flush -- so a plain
+        # observe() runs first, sees "", and wipes a constructor-supplied or
+        # restored template before the seed can land. That is why passing
+        # `template =` produced a report rendered against quarto's stock
+        # reference-doc instead of the one that was asked for. Skipping the
+        # initial read leaves state alone; a later change (including the user
+        # genuinely clearing the field) still propagates.
+        observeEvent(tmpl_path(), {
           p <- coal(tmpl_path(), "")
           if (!identical(p, isolate(rv_template()))) {
             rv_template(p)
           }
-        })
+        }, ignoreInit = TRUE, ignoreNULL = FALSE)
         # path_input_ui takes no initial value, so seed the field once from
         # the constructor / restored state (a demo default or a saved
         # board's template). set-value fires the DOM input event, so
