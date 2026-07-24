@@ -393,6 +393,10 @@ outline_sections <- function(expressions, board, annotations,
       character(1L)
     ),
     renderers = chr_ply(blks, block_report_renderer),
+    report_calls = chr_ply(
+      seq_along(blks),
+      function(i) block_report_call_str(blks[[i]], ids[[i]])
+    ),
     stack_ids = stack_ids,
     stack_names = stack_names,
     stack_colors = stack_colors,
@@ -422,9 +426,44 @@ block_report_renderer <- function(blk) {
   }
 }
 
-# The output line of a reported chunk: the result variable, wrapped in the
-# block's report renderer when it has one.
+# A block-supplied report call, deparsed for the document. blockr.viz's
+# report_call() generic lets a block state how its result prints -- the
+# chart block emits blockr.viz::gg_chart(<var>, <state...>), rebuilding the
+# canvas chart as a ggplot. Resolved defensively (same pattern as
+# block_icon_html): without blockr.viz, or for a block with no method, the
+# simpler renderer paths below apply.
+block_report_call_str <- function(blk, var) {
+
+  if (!requireNamespace("blockr.viz", quietly = TRUE)) {
+    return("")
+  }
+
+  fn <- tryCatch(
+    getExportedValue("blockr.viz", "report_call"),
+    error = function(e) NULL
+  )
+
+  if (!is.function(fn)) {
+    return("")
+  }
+
+  cl <- tryCatch(fn(blk, var), error = function(e) NULL)
+
+  if (is.null(cl)) {
+    return("")
+  }
+
+  paste(deparse(cl), collapse = "\n")
+}
+
+# The output line of a reported chunk: the block's own report call when it
+# states one, else the result variable, wrapped in the block's report
+# renderer when it has one.
 sect_output <- function(sects, i) {
+  rc <- coal(sects$report_calls[i], "")
+  if (nzchar(rc)) {
+    return(rc)
+  }
   rndr <- coal(sects$renderers[i], "")
   if (nzchar(rndr)) {
     paste0(rndr, "(", sects$ids[i], ")")
@@ -468,7 +507,8 @@ prune_sections <- function(sects) {
 
   per_block <- c(
     "ids", "pending", "code", "names", "icons", "descriptions", "report",
-    "exported", "kinds", "renderers", "stack_ids", "stack_names"
+    "exported", "kinds", "renderers", "report_calls", "stack_ids",
+    "stack_names"
   )
 
   for (fld in intersect(per_block, names(sects))) {

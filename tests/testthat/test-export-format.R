@@ -128,6 +128,39 @@ test_that("chapter_intro emits the stack description only under a fresh heading"
   expect_length(chapter_intro(s, ch, non_head), 0L)
 })
 
+test_that("a block-supplied report call wins the chunk output line", {
+  # The chart block states its printed form through blockr.viz::report_call
+  # (emitting a gg_chart call over the result variable). A head block
+  # wearing the chart_block class exercises the dispatch + emission
+  # plumbing without pulling chart fixtures into this suite; its state env
+  # has none of the chart names, so the emitted call is the minimal one.
+  skip_if_not_installed("blockr.viz")
+
+  blocks <- c(
+    data = blockr.core::new_dataset_block("iris"),
+    ch   = blockr.core::new_head_block()
+  )
+  class(blocks[["ch"]]) <- c("chart_block", class(blocks[["ch"]]))
+  board <- blockr.core::new_board(
+    blocks = blocks,
+    links = blockr.core::links(from = "data", to = "ch")
+  )
+  exprs <- structure(
+    list(data = quote(datasets::iris), ch = quote(utils::head(data, 3))),
+    pending = character()
+  )
+
+  s <- outline_sections(exprs, board, annotations = list())
+  expect_match(
+    unname(s$report_calls[s$ids == "ch"]),
+    "^blockr\\.viz::gg_chart\\(ch"
+  )
+
+  for (txt in list(export_qmd(s), export_spin(s))) {
+    expect_match(txt, "blockr.viz::gg_chart(ch", fixed = TRUE)
+  }
+})
+
 test_that("viz table blocks print through the flextable report renderer", {
   # A blockr.viz table / summary_table block returns a bare annotated data
   # frame (the styled table lives in its Shiny UI), so the exporters wrap

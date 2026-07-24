@@ -362,6 +362,36 @@
   opacity: 0.7;
 }
 
+/* Code view, presentation line: an activated block's cell ends with the
+   same line its qmd chunk ends with (report_call / renderer / variable,
+   see sect_output). Dimmed so the transform reads as the substance and
+   the exhibit call as its footer -- Output mode shows this line's
+   evaluated result. */
+.blockr-otl-exline { opacity: 0.55; }
+.blockr-otl-exline pre,
+.blockr-otl-exline pre.chroma { margin: 0; }
+
+/* Output mode: the block body holds a rendered exhibit (flextable, plot,
+   table) instead of code, so drop the code cell's monospace wrapping and
+   let the exhibit size itself. The deck-builder view. */
+.blockr-otl-bodytoggle { margin-left: 8px; }
+.blockr-otl-outwrap {
+  font-family: inherit;
+  white-space: normal;
+  padding: 0.35rem 0.25rem;
+  overflow-x: auto;
+}
+.blockr-otl-exhibit { max-width: 100%; }
+.blockr-otl-exhibit table { font-size: 0.8125rem; }
+.blockr-otl-outimg { display: block; border-radius: 4px; }
+.blockr-otl-outnote {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8125rem;
+  font-style: italic;
+  color: var(--bs-secondary-color, #6c757d);
+  opacity: 0.75;
+}
+
 /* Gear + settings band (blockr.viz / blockr.dplyr settings-band pattern):
    the gear sits at the toolbar's right edge; clicking it expands a
    full-width, in-flow band under the toolbar (no popover, no overlay) so

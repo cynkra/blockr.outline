@@ -78,7 +78,13 @@ outline_js <- function(ns) {
       function applyCode() {
         Object.keys(codeById).forEach(function(id) {
           var el = document.getElementById(id);
-          if (el && el.innerHTML !== codeById[id]) el.innerHTML = codeById[id];
+          if (!el) return;
+          // Output mode: the cell holds an exhibit painted by renderUI
+          // (class set server-side), not code -- applying the cached code
+          // markup would stomp it. Pushes still land in codeById, so the
+          // cache stays current and flipping back to Code replays cleanly.
+          if (el.classList.contains('blockr-otl-outwrap')) return;
+          if (el.innerHTML !== codeById[id]) el.innerHTML = codeById[id];
         });
       }
       Shiny.addCustomMessageHandler('blockr-outline-code', function(msg) {
@@ -557,25 +563,38 @@ sect_code_html <- function(sects, i) {
     )
   }
 
+  hl_or_pre <- function(txt) {
+    hl <- highlight_r_code(txt)
+    if (is.null(hl)) as.character(tags$pre(txt)) else hl
+  }
+
   chunk <- paste(
     c(
       paste0(
         "#+ ", sects$ids[i],
         if (!sects$report[i]) ", include=FALSE"
       ),
-      sects$code[i],
-      if (sects$report[i]) sects$ids[i]
+      sects$code[i]
     ),
     collapse = "\n"
   )
 
-  hl <- highlight_r_code(chunk)
-
-  if (is.null(hl)) {
-    as.character(tags$pre(chunk))
-  } else {
-    hl
-  }
+  # The cell mirrors the document chunk exactly: transform code, then --
+  # for a reported block -- the same presentation line the qmd chunk ends
+  # with (report_call / renderer / bare variable, see sect_output). It is
+  # highlighted separately so it can carry its own class and render
+  # dimmed: the transform is the substance, the exhibit call its footer.
+  # Code view is thus the chunk source; Output view its evaluated result.
+  paste0(
+    hl_or_pre(chunk),
+    if (sects$report[i]) {
+      paste0(
+        "<div class=\"blockr-otl-exline\">",
+        hl_or_pre(sect_output(sects, i)),
+        "</div>"
+      )
+    }
+  )
 }
 
 outline_code_map <- function(sects) {
@@ -689,11 +708,17 @@ outline_tags <- function(sects, ns, editing = NULL) {
 
     # Rendered from the pre-computed map so the initial paint and the
     # incremental push (see the code observer in ext.R) go through the
-    # same producer and can never drift apart.
+    # same producer and can never drift apart. Code mode holds an HTML
+    # string (also the target of the incremental push); Output mode holds
+    # a tag object, so a flextable's html dependency survives -- render it
+    # directly rather than through HTML().
+    body <- sects$code_html[[sects$ids[i]]]
+    output_mode <- identical(coal(sects$body_mode, "code"), "output")
     code_tag <- div(
       id = ns(paste0("code-", sects$ids[i])),
-      class = "blockr-otl-codewrap",
-      HTML(coal(sects$code_html[[sects$ids[i]]], ""))
+      class = if (output_mode) "blockr-otl-codewrap blockr-otl-outwrap" else
+        "blockr-otl-codewrap",
+      if (is.character(body)) HTML(coal(body, "")) else body
     )
 
     prose <- if (sects$report[i] && nzchar(sects$descriptions[i])) {

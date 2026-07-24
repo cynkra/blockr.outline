@@ -107,6 +107,21 @@ outline_ext_ui <- function(id, board, ...) {
         ),
         selected = "outline"
       ),
+      # Outline body: generated Code (default) or the activated blocks'
+      # rendered Output -- the deck-builder view. Only meaningful in the
+      # Outline view, so it rides in a conditionalPanel keyed on it.
+      conditionalPanel(
+        condition = sprintf("input['%s'] == 'outline'", ns("code_view")),
+        class = "blockr-otl-bodytoggle",
+        shinyWidgets::radioGroupButtons(
+          inputId = ns("otl_body"),
+          label = NULL,
+          size = "sm",
+          status = "light",
+          choices = c("Code" = "code", "Output" = "output"),
+          selected = "code"
+        )
+      ),
       div(
         class = "blockr-otl-toolbar-right",
         # Split button (decision record:
@@ -651,6 +666,18 @@ outline_ext_srv <- function(annotations, block_order, title,
           }
         )
 
+        # Output mode: render each activated block's exhibit inline. Gated
+        # on the toggle so the (heavy) evaluation only runs when the view is
+        # actually asked for; in Code mode this reactive never fires. It
+        # depends on sections() reactively, so editing a block value while
+        # in Output mode refreshes the preview -- a full renderUI redraw,
+        # which is fine (the lightweight incremental push is Code-mode only,
+        # and exhibits are heavier and change less often anyway).
+        output_map <- reactive({
+          req(identical(coal(input$otl_body, "code"), "output"))
+          outline_output_map(sections())
+        })
+
         output$outline_out <- renderUI(
           {
             view <- coal(input$code_view, "outline")
@@ -662,7 +689,15 @@ outline_ext_srv <- function(annotations, block_order, title,
               # skeleton does redraw it has to paint the current code.
               sects <- skel_store()
               req(!is.null(sects))
-              sects$code_html <- isolate(code_store())
+
+              body_mode <- coal(input$otl_body, "code")
+              sects$body_mode <- body_mode
+
+              if (identical(body_mode, "output")) {
+                sects$code_html <- output_map()
+              } else {
+                sects$code_html <- isolate(code_store())
+              }
 
               return(
                 tagList(

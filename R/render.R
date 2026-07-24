@@ -352,6 +352,14 @@ render_pptx_officer <- function(sects, file, title, template = NULL) {
     stop(msg)
   }
 
+  # Prune to the reported closure, exactly like the qmd / spin exporters:
+  # otherwise the deck evaluates EVERY block on the board -- including
+  # branches no slide depends on -- so an unrelated block that errors (or a
+  # pending block whose downstream references it) aborts a deck that never
+  # needed it. After pruning, only the reported exhibits and their
+  # ancestors remain.
+  sects <- prune_sections(sects)
+
   # Size tables to the slide's usable width so they do not overflow: the
   # ft_table() default reads this option.
   fit_w <- template_content_width(template)
@@ -360,7 +368,11 @@ render_pptx_officer <- function(sects, file, title, template = NULL) {
 
   # Evaluate every exported block's code once, in order, in a fresh env --
   # the same computation the report chunk runs. A block id becomes a bound
-  # variable; the reported ones are the exhibits.
+  # variable; the reported ones are the exhibits. A pending block within the
+  # closure has no code to run; a reported block downstream of it will fail
+  # to resolve it, which surfaces as a render error rather than a silent
+  # blank -- correct, since the deck cannot show an exhibit whose inputs
+  # never evaluated.
   env <- new.env(parent = globalenv())
   for (i in seq_along(sects$ids)) {
     if (isTRUE(sects$pending[i])) next
@@ -429,6 +441,152 @@ render_pptx_officer <- function(sects, file, title, template = NULL) {
   invisible(file)
 }
 
+# ---- in-app output preview -------------------------------------------
+#
+# The Outline view's Output mode shows each activated (reported) block's
+# EXHIBIT inline instead of its generated code -- the deck-builder view.
+# It reuses the officer path's model exactly: evaluate every exported
+# block's code once, in order, in a fresh env, then render each reported
+# block's `sect_output()` object to HTML. What you see is therefore the
+# same object that lands on the pptx slide, one abstraction earlier.
+#
+# Returns TAG objects (not html strings) so a flextable's own htmlwidget
+# dependency rides along through renderUI; a stringified table would lose
+# its styling. The map is keyed by block id, mirroring outline_code_map().
+outline_output_map <- function(sects) {
+
+  env <- new.env(parent = globalenv())
+  eval_ok <- rep(TRUE, length(sects$ids))
+
+  for (i in seq_along(sects$ids)) {
+    if (isTRUE(sects$pending[i]) || !isTRUE(sects$exported[i])) {
+      next
+    }
+    ok <- tryCatch(
+      {
+        eval(parse(text = sect_export_code(sects, i)), envir = env)
+        TRUE
+      },
+      error = function(e) FALSE
+    )
+    eval_ok[i] <- ok
+  }
+
+  setNames(
+    lapply(
+      seq_along(sects$ids),
+      function(i) sect_output_html(sects, env, i, eval_ok[i])
+    ),
+    sects$ids
+  )
+}
+
+# One block's Output-mode body. A reported, evaluated block resolves its
+# output expression in `env` and renders the result; everything else is a
+# muted note (the offchip already states WHY a block is excluded).
+sect_output_html <- function(sects, env, i, eval_ok = TRUE) {
+
+  if (isTRUE(sects$pending[i])) {
+    return(div(class = "blockr-otl-pending", "Evaluating…"))
+  }
+
+  if (!isTRUE(sects$report[i])) {
+    return("")
+  }
+
+  if (!isTRUE(eval_ok)) {
+    return(div(class = "blockr-otl-outnote", "Could not evaluate this block"))
+  }
+
+  exhibit <- tryCatch(
+    eval(parse(text = sect_output(sects, i)), envir = env),
+    error = function(e) NULL
+  )
+
+  if (is.null(exhibit)) {
+    return(div(class = "blockr-otl-outnote", "No output"))
+  }
+
+  div(class = "blockr-otl-exhibit", exhibit_html(exhibit))
+}
+
+# Render one exhibit object to inline HTML tags. Mirrors place_exhibit()'s
+# type dispatch: flextables (ft_table and the topline block) keep their
+# styling via htmltools_value; ggplots rasterize to a data-URI img at the
+# aspect ratio the block chose; a bare data frame goes through ft_table so
+# the preview matches the deck; anything else prints verbatim.
+exhibit_html <- function(exhibit) {
+
+  if (inherits(exhibit, "flextable") &&
+        requireNamespace("flextable", quietly = TRUE)) {
+    return(
+      tryCatch(
+        flextable::htmltools_value(exhibit),
+        error = function(e) tags$pre(paste(utils::capture.output(exhibit),
+                                            collapse = "\n"))
+      )
+    )
+  }
+
+  if (inherits(exhibit, c("gg", "ggplot"))) {
+    return(gg_exhibit_img(exhibit))
+  }
+
+  if (is.data.frame(exhibit)) {
+    if (requireNamespace("blockr.viz", quietly = TRUE) &&
+          requireNamespace("flextable", quietly = TRUE)) {
+      ft <- tryCatch(blockr.viz::ft_table(exhibit), error = function(e) NULL)
+      if (!is.null(ft)) {
+        return(exhibit_html(ft))
+      }
+    }
+    if (requireNamespace("knitr", quietly = TRUE)) {
+      return(HTML(paste(
+        knitr::kable(utils::head(exhibit, 50L), format = "html"),
+        collapse = "\n"
+      )))
+    }
+  }
+
+  tags$pre(paste(utils::capture.output(print(exhibit)), collapse = "\n"))
+}
+
+# A ggplot as an inline PNG data-URI. Sizes from the block's own pptx
+# geometry (gg_chart carries pptx_width / pptx_height in inches) capped to
+# a sensible on-screen width, so the preview keeps the deck's proportions
+# without rendering an 12in-wide canvas into a narrow panel.
+gg_exhibit_img <- function(p, dpi = 96) {
+
+  w <- coal(attr(p, "pptx_width"), 8)
+  h <- coal(attr(p, "pptx_height"), 4.5)
+  if (!is.finite(w) || w <= 0) w <- 8
+  if (!is.finite(h) || h <= 0) h <- 4.5
+
+  scale <- min(1, 8 / w)
+  w <- w * scale
+  h <- h * scale
+
+  out <- tryCatch(
+    {
+      tmp <- tempfile(fileext = ".png")
+      on.exit(unlink(tmp), add = TRUE)
+      grDevices::png(tmp, width = w * dpi, height = h * dpi, res = dpi)
+      tryCatch(print(p), finally = grDevices::dev.off())
+      uri <- base64enc::dataURI(file = tmp, mime = "image/png")
+      tags$img(
+        class = "blockr-otl-outimg",
+        src = uri,
+        style = "max-width:100%;height:auto;"
+      )
+    },
+    error = function(e) {
+      div(class = "blockr-otl-outnote", "Could not render this plot")
+    }
+  )
+
+  out
+}
+
 # Place one exhibit on the current slide at its intended coordinates.
 # Flextables carry `pptx_left` / `pptx_top` attributes (ft_table and the
 # topline flextable block both set them); ggplots and anything else fall
@@ -447,8 +605,13 @@ place_exhibit <- function(doc, exhibit) {
   }
 
   if (inherits(exhibit, c("gg", "ggplot"))) {
-    loc <- officer::ph_location(left = left, top = top,
-                                width = 11.9, height = 5.5)
+    # gg_chart() sizes the plot from the chart's row geometry and carries
+    # the result as attributes; a plain ggplot takes the default box.
+    loc <- officer::ph_location(
+      left = left, top = top,
+      width = coal(attr(exhibit, "pptx_width"), 11.9),
+      height = coal(attr(exhibit, "pptx_height"), 5.5)
+    )
     return(officer::ph_with(doc, exhibit, location = loc))
   }
 
