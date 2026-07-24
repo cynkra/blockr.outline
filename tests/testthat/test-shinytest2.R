@@ -117,8 +117,10 @@ test_that("the R script view renders the generated code", {
   set_view("script")
   txt <- pre_text()
   expect_match(txt, "data <- ")
-  # audit is excluded -> spin emits an include=FALSE chunk header for it.
-  expect_match(txt, "include=FALSE")
+  # audit is excluded and nothing reported depends on it -> pruned from the
+  # document entirely (its code must not run at render). The outline view
+  # still shows it (the offchip assertion above).
+  expect_no_match(txt, "audit")
   set_view("outline")
 })
 

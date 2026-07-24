@@ -27,11 +27,10 @@ port <- local({
 options(shiny.port = port, shiny.host = "0.0.0.0")
 options(blockr.dock_is_locked = FALSE)
 
-# A report surface needs every block's expression, including blocks whose
-# panels are hidden tabs. Core's deferred construction only builds blocks
-# the dock reports visible, and an extension cannot request construction,
-# so this demo constructs eagerly. Recorded core follow-up: an exported
-# construct-on-demand hook for report-style consumers.
+# This demo constructs eagerly so every code section is filled from the
+# first paint. Deferred boards (background_construction_delay = Inf) work
+# too -- Download demands the reported blocks through core's visibility
+# channel; see example-deferred.R.
 options(blockr.background_construction_delay = 0)
 
 message("Open http://127.0.0.1:", port, "/")

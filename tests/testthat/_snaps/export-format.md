@@ -5,6 +5,7 @@
     Output
       ---
       title: "Iris report"
+      df-print: kable
       ---
       
       # Stack
@@ -28,12 +29,6 @@
       sub <- subset(data, Species == "setosa")
       sub
       ```
-      
-      ```{r}
-      #| label: head
-      #| include: false
-      head <- utils::head(sub, 3)
-      ```
 
 # export_spin renders the expected script
 
@@ -54,7 +49,4 @@
       #+ sub
       sub <- subset(data, Species == "setosa")
       sub
-      
-      #+ head, include=FALSE
-      head <- utils::head(sub, 3)
 

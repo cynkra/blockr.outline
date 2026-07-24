@@ -86,6 +86,33 @@ outline_js <- function(ns) {
         applyCode();
       });
 
+      // Fire the real download. The visible Download button is an action
+      // button: on a deferred board the server first has to construct the
+      // reported blocks and wait for their code, so the browser-initiated
+      // GET a plain download button issues would race the render. The
+      // server sends this message once the document is complete.
+      //
+      // Not a.click(): the shiny-download-link is target=_blank, and by
+      // the time this message arrives (a websocket round trip later) the
+      // user activation from the button click has expired -- browsers
+      // popup-block the programmatic _blank click and the download dies
+      // silently. Navigate a same-tab throwaway anchor instead. No
+      // download attribute: it would override the handler's
+      // Content-Disposition filename with one derived from the URL; the
+      // attachment disposition alone already makes this a download, not
+      // a navigation.
+      Shiny.addCustomMessageHandler('blockr-outline-download', function(msg) {
+        var a = document.getElementById(msg.id);
+        if (!a) return;
+        var href = a.getAttribute('href');
+        if (!href || href === '#') return;
+        var tmp = document.createElement('a');
+        tmp.href = a.href;
+        document.body.appendChild(tmp);
+        tmp.click();
+        tmp.remove();
+      });
+
       // Gear toggles the settings band. Client-only, like the collapse:
       // opening a settings panel is not board state, so no round trip.
       var gear = document.getElementById(GEAR);
@@ -682,7 +709,14 @@ outline_tags <- function(sects, ns, editing = NULL) {
       if (!sects$report[i]) {
         span(
           class = "blockr-otl-offchip",
-          "include=FALSE \u00b7 runs, not shown"
+          # Two different exclusions: a block the report still depends on
+          # runs invisibly (include=FALSE); one nothing reported needs is
+          # pruned from the document and never evaluated.
+          if (isTRUE(sects$exported[i])) {
+            "include=FALSE \u00b7 runs, not shown"
+          } else {
+            "not in report \u00b7 not evaluated"
+          }
         )
       },
       prose,

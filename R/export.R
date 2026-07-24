@@ -260,6 +260,20 @@ outline_sections <- function(expressions, board, annotations,
       (i < length(ids) && !reaches(ids[i], ids[i + 1L]))
   })
 
+  # The document's evaluation closure: a block belongs to the export iff it
+  # is reported or some reported block depends on it. Everything else is
+  # dropped from the DOCUMENT entirely (not include=FALSE, whose code still
+  # runs at render) -- on a many-view board the independent branches would
+  # otherwise all evaluate for a report that shows none of them. The
+  # outline view keeps showing every block; only the exporters prune.
+  report <- lgl_ply(ids, function(i) ann_report(annotations, i))
+  reported <- ids[report]
+
+  exported <- report | lgl_ply(
+    ids,
+    function(a) any(lgl_ply(reported, function(b) reaches(a, b)))
+  )
+
   # Legal landing range for a drag, as gap indices over the list without
   # the dragged block: it must land after its last ancestor and before its
   # first descendant. Everything in between is a valid document order.
@@ -348,7 +362,8 @@ outline_sections <- function(expressions, board, annotations,
     names = chr_ply(blks, blockr.core::block_name),
     icons = chr_ply(seq_along(blks), function(i) block_icon_html(blks[[i]])),
     descriptions = chr_ply(ids, function(i) ann_description(annotations, i)),
-    report = lgl_ply(ids, function(i) ann_report(annotations, i)),
+    report = report,
+    exported = exported,
     # Exhibit kind from the block's CLASS, not its result: results are
     # gated by evaluation and visibility, so a runtime probe reads NULL
     # for most blocks and the caption would appear only sometimes. The
@@ -377,6 +392,7 @@ outline_sections <- function(expressions, board, annotations,
       },
       character(1L)
     ),
+    renderers = chr_ply(blks, block_report_renderer),
     stack_ids = stack_ids,
     stack_names = stack_names,
     stack_colors = stack_colors,
@@ -386,6 +402,35 @@ outline_sections <- function(expressions, board, annotations,
       character(1L)
     )
   )
+}
+
+# The report renderer wrapped around a block's printed result ("" = bare
+# print). The blockr.viz table blocks return a bare annotated data frame --
+# their styled table lives in the block's Shiny UI, so a bare print degrades
+# to df-print:kable. Wrapping the result variable in the static flextable
+# renderer restores the styled table, and flextable is the one engine whose
+# knit_print emits real OpenXML tables in pptx and docx (it renders in html
+# and pdf too), so a single wrapper serves every format. Class check only,
+# like `kinds`: blockr.viz need not be installed to project the sections;
+# the emitted call self-qualifies and the render session loads blockr.viz
+# anyway (the block's own code calls it).
+block_report_renderer <- function(blk) {
+  if (inherits(blk, c("table_block", "summary_table_block"))) {
+    "blockr.viz::ft_table"
+  } else {
+    ""
+  }
+}
+
+# The output line of a reported chunk: the result variable, wrapped in the
+# block's report renderer when it has one.
+sect_output <- function(sects, i) {
+  rndr <- coal(sects$renderers[i], "")
+  if (nzchar(rndr)) {
+    paste0(rndr, "(", sects$ids[i], ")")
+  } else {
+    sects$ids[i]
+  }
 }
 
 # The registry icon exactly as the dock's block card shows it. The two
@@ -404,6 +449,51 @@ block_icon_html <- function(blk) {
     },
     error = function(e) NA_character_
   )
+}
+
+# Narrow a sections projection onto its export closure (see `exported` in
+# outline_sections): the per-block vectors are subset in place, the
+# stack-level maps stay whole (chapter emission only reads the stacks that
+# survive in stack_ids). The drag-geometry fields (movable, drop_lo,
+# drop_hi, chap_targets) index into the FULL projection and would be
+# meaningless after subsetting; the exporters never read them, so they are
+# dropped rather than recomputed.
+prune_sections <- function(sects) {
+
+  keep <- sects$exported
+
+  if (is.null(keep) || all(keep)) {
+    return(sects)
+  }
+
+  per_block <- c(
+    "ids", "pending", "code", "names", "icons", "descriptions", "report",
+    "exported", "kinds", "renderers", "stack_ids", "stack_names"
+  )
+
+  for (fld in intersect(per_block, names(sects))) {
+    sects[[fld]] <- sects[[fld]][keep]
+  }
+
+  sects[c("movable", "drop_lo", "drop_hi", "chap_targets")] <- NULL
+
+  sects
+}
+
+# The code cell of one exported section. A pending block (constructed but
+# not yet reporting an expression, or not constructed at all on a deferred
+# board) holds a placeholder expression that must never reach a document as
+# code -- `id <- invisible(NULL)` would silently poison every dependent.
+# It becomes an honest comment instead; the render path waits for pending
+# blocks to resolve before running quarto (see the download flow in ext.R).
+sect_export_code <- function(sects, i) {
+  if (isTRUE(sects$pending[i])) {
+    paste0(
+      "# ", sects$ids[i], ": waiting for R code to be generated"
+    )
+  } else {
+    sects$code[i]
+  }
 }
 
 # Chapter headings: one per contiguous run of a stack, emitted only when
@@ -464,6 +554,8 @@ chapter_intro <- function(sects, chapters, i) {
 
 export_spin <- function(sects, stack_level = "#", block_level = "caption") {
 
+  sects <- prune_sections(sects)
+
   chapters <- section_chapters(sects)
 
   stack_hd <- if (stack_level %in% c("#", "##")) stack_level
@@ -500,7 +592,12 @@ export_spin <- function(sects, stack_level = "#", block_level = "caption") {
     )
 
     paste(
-      c(prose, header, sects$code[i], if (sects$report[i]) sects$ids[i]),
+      c(
+        prose,
+        header,
+        sect_export_code(sects, i),
+        if (sects$report[i] && !isTRUE(sects$pending[i])) sect_output(sects, i)
+      ),
       collapse = "\n"
     )
   }
@@ -513,6 +610,8 @@ export_spin <- function(sects, stack_level = "#", block_level = "caption") {
 
 export_qmd <- function(sects, title = "Board report",
                        stack_level = "#", block_level = "caption") {
+
+  sects <- prune_sections(sects)
 
   chapters <- section_chapters(sects)
 
@@ -567,8 +666,8 @@ export_qmd <- function(sects, title = "Board report",
       paste0("#| label: ", lbl),
       cap,
       if (!sects$report[i]) "#| include: false",
-      sects$code[i],
-      if (sects$report[i]) sects$ids[i],
+      sect_export_code(sects, i),
+      if (sects$report[i] && !isTRUE(sects$pending[i])) sect_output(sects, i),
       "```"
     )
 

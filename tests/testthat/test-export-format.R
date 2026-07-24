@@ -32,8 +32,63 @@ test_that("report exhibits get a caption, excluded blocks are hidden", {
   expect_match(qmd, "#\\| label: data")
   expect_no_match(qmd, "#\\| label: tbl-data")
   expect_match(qmd, "#\\| tbl-cap:")
-  # head is excluded -> include:false and no echo of its value.
-  expect_match(qmd, "#\\| include: false")
+  # head is excluded and nothing reported depends on it -> dropped from the
+  # document entirely (its code must not run at render), not include:false.
+  expect_no_match(qmd, "#\\| label: head")
+})
+
+test_that("an excluded block stays as include:false iff the report needs it", {
+  # data is excluded but sub (reported) depends on it: its code must still
+  # run, silently. head is excluded and independent: it vanishes.
+  s <- outline_sections(
+    otl_exprs(),
+    otl_board(stacks = TRUE),
+    annotations = list(
+      data = list(report = FALSE),
+      head = list(report = FALSE)
+    )
+  )
+
+  expect_identical(s$exported, c(data = TRUE, sub = TRUE, head = FALSE)[s$ids])
+
+  for (txt in list(export_qmd(s), export_spin(s))) {
+    expect_match(txt, "data <- ", fixed = TRUE)
+    expect_match(txt, "include")
+    expect_no_match(txt, "head")
+  }
+})
+
+test_that("nothing reported yields a document with no chunks", {
+  s <- outline_sections(
+    otl_exprs(),
+    otl_board(stacks = TRUE),
+    annotations = list(
+      data = list(report = FALSE),
+      sub  = list(report = FALSE),
+      head = list(report = FALSE)
+    )
+  )
+
+  expect_false(any(s$exported))
+  expect_no_match(export_qmd(s), "```")
+  expect_identical(export_spin(s), "")
+})
+
+test_that("a pending block exports as a comment, never as code", {
+  # The placeholder expression backing a pending block must not reach the
+  # document as `id <- invisible(NULL)`; it renders as a comment and its
+  # value is not echoed.
+  ex <- otl_exprs()
+  ex$head <- quote(invisible(NULL))
+  attr(ex, "pending") <- "head"
+
+  s <- outline_sections(ex, otl_board(stacks = TRUE), list())
+
+  for (txt in list(export_qmd(s), export_spin(s))) {
+    expect_match(txt, "head: waiting for R code to be generated", fixed = TRUE)
+    expect_no_match(txt, "invisible(NULL)", fixed = TRUE)
+    expect_no_match(txt, "\nhead\n", fixed = TRUE)
+  }
 })
 
 test_that("qmd escapes double quotes in the title", {
@@ -71,4 +126,35 @@ test_that("chapter_intro emits the stack description only under a fresh heading"
   # A row that is not a chapter start yields nothing.
   non_head <- which(is.na(ch))[[1L]]
   expect_length(chapter_intro(s, ch, non_head), 0L)
+})
+
+test_that("viz table blocks print through the flextable report renderer", {
+  # A blockr.viz table / summary_table block returns a bare annotated data
+  # frame (the styled table lives in its Shiny UI), so the exporters wrap
+  # the result variable in blockr.viz::ft_table(). Class check only -- a
+  # head block wearing the class stands in, no blockr.viz needed.
+  blocks <- c(
+    data = blockr.core::new_dataset_block("iris"),
+    tbl  = blockr.core::new_head_block()
+  )
+  class(blocks[["tbl"]]) <- c("table_block", class(blocks[["tbl"]]))
+  board <- blockr.core::new_board(
+    blocks = blocks,
+    links = blockr.core::links(from = "data", to = "tbl")
+  )
+  exprs <- structure(
+    list(data = quote(datasets::iris), tbl = quote(utils::head(data, 3))),
+    pending = character()
+  )
+
+  s <- outline_sections(exprs, board, annotations = list(),
+                        stack_annotations = list())
+  expect_identical(unname(s$renderers[s$ids == "tbl"]), "blockr.viz::ft_table")
+  expect_identical(unname(s$renderers[s$ids == "data"]), "")
+
+  for (txt in list(export_qmd(s), export_spin(s))) {
+    expect_match(txt, "blockr.viz::ft_table(tbl)", fixed = TRUE)
+    # the untouched block still prints bare
+    expect_match(txt, "\ndata\n", fixed = TRUE)
+  }
 })

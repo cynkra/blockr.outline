@@ -128,10 +128,22 @@ outline_ext_ui <- function(id, board, ...) {
             selectize = FALSE,
             width = "88px"
           ),
-          downloadButton(
-            ns("code_render"),
+          # The visible half of a two-stage download. A plain
+          # downloadButton would GET immediately on click; on a deferred
+          # board the reported blocks may not be constructed yet, so the
+          # click first goes to the server (require blocks, wait for their
+          # code) which then clicks the hidden link below from JS. See the
+          # code_render_go observer.
+          actionButton(
+            ns("code_render_go"),
             "Download",
+            icon = icon("download"),
             class = "blockr-otl-renderbtn"
+          ),
+          downloadLink(
+            ns("code_render"),
+            label = NULL,
+            style = "display: none;"
           )
         ),
         # Gear: opens the in-flow settings band below the toolbar (the
@@ -237,7 +249,8 @@ outline_ext_srv <- function(annotations, block_order, title,
                             block_title_level = "caption",
                             template = "") {
 
-  function(id, board, update, session, parent, actions = NULL, ...) {
+  function(id, board, update, session, parent, actions = NULL,
+           visibility = NULL, ...) {
     moduleServer(
       id,
       function(input, output, session) {
@@ -353,9 +366,9 @@ outline_ext_srv <- function(annotations, block_order, title,
         # going quiet must not remove it from the document; the last
         # expression it did report stays until it reports a new one.
         # Without this the outline loses blocks as soon as you switch
-        # tabs. (The real fix is upstream: an extension cannot ask core to
-        # construct or evaluate a hidden block. Recorded as a core
-        # follow-up; the demo sets background_construction_delay = 0.)
+        # tabs. The cache is also what lets the download flow withdraw its
+        # demand (see restore_demanded): a block demoted back to dormant
+        # keeps the last expression it reported.
         expr_cache <- new.env(parent = emptyenv())
 
         board_exprs <- reactive(
@@ -1221,6 +1234,148 @@ outline_ext_srv <- function(annotations, block_order, title,
           }
         )
 
+        # The action half of the two-stage download (see the UI). On a
+        # deferred board (background_construction_delay = Inf) a block no
+        # view has shown is never constructed, reports no expression, and
+        # sits in the document as a pending placeholder. The click demands
+        # exactly the export closure through core's visibility channel --
+        # `visibility$required[[id]](TRUE)`, the same mechanism core's own
+        # generate_code plugin uses -- which constructs the pending blocks
+        # and (their ancestors riding along via core's upstream closure)
+        # evaluates the reported branches. Once nothing exported is
+        # pending, the hidden download link is clicked from JS and the
+        # render runs against complete code. Branches outside the export
+        # closure are never constructed, mirroring the app's lazy views.
+        #
+        # The demanded slots are snapshotted and RESTORED once the download
+        # fires. The dock overloads the `required` axis as its card build
+        # ledger (non-NA = card built, see blockr.dock::built_cards), so a
+        # TRUE left on a block whose card was never built would make the
+        # first visit to its view skip the card build -- a blank panel.
+        # Constructed-server-with-unbuilt-card is a state the dock already
+        # supports (finite-delay background construction produces it), so
+        # putting the prior value back is safe: core keeps the constructed
+        # block, the dock keeps an honest ledger.
+        awaiting_render <- reactiveVal(FALSE)
+        wait_note <- reactiveVal(NULL)
+        demanded <- reactiveVal(list())
+
+        restore_demanded <- function() {
+          snap <- demanded()
+
+          for (blk_id in names(snap)) {
+            slot <- visibility$required[[blk_id]]
+            if (is.function(slot)) {
+              slot(snap[[blk_id]])
+            }
+          }
+
+          demanded(list())
+        }
+
+        pending_exported <- function(sects) {
+          sects$ids[sects$exported & sects$pending]
+        }
+
+        fire_download <- function() {
+          session$sendCustomMessage(
+            "blockr-outline-download",
+            list(id = session$ns("code_render"))
+          )
+        }
+
+        observeEvent(
+          input$code_render_go,
+          {
+            sects <- tryCatch(sections(), error = function(e) NULL)
+
+            if (is.null(sects)) {
+              showNotification(
+                "The document is not ready yet; try again in a moment.",
+                type = "warning"
+              )
+              return()
+            }
+
+            pending <- pending_exported(sects)
+
+            if (!length(pending)) {
+              fire_download()
+              return()
+            }
+
+            slots <- if (!is.null(visibility)) visibility$required
+
+            if (is.null(slots)) {
+              # No channel (an old container, or none at all): blocks can
+              # only construct through their views, so say so instead of
+              # waiting on something that cannot happen.
+              showNotification(
+                paste(
+                  "Some report blocks are not initialized yet. Open their",
+                  "views to initialize them, then download again."
+                ),
+                type = "warning",
+                duration = 10
+              )
+              return()
+            }
+
+            snap <- demanded()
+
+            for (blk_id in pending) {
+              slot <- slots[[blk_id]]
+              if (is.function(slot)) {
+                # A re-click while already waiting must keep the ORIGINAL
+                # prior value, not the TRUE of the first click.
+                if (!blk_id %in% names(snap)) {
+                  snap[[blk_id]] <- isolate(slot())
+                }
+                slot(TRUE)
+              }
+            }
+
+            demanded(snap)
+
+            awaiting_render(TRUE)
+            wait_note(
+              showNotification(
+                sprintf(
+                  paste(
+                    "Generating R code for %d block%s… the download",
+                    "starts when it is ready."
+                  ),
+                  length(pending),
+                  if (length(pending) == 1L) "" else "s"
+                ),
+                duration = NULL,
+                closeButton = FALSE
+              )
+            )
+          }
+        )
+
+        observe(
+          {
+            req(awaiting_render())
+
+            if (length(pending_exported(sections()))) {
+              return()
+            }
+
+            awaiting_render(FALSE)
+            restore_demanded()
+
+            note <- wait_note()
+            if (!is.null(note)) {
+              removeNotification(note)
+              wait_note(NULL)
+            }
+
+            fire_download()
+          }
+        )
+
         output$code_render <- downloadHandler(
           filename = function() {
             paste0(
@@ -1241,6 +1396,13 @@ outline_ext_srv <- function(annotations, block_order, title,
             )
           }
         )
+
+        # The download link is display:none (the visible button is the
+        # action half, see above), and Shiny suspends hidden outputs --
+        # which for a downloadHandler means the link's href is never
+        # populated and a click navigates to the bare page URL instead of
+        # the handler. Keep it live.
+        outputOptions(output, "code_render", suspendWhenHidden = FALSE)
 
         list(
           state = list(
