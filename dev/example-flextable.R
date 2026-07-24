@@ -1,16 +1,17 @@
 # blockr.outline as a slide-deck builder, the topline essentials without
-# blockr.md: blockr.viz table blocks and topline-style flextables rendered
-# to NATIVE, positioned pptx tables on the BMS master.
+# blockr.md: blockr.viz table blocks and the real topline flextable block,
+# rendered to NATIVE, positioned pptx tables on the BMS master.
 #
 # Two exhibits, to show both paths:
-#   * `tbl` -- a normal blockr.viz new_table_block(). It returns an
-#     annotated data frame; the outline's report seam prints it through
+#   * `tbl` -- a normal blockr.viz new_table_block(). It returns an annotated
+#     data frame; the outline's report seam prints it through
 #     blockr.viz::ft_table(), which stamps pptx_left / pptx_top (0.4 / 1.1)
 #     so the deck renderer positions it.
-#   * `ft` -- a topline-style flextable from a function block, carrying its
-#     own pptx_left / pptx_top attributes. The deck renderer reads those and
-#     places it exactly there -- the same positioning contract, so the old
-#     topline flextable block drops in unchanged.
+#   * `ft` -- the genuine blockr.topline::new_flextable_block(), with its
+#     clinical styling (colored header bands via col_colors, indentation,
+#     bold section rows) and its own pptx_left / pptx_top. The deck renderer
+#     reads those attributes and places it exactly there, so the topline
+#     block drops in unchanged.
 #
 # pptx is built with officer (render_pptx_officer): pandoc's pptx writer
 # ignores the reference template's placeholder geometry and fixes every
@@ -34,7 +35,7 @@ message("Open http://127.0.0.1:", port, "/")
 
 root <- "."
 deps <- c("dockViewR", "blockr.core", "blockr.dag", "blockr.dock",
-          "blockr.extra", "blockr.viz", "blockr.outline")
+          "blockr.extra", "blockr.viz", "blockr.topline", "blockr.outline")
 for (d in deps) {
   pkgload::load_all(
     file.path(root, d),
@@ -51,22 +52,20 @@ if (!nzchar(bms_template)) {
                             "bms-template.pptx")
 }
 
-# A topline-style flextable: colored header bands, dense borders, and its own
-# slide position stamped as attributes (pptx_left / pptx_top). This is what
-# the topline flextable block emits; a function block stands in here.
-ft_fn <- paste(
+# A clinical demographics frame in topline's annotated shape: `.label` is the
+# row stub, `.indent` the display depth, `.bold` the section rows. The two
+# data columns are the treatment arms. new_flextable_block() styles this.
+clin_fn <- paste(
   "function(data) {",
-  "  ft <- flextable::flextable(utils::head(data, 6))",
-  "  ft <- flextable::font(ft, fontname = 'Trebuchet MS', part = 'all')",
-  "  ft <- flextable::color(ft, color = '#444444', part = 'all')",
-  "  ft <- flextable::bg(ft, bg = '#A59F9F', part = 'header')",
-  "  ft <- flextable::color(ft, color = '#FFFFFF', part = 'header')",
-  "  ft <- flextable::border_outer(ft,",
-  "    border = officer::fp_border(color = 'black', width = 1))",
-  "  ft <- flextable::autofit(ft)",
-  "  attr(ft, 'pptx_left') <- 0.4",
-  "  attr(ft, 'pptx_top') <- 1.1",
-  "  ft",
+  "  data.frame(",
+  "    check.names = FALSE, stringsAsFactors = FALSE,",
+  "    '.label' = c('Age (years)', 'Mean (SD)', 'Median',",
+  "                 'Sex, n (%)', 'Female', 'Male'),",
+  "    '.indent' = c(0, 1, 1, 0, 1, 1),",
+  "    '.bold' = c(TRUE, FALSE, FALSE, TRUE, FALSE, FALSE),",
+  "    'PBO  N=334' = c('', '52.1 (13.4)', '53', '', '180 (53.9)', '154 (46.1)'),",
+  "    'DEUC 6 mg  N=336' = c('', '51.8 (12.9)', '52', '', '179 (53.3)', '157 (46.7)')",
+  "  )",
   "}",
   sep = "\n"
 )
@@ -79,16 +78,23 @@ board <- new_dock_board(
       block_name = "Iris summary"
     ),
     tbl = blockr.viz::new_table_block(block_name = "Summary table"),
-    cars = new_dataset_block("mtcars", block_name = "Cars data"),
-    ft = blockr.extra::new_function_block(fn = ft_fn,
-                                          block_name = "Topline flextable")
+    seed = new_dataset_block("iris", block_name = "Seed"),
+    clin = blockr.extra::new_function_block(fn = clin_fn,
+                                            block_name = "Demographics data"),
+    ft = blockr.topline::new_flextable_block(
+      col_colors = c("gray", "dark_gray", "blue"),
+      first_column_label = "Characteristics",
+      first_col_width = 3.2, other_cols_width = 2.6,
+      pptx_left = 0.4, pptx_top = 1.1,
+      block_name = "Topline flextable"
+    )
   ),
   links = links(
-    from = c("iris_data", "st", "cars"),
-    to = c("st", "tbl", "ft")
+    from = c("iris_data", "st", "seed", "clin"),
+    to = c("st", "tbl", "clin", "ft")
   ),
   stacks = stacks(
-    deck = new_dock_stack(c("iris_data", "st", "tbl", "cars", "ft"),
+    deck = new_dock_stack(c("iris_data", "st", "tbl", "seed", "clin", "ft"),
                           name = "Deck", color = "#7c3aed")
   ),
   extensions = list(
@@ -100,9 +106,10 @@ board <- new_dock_board(
         tbl = list(
           description = "Baseline sepal measures by species (blockr.viz table block via ft_table)."
         ),
-        cars = list(report = FALSE),
+        seed = list(report = FALSE),
+        clin = list(report = FALSE),
         ft = list(
-          description = "A topline-style flextable, positioned by its own pptx attributes."
+          description = "Demographics, the topline flextable block: colored header bands, positioned by its pptx attributes."
         )
       ),
       stack_annotations = list(
