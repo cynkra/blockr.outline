@@ -110,6 +110,9 @@ outline_ext_ui <- function(id, board, ...) {
       # Outline body: generated Code (default) or the activated blocks'
       # rendered Output -- the deck-builder view. Only meaningful in the
       # Outline view, so it rides in a conditionalPanel keyed on it.
+      # Icon-only (</> vs eye): two states on a strip that only appears in
+      # one of three views reads better as glyphs than a second word pair
+      # competing with the view switcher beside it.
       conditionalPanel(
         condition = sprintf("input['%s'] == 'outline'", ns("code_view")),
         class = "blockr-otl-bodytoggle",
@@ -118,7 +121,27 @@ outline_ext_ui <- function(id, board, ...) {
           label = NULL,
           size = "sm",
           status = "light",
-          choices = c("Code" = "code", "Output" = "output"),
+          choiceValues = c("code", "output"),
+          choiceNames = list(
+            tags$span(
+              class = "blockr-otl-bodyicon", title = "Code",
+              HTML(paste0(
+                "<svg width='14' height='14' viewBox='0 0 24 24' fill='none' ",
+                "stroke='currentColor' stroke-width='2' stroke-linecap='round' ",
+                "stroke-linejoin='round'><polyline points='16 18 22 12 16 6'/>",
+                "<polyline points='8 6 2 12 8 18'/></svg>"
+              ))
+            ),
+            tags$span(
+              class = "blockr-otl-bodyicon", title = "Output",
+              HTML(paste0(
+                "<svg width='14' height='14' viewBox='0 0 24 24' fill='none' ",
+                "stroke='currentColor' stroke-width='2' stroke-linecap='round' ",
+                "stroke-linejoin='round'><path d='M1 12s4-8 11-8 11 8 11 8-4 8-",
+                "11 8-11-8-11-8z'/><circle cx='12' cy='12' r='3'/></svg>"
+              ))
+            )
+          ),
           selected = "code"
         )
       ),

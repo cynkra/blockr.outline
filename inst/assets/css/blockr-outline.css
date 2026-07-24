@@ -374,7 +374,19 @@
 /* Output mode: the block body holds a rendered exhibit (flextable, plot,
    table) instead of code, so drop the code cell's monospace wrapping and
    let the exhibit size itself. The deck-builder view. */
-.blockr-otl-bodytoggle { margin-left: 8px; }
+
+/* The Code/Output strip rides in a conditionalPanel div, so the toolbar's
+   direct-child `> .shiny-input-container { margin: 0 }` never reaches its
+   form-group wrapper -- that leftover bottom margin is what floated the
+   strip above the switcher's centre line. Zero it here and match the
+   toolbar control height so both segmented strips share one baseline. */
+.blockr-otl-bodytoggle { display: inline-flex; align-items: center;
+  height: var(--otl-ctrl-h); margin-left: 8px; }
+.blockr-otl-bodytoggle .shiny-input-container { margin: 0; }
+/* Icon-only segments: square them off (the labelled switcher uses 12px
+   side padding for text) and centre the glyph. */
+.blockr-otl-bodytoggle .btn-group > .btn.radiobtn { padding: 0 9px; }
+.blockr-otl-bodyicon { display: inline-flex; align-items: center; }
 .blockr-otl-outwrap {
   font-family: inherit;
   white-space: normal;
