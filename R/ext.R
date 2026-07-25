@@ -91,6 +91,16 @@ outline_ext_ui <- function(id, board, ...) {
 
   div(
     class = "blockr-otl-panel",
+    # Id so the client can report when this panel is on screen. The dock
+    # mounts every extension eagerly (in a hidden offcanvas) and MOVES the
+    # DOM into a dock panel when shown, so the outline's outputs are live
+    # from board startup. Without a visibility gate the O(n^2) projection
+    # (board_exprs -> sections_calc -> outline_sections) would run on every
+    # block-expression change even while the panel is closed -- a real cost
+    # on a large deferred board (see the perf note in the server). An
+    # IntersectionObserver on this element drives `otl_visible`, gating the
+    # projection so a present-but-unopened outline costs nothing.
+    id = ns("otl_panel"),
     outline_dep(),
     md_editor_dep(),
     div(
@@ -311,6 +321,20 @@ outline_ext_srv <- function(annotations, block_order, title,
         pending_after <- reactiveVal(NULL)
         known_ids <- reactiveVal(NULL)
 
+        # Whether the outline panel is on screen (client-reported via the
+        # IntersectionObserver in outline_js). Seeded TRUE so the first
+        # projection runs before the client has reported and a broken /
+        # absent observer degrades to the old always-on behaviour rather
+        # than a blank panel. `sections_calc` reads this to skip the
+        # expensive projection while the panel is closed.
+        panel_visible <- reactiveVal(TRUE)
+
+        observeEvent(
+          input$otl_visible,
+          panel_visible(isTRUE(input$otl_visible)),
+          ignoreNULL = TRUE
+        )
+
         # Garbage-collect annotations / order entries for removed blocks;
         # the id-keyed map must follow the board's block lifecycle.
         observeEvent(
@@ -466,6 +490,15 @@ outline_ext_srv <- function(annotations, block_order, title,
 
         sections_calc <- reactive(
           {
+            # Gate FIRST, before board_exprs is even read: the projection
+            # is the outline's one expensive step (O(n^2) drag geometry),
+            # and it is the sole eager reader of board_exprs. Skipping it
+            # while the panel is closed idles the entire pipeline -- no
+            # expr reads, no projection -- so a present-but-unopened outline
+            # costs nothing. The next time the panel is shown, panel_visible
+            # flips and the projection runs.
+            req(panel_visible())
+
             req(length(board_exprs()) > 0L)
 
             # During startup (deferred construction) the block servers and

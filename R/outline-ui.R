@@ -39,7 +39,8 @@ outline_js <- function(ns) {
       "var TOGGLE = '%s', OPEN = '%s', MOVE = '%s', EDIT = '%s', ",
       "REN = '%s', RENSTACK = '%s', SAVE = '%s', CANCEL = '%s', ",
       "ADD = '%s', RM = '%s', CHAP = '%s', NEWCHAP = '%s', ",
-      "TOSTACK = '%s', MOVECHAP = '%s', GEAR = '%s', SETTINGS = '%s';"
+      "TOSTACK = '%s', MOVECHAP = '%s', GEAR = '%s', SETTINGS = '%s', ",
+      "PANEL = '%s', VISIBLE = '%s';"
     ),
     ns("outline_toggle"),
     ns("outline_open"),
@@ -56,7 +57,9 @@ outline_js <- function(ns) {
     ns("outline_tostack"),
     ns("outline_movechap"),
     ns("otl_gear"),
-    ns("otl_settings")
+    ns("otl_settings"),
+    ns("otl_panel"),
+    ns("otl_visible")
   )
 
   tags$script(HTML(paste0(
@@ -118,6 +121,37 @@ outline_js <- function(ns) {
         tmp.click();
         tmp.remove();
       });
+
+      // Report whether the outline panel is on screen, so the server can
+      // gate its (O(n^2)) projection: idle while the panel is closed, live
+      // when it is shown. The dock parks an unshown extension in an
+      // offcanvas that hides it with `visibility: hidden` -- NOT
+      // display:none -- and moves the DOM into a dock panel when shown. So
+      // IntersectionObserver is no use (it ignores visibility:hidden); the
+      // reliable test is the visibility CSS property plus a client-rect
+      // check (which also catches display:none / detached). A light poll
+      // (cheap getComputedStyle, only pushes the input on CHANGE) covers
+      // the offcanvas move, dockview tab switches and view changes alike.
+      // Seeded server-side as TRUE, so a broken poll degrades to the old
+      // always-on cost rather than a blank panel.
+      (function() {
+        var last = null;
+        function tick() {
+          // Resolve the panel inside the tick, not once at setup: at DOM
+          // ready the dock may not have mounted / moved the extension node
+          // yet, so a setup-time lookup can miss it and never recover. A
+          // per-tick lookup self-heals.
+          var panel = document.getElementById(PANEL);
+          if (!panel) return;
+          var vis = getComputedStyle(panel).visibility !== 'hidden' &&
+                    panel.getClientRects().length > 0;
+          if (vis === last) return;
+          last = vis;
+          Shiny.setInputValue(VISIBLE, vis, {priority: 'event'});
+        }
+        setInterval(tick, 400);
+        tick();
+      })();
 
       // Gear toggles the settings band. Client-only, like the collapse:
       // opening a settings panel is not board state, so no round trip.
