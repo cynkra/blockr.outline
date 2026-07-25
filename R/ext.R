@@ -662,10 +662,18 @@ outline_ext_srv <- function(annotations, block_order, title,
 
             skel <- full
             skel$code <- NULL
-            # Pending-ness only changes the code cell, so it rides with
-            # the pushed code map. In the skeleton it would redraw the
-            # outline the moment a block reports.
-            skel$pending <- NULL
+            # Keep `pending` IN the skeleton so a block flipping pending ->
+            # code redraws the outline. That redraw is how a deferred board
+            # (background_construction_delay = Inf) ever shows real code: the
+            # incremental code push cannot carry it, because on a deferred
+            # board a block's push arrives before renderUI has inserted its
+            # cell (so applyCode finds no node), and the outline output does
+            # not emit the shiny:value the re-apply hooks -- the dock mounts
+            # the extension in an offcanvas and moves its DOM, skipping the
+            # event -- so the cached markup would sit unapplied forever.
+            # Re-rendering paints the current code straight from code_store.
+            # A plain code EDIT does not touch `pending`, so the skeleton is
+            # unchanged and the push still handles it without a redraw.
 
             if (!identical(skel, isolate(skel_store()))) {
               skel_store(skel)
