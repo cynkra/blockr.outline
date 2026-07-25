@@ -130,7 +130,7 @@ test_that("chapter_intro emits the stack description only under a fresh heading"
 
 test_that("a block-supplied report call wins the chunk output line", {
   # The chart block states its printed form through blockr.viz::report_call
-  # (emitting a gg_chart call over the result variable). A head block
+  # (emitting a static_chart call over the result variable). A head block
   # wearing the chart_block class exercises the dispatch + emission
   # plumbing without pulling chart fixtures into this suite; its state env
   # has none of the chart names, so the emitted call is the minimal one.
@@ -153,18 +153,18 @@ test_that("a block-supplied report call wins the chunk output line", {
   s <- outline_sections(exprs, board, annotations = list())
   expect_match(
     unname(s$report_calls[s$ids == "ch"]),
-    "^blockr\\.viz::gg_chart\\(ch"
+    "^blockr\\.viz::static_chart\\(ch"
   )
 
   for (txt in list(export_qmd(s), export_spin(s))) {
-    expect_match(txt, "blockr.viz::gg_chart(ch", fixed = TRUE)
+    expect_match(txt, "blockr.viz::static_chart(ch", fixed = TRUE)
   }
 })
 
 test_that("viz table blocks print through the flextable report renderer", {
   # A blockr.viz table / summary_table block returns a bare annotated data
   # frame (the styled table lives in its Shiny UI), so the exporters wrap
-  # the result variable in blockr.viz::ft_table(). Class check only -- a
+  # the result variable in blockr.viz::static_table(). Class check only -- a
   # head block wearing the class stands in, no blockr.viz needed.
   blocks <- c(
     data = blockr.core::new_dataset_block("iris"),
@@ -182,11 +182,11 @@ test_that("viz table blocks print through the flextable report renderer", {
 
   s <- outline_sections(exprs, board, annotations = list(),
                         stack_annotations = list())
-  expect_identical(unname(s$renderers[s$ids == "tbl"]), "blockr.viz::ft_table")
+  expect_identical(unname(s$renderers[s$ids == "tbl"]), "blockr.viz::static_table")
   expect_identical(unname(s$renderers[s$ids == "data"]), "")
 
   for (txt in list(export_qmd(s), export_spin(s))) {
-    expect_match(txt, "blockr.viz::ft_table(tbl)", fixed = TRUE)
+    expect_match(txt, "blockr.viz::static_table(tbl)", fixed = TRUE)
     # the untouched block still prints bare
     expect_match(txt, "\ndata\n", fixed = TRUE)
   }

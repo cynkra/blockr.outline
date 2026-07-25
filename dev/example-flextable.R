@@ -5,7 +5,7 @@
 # Two exhibits, to show both paths:
 #   * `tbl` -- a normal blockr.viz new_table_block(). It returns an annotated
 #     data frame; the outline's report seam prints it through
-#     blockr.viz::ft_table(), which stamps pptx_left / pptx_top (0.4 / 1.1)
+#     blockr.viz::static_table(), which stamps pptx_left / pptx_top (0.4 / 1.1)
 #     so the deck renderer positions it.
 #   * `ft` -- the genuine blockr.topline::new_flextable_block(), with its
 #     clinical styling (colored header bands via col_colors, indentation,
@@ -31,7 +31,7 @@ options(shiny.port = port, shiny.host = "0.0.0.0")
 options(blockr.dock_is_locked = FALSE)
 options(blockr.background_construction_delay = 0)
 
-# The deck's house palette lives app-side -- blockr.viz::ft_table() carries
+# The deck's house palette lives app-side -- blockr.viz::static_table() carries
 # no colors of its own and reads this option. Named entries pin an arm
 # (e.g. `Placebo = "grey"`); unnamed entries cycle for the rest. Here: a
 # light-gray stub then dark-gray / blue / orange bands, the BMS look.
@@ -111,7 +111,7 @@ board <- new_dock_board(
         iris_data = list(report = FALSE),
         st = list(report = FALSE),
         tbl = list(
-          description = "Baseline sepal measures by species (blockr.viz table block via ft_table)."
+          description = "Baseline sepal measures by species (blockr.viz table block via static_table)."
         ),
         seed = list(report = FALSE),
         clin = list(report = FALSE),

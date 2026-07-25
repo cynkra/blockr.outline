@@ -334,7 +334,7 @@ render_report <- function(qmd_txt, spin_txt, fmt, file, title,
 # outline_sections() projection; its export code is evaluated in a fresh
 # environment (reproducing the report's computation), then each reported
 # block's result is turned into an exhibit through the same output
-# expression the qmd uses (sect_output -> ft_table() for table blocks).
+# expression the qmd uses (sect_output -> static_table() for table blocks).
 render_pptx_officer <- function(sects, file, title, template = NULL) {
 
   if (!requireNamespace("officer", quietly = TRUE)) {
@@ -361,7 +361,7 @@ render_pptx_officer <- function(sects, file, title, template = NULL) {
   sects <- prune_sections(sects)
 
   # Size tables to the slide's usable width so they do not overflow: the
-  # ft_table() default reads this option.
+  # static_table() default reads this option.
   fit_w <- template_content_width(template)
   old <- options(blockr.viz.ft_fit_width = fit_w)
   on.exit(options(old), add = TRUE)
@@ -405,7 +405,7 @@ render_pptx_officer <- function(sects, file, title, template = NULL) {
     if (!isTRUE(sects$report[i]) || isTRUE(sects$pending[i])) next
 
     # The exhibit object: the SAME expression the qmd prints -- a table
-    # block resolves through ft_table(), a plot / raw flextable stays as
+    # block resolves through static_table(), a plot / raw flextable stays as
     # itself.
     exhibit <- tryCatch(
       eval(parse(text = sect_output(sects, i)), envir = env),
@@ -511,9 +511,9 @@ sect_output_html <- function(sects, env, i, eval_ok = TRUE) {
 }
 
 # Render one exhibit object to inline HTML tags. Mirrors place_exhibit()'s
-# type dispatch: flextables (ft_table and the topline block) keep their
+# type dispatch: flextables (static_table and the topline block) keep their
 # styling via htmltools_value; ggplots rasterize to a data-URI img at the
-# aspect ratio the block chose; a bare data frame goes through ft_table so
+# aspect ratio the block chose; a bare data frame goes through static_table so
 # the preview matches the deck; anything else prints verbatim.
 exhibit_html <- function(exhibit) {
 
@@ -535,7 +535,7 @@ exhibit_html <- function(exhibit) {
   if (is.data.frame(exhibit)) {
     if (requireNamespace("blockr.viz", quietly = TRUE) &&
           requireNamespace("flextable", quietly = TRUE)) {
-      ft <- tryCatch(blockr.viz::ft_table(exhibit), error = function(e) NULL)
+      ft <- tryCatch(blockr.viz::static_table(exhibit), error = function(e) NULL)
       if (!is.null(ft)) {
         return(exhibit_html(ft))
       }
@@ -552,7 +552,7 @@ exhibit_html <- function(exhibit) {
 }
 
 # A ggplot as an inline PNG data-URI. Sizes from the block's own pptx
-# geometry (gg_chart carries pptx_width / pptx_height in inches) capped to
+# geometry (static_chart carries pptx_width / pptx_height in inches) capped to
 # a sensible on-screen width, so the preview keeps the deck's proportions
 # without rendering an 12in-wide canvas into a narrow panel.
 gg_exhibit_img <- function(p, dpi = 96) {
@@ -588,7 +588,7 @@ gg_exhibit_img <- function(p, dpi = 96) {
 }
 
 # Place one exhibit on the current slide at its intended coordinates.
-# Flextables carry `pptx_left` / `pptx_top` attributes (ft_table and the
+# Flextables carry `pptx_left` / `pptx_top` attributes (static_table and the
 # topline flextable block both set them); ggplots and anything else fall
 # back to a sensible content box.
 place_exhibit <- function(doc, exhibit) {
@@ -605,7 +605,7 @@ place_exhibit <- function(doc, exhibit) {
   }
 
   if (inherits(exhibit, c("gg", "ggplot"))) {
-    # gg_chart() sizes the plot from the chart's row geometry and carries
+    # static_chart() sizes the plot from the chart's row geometry and carries
     # the result as attributes; a plain ggplot takes the default box.
     loc <- officer::ph_location(
       left = left, top = top,
@@ -616,7 +616,7 @@ place_exhibit <- function(doc, exhibit) {
   }
 
   if (is.data.frame(exhibit)) {
-    ft <- blockr.viz::ft_table(exhibit)
+    ft <- blockr.viz::static_table(exhibit)
     return(place_exhibit(doc, ft))
   }
 

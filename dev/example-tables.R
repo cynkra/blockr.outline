@@ -1,5 +1,5 @@
 # blockr.outline with blockr.viz TABLE blocks: the outline's report renders
-# them through blockr.viz::ft_table() (annotated df -> styled flextable), so
+# them through blockr.viz::static_table() (annotated df -> styled flextable), so
 # the pptx / docx / html downloads carry real styled tables instead of a
 # bare kable of the underlying frame.
 #
@@ -7,7 +7,7 @@
 #   * the `tbl` / `tbl2` blocks show the interactive styled table in their
 #     control pane, as usual,
 #   * open the outline's Document view: their chunks end in
-#     `blockr.viz::ft_table(<id>)` -- the report seam,
+#     `blockr.viz::static_table(<id>)` -- the report seam,
 #   * pick a format (pptx!) in the outline gear and click Download: the
 #     tables arrive as native, editable PowerPoint tables in the topline
 #     look. The upstream data / summary blocks are excluded from the

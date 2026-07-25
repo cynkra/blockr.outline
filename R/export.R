@@ -420,7 +420,7 @@ outline_sections <- function(expressions, board, annotations,
 # anyway (the block's own code calls it).
 block_report_renderer <- function(blk) {
   if (inherits(blk, c("table_block", "summary_table_block"))) {
-    "blockr.viz::ft_table"
+    "blockr.viz::static_table"
   } else {
     ""
   }
@@ -428,7 +428,7 @@ block_report_renderer <- function(blk) {
 
 # A block-supplied report call, deparsed for the document. blockr.viz's
 # report_call() generic lets a block state how its result prints -- the
-# chart block emits blockr.viz::gg_chart(<var>, <state...>), rebuilding the
+# chart block emits blockr.viz::static_chart(<var>, <state...>), rebuilding the
 # canvas chart as a ggplot. Resolved defensively (same pattern as
 # block_icon_html): without blockr.viz, or for a block with no method, the
 # simpler renderer paths below apply.
