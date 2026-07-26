@@ -28,14 +28,16 @@ test_that("a failed render names the cause instead of the wrapper's noise", {
   expect_match(err, "the actual cause")
 })
 
-test_that("render_logged restores sinks exactly, on success and on failure", {
-  # A dangling sink would silence every message the app writes afterwards,
-  # which is worse than the render failure that caused it.
+test_that("render_logged does not divert output away from the app's log", {
+  # This once tee'd both streams to a file with sink(). sink() is
+  # process-wide, so the app logged nothing for the length of a render, and a
+  # process killed mid-render (a Connect timeout) took the whole window with
+  # it: minutes of silence, then "Execution halted". The renderer's output has
+  # to stream as it happens.
   before <- c(sink.number(), sink.number(type = "message"))
 
   ok <- render_logged(cat("hello\n"))
   expect_null(ok$error)
-  expect_true(any(grepl("hello", ok$log)))
   expect_identical(c(sink.number(), sink.number(type = "message")), before)
 
   bad <- render_logged(stop("nope"))
@@ -43,23 +45,16 @@ test_that("render_logged restores sinks exactly, on success and on failure", {
   expect_identical(conditionMessage(bad$error), "nope")
   expect_identical(c(sink.number(), sink.number(type = "message")), before)
 
-  # Output written before the failure is still captured, which is where a
-  # renderer's own diagnostics live.
-  partial <- render_logged({
-    cat("progress line\n")
-    stop("later")
-  })
-  expect_true(any(grepl("progress line", partial$log)))
+  # Output reaches the caller's stdout rather than being swallowed.
+  expect_output(render_logged(cat("progress line\n")), "progress line")
   expect_identical(c(sink.number(), sink.number(type = "message")), before)
 })
 
 test_that("render_logged returns the value for callers that need it", {
   # The rmarkdown branch uses the returned path.
-  res <- render_logged({
-    cat("noise\n")
-    "the-value"
-  })
+  res <- render_logged("the-value")
   expect_identical(res$value, "the-value")
+  expect_null(res$error)
 })
 
 test_that("notify_render_error never throws without a session", {
