@@ -11,15 +11,29 @@ pkg_file <- function(...) {
   system.file(..., package = "blockr.outline")
 }
 
+# The bundled fallback beneath the app-level option: a neutral 13.333x7.5in
+# (true 16:9) deck with officer's stock 11-layout "Office Theme" catalog and
+# its original color/font pairing -- same FORM as blockr.bms's template (that
+# one is this deck plus a swapped font scheme and a logo on the master), but
+# with neither, so no deployment gets another's branding just for setting no
+# template. Exists because officer's OWN stock deck (read_pptx() with no
+# path) is 10x7.5in -- 4:3 -- while every exhibit's pptx_width sizes to
+# ~11.9in (gg_attach_pptx_size(), static_table()'s ft_fit_width default):
+# widescreen math laid onto a 4:3 slide, overflowing the right edge on every
+# chart and table, on every board that never configured a house deck.
+default_template <- function() {
+  pkg_file("templates", "widescreen-default.pptx")
+}
+
 # The reference document a render actually styles against: the outline's own
 # `template` when it has one, otherwise the app-level default from
-# `getOption("blockr.outline.template")`.
+# `getOption("blockr.outline.template")`, otherwise the bundled deck above.
 #
 # The option exists because the deck is a property of the DEPLOYMENT, not of
 # the board. `template` is extension STATE, so it serialises with the board --
 # which means a constructor argument only ever reaches boards created after it
 # was added: every workflow saved before an app shipped a house template
-# restores its own empty template and keeps rendering against officer's stock
+# restores its own empty template and keeps rendering against the fallback
 # deck, with no way to fix it short of every user typing the path into the
 # gear. The option applies to all of them, old and new.
 #
@@ -33,7 +47,7 @@ pkg_file <- function(...) {
 # whichever machine last saved the board, so a board moved between deployments
 # (or saved on a laptop and opened on Connect) carries one that resolves
 # nowhere. Returning it anyway does not fail: render_pptx_officer() checks
-# file.exists() and quietly falls back to officer's stock deck -- so the house
+# file.exists() and quietly falls back to the fallback deck -- so the house
 # template is silently ignored while an app-level default sits right there
 # unused. Exactly the "absolute path that happened to exist" case the paragraph
 # above rules out.
@@ -45,7 +59,7 @@ effective_template <- function(x) {
     return(x)
   }
 
-  fallback <- coal(getOption("blockr.outline.template", ""), "")
+  fallback <- coal(getOption("blockr.outline.template", default_template()), "")
 
   # Worth saying out loud: the render succeeds either way, so a stale path is
   # otherwise indistinguishable from having no house deck at all.
