@@ -11,10 +11,14 @@ test_that("coal returns the first non-NULL argument", {
   expect_null(coal())
 })
 
-test_that("effective_template falls back to the app-level option", {
+test_that("effective_template falls back to the bundled widescreen deck", {
   withr::local_options(list(blockr.outline.template = NULL))
-  expect_identical(effective_template(""), "")
-  expect_identical(effective_template(NULL), "")
+  # Nobody configured anything: the bundled deck, not officer's 4:3 stock
+  # deck (see default_template()'s doc comment for why that distinction
+  # matters -- every exhibit sizes to a ~11.9in widescreen assumption).
+  expect_identical(effective_template(""), default_template())
+  expect_identical(effective_template(NULL), default_template())
+  expect_true(file.exists(default_template()))
 
   withr::local_options(list(blockr.outline.template = "/app/house.pptx"))
   # A board that names no template -- including every board saved before the
@@ -33,7 +37,7 @@ test_that("a stored template that does not exist here yields to the app deck", {
   # The stored value is an absolute path from whichever machine last saved the
   # board, so a board moved between deployments carries one that resolves
   # nowhere. Returning it anyway does not fail -- render_pptx_officer() checks
-  # file.exists() and quietly drops to officer's stock deck -- so the house
+  # file.exists() and quietly drops to the fallback deck -- so the house
   # template is silently ignored with the app default sitting unused.
   house <- withr::local_tempfile(fileext = ".pptx")
   file.create(house)
@@ -51,14 +55,13 @@ test_that("a stored template that does not exist here yields to the app deck", {
   expect_silent(expect_identical(effective_template(own), own))
 })
 
-test_that("a stale template with no app default degrades to the stock deck", {
+test_that("a stale template with no app option still finds the bundled deck", {
   withr::local_options(list(blockr.outline.template = NULL))
   expect_message(
     got <- effective_template("/gone.pptx"),
-    "no app default is set"
+    "does not exist here"
   )
-  # "" is what render_pptx_officer() reads as "use officer's own deck".
-  expect_identical(got, "")
+  expect_identical(got, default_template())
 })
 
 test_that("chr_ply / lgl_ply vapply with the right prototype", {
