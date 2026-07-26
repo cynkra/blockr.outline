@@ -637,6 +637,13 @@ outline_js <- function(ns) {
         // convention: blur applies); a pristine editor just closes.
         var ed = openEditor();
         if (ed && !ed.contains(ev.target)) {
+          // Push the editor's current text before asking the server to save
+          // it. The editor no longer streams every keystroke (it commits on
+          // focusout), and focusout does fire ahead of this click -- but a
+          // click that never moves focus would otherwise save a stale value.
+          if (window.blockrMdEditor && window.blockrMdEditor.flush) {
+            window.blockrMdEditor.flush();
+          }
           fire(ed.classList.contains('dirty') ? SAVE : CANCEL);
           return;
         }
