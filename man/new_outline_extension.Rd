@@ -36,7 +36,10 @@ level, \code{"none"} to omit them. A block title is a heading or a
 caption, never both.}
 
 \item{template}{Path to a pandoc reference document (\code{.pptx} / \code{.docx})
-styling the corresponding render. \code{""} for none.}
+styling the corresponding render. \code{""} falls back to the app-level
+default, \code{getOption("blockr.outline.template")} -- the place to declare
+a house deck, since it also reaches boards saved before the app had one
+(this argument is extension state and only ever reaches new boards).}
 
 \item{...}{Forwarded to \code{\link[blockr.dock:extension]{blockr.dock::new_dock_extension()}}}
 }

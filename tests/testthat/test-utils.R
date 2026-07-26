@@ -11,6 +11,21 @@ test_that("coal returns the first non-NULL argument", {
   expect_null(coal())
 })
 
+test_that("effective_template falls back to the app-level option", {
+  withr::local_options(list(blockr.outline.template = NULL))
+  expect_identical(effective_template(""), "")
+  expect_identical(effective_template(NULL), "")
+
+  withr::local_options(list(blockr.outline.template = "/app/house.pptx"))
+  # A board that names no template -- including every board saved before the
+  # app declared one -- picks up the deployment's deck.
+  expect_identical(effective_template(""), "/app/house.pptx")
+  expect_identical(effective_template(NULL), "/app/house.pptx")
+  expect_identical(effective_template(character()), "/app/house.pptx")
+  # One typed into the gear still wins.
+  expect_identical(effective_template("/own.pptx"), "/own.pptx")
+})
+
 test_that("chr_ply / lgl_ply vapply with the right prototype", {
   expect_identical(chr_ply(1:3, function(i) letters[i]), c("a", "b", "c"))
   expect_identical(lgl_ply(1:3, function(i) i > 1L), c(FALSE, TRUE, TRUE))

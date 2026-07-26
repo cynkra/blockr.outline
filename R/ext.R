@@ -21,7 +21,10 @@
 #'   level, `"none"` to omit them. A block title is a heading or a
 #'   caption, never both.
 #' @param template Path to a pandoc reference document (`.pptx` / `.docx`)
-#'   styling the corresponding render. `""` for none.
+#'   styling the corresponding render. `""` falls back to the app-level
+#'   default, `getOption("blockr.outline.template")` -- the place to declare
+#'   a house deck, since it also reaches boards saved before the app had one
+#'   (this argument is extension state and only ever reaches new boards).
 #' @param ... Forwarded to [blockr.dock::new_dock_extension()]
 #'
 #' @return A dock extension object, to be passed in a board's `extensions`
@@ -1564,7 +1567,7 @@ outline_ext_srv <- function(annotations, block_order, title,
               input$code_render_format,
               file,
               rv_title(),
-              template = rv_template(),
+              template = effective_template(rv_template()),
               sects = sections()
             )
           }

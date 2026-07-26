@@ -147,3 +147,48 @@ test_that("render_pptx_officer builds a deck, one slide per reported table", {
   # exactly one reported exhibit -> one added slide (blank base deck).
   expect_gte(nrow(officer::pptx_summary(doc)), 1L)
 })
+
+test_that("a reference deck contributes styling, not slides", {
+  skip_if_not_installed("officer")
+  skip_if_not_installed("flextable")
+  skip_if_not_installed("blockr.viz")
+
+  # A reference document with example slides, exactly as pandoc expects one
+  # (and as the BMS master ships: "Presentation Title", "Hello, world.", ...).
+  ref <- withr::local_tempfile(fileext = ".pptx")
+  tpl <- officer::read_pptx()
+  mst <- officer::layout_summary(tpl)$master[[1L]]
+  for (i in 1:2) {
+    tpl <- officer::add_slide(tpl, layout = "Title and Content", master = mst)
+    tpl <- officer::ph_with(tpl, paste("Example", i),
+                            location = officer::ph_location_type(type = "title"))
+  }
+  print(tpl, target = ref)
+  expect_length(officer::read_pptx(ref), 2L)
+
+  expect_length(strip_slides(officer::read_pptx(ref)), 0L)
+
+  board <- blockr.core::new_board(
+    blocks = c(
+      data = blockr.core::new_dataset_block("iris"),
+      tbl = blockr.viz::new_table_block()
+    ),
+    links = blockr.core::links(from = "data", to = "tbl")
+  )
+  exprs <- structure(list(
+    data = quote(datasets::iris),
+    tbl = quote(dplyr::filter(blockr.viz::as_annotated_df(data), TRUE))
+  ), pending = character())
+  s <- outline_sections(exprs, board,
+    annotations = list(data = list(report = FALSE), tbl = list(report = TRUE)),
+    stack_annotations = list())
+
+  f <- withr::local_tempfile(fileext = ".pptx")
+  render_pptx_officer(s, f, "Deck", template = ref)
+
+  # One reported exhibit -> one slide. The template's two examples are gone;
+  # without stripping, the deck would open on "Example 1".
+  out <- officer::read_pptx(f)
+  expect_length(out, 1L)
+  expect_false(any(grepl("^Example ", officer::pptx_summary(out)$text)))
+})
