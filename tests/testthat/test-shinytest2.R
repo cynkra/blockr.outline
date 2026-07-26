@@ -172,3 +172,72 @@ test_that("Render downloads a self-contained html report", {
   head_txt <- paste(readLines(path, n = 40, warn = FALSE), collapse = "\n")
   expect_match(head_txt, "<!DOCTYPE html>|<html", ignore.case = TRUE)
 })
+
+# ---------------------------------------------------------------------------
+# Interactivity: the delegated click handlers must actually be ATTACHED. The
+# tests above emit their inputs with send() (Shiny.setInputValue directly),
+# which bypasses the JS click handlers entirely -- so a JS error that aborts
+# outline_js before the handlers attach passes every one of them while the
+# real outline is inert. These tests click real DOM nodes and assert the
+# resulting input fires. Regression guard for: the visibility poll calling
+# Shiny.setInputValue at DOM ready, before Shiny was up, throwing and taking
+# every later handler (gear, drag, OPEN / ADD / chapter) down with it.
+
+# Capture every Shiny.setInputValue name fired after `expr` runs on the client.
+fired_inputs <- function(click_js) {
+  app$run_js(paste0(
+    "window._otlFired = [];",
+    "if (!window._otlHooked) {",
+    "  window._otlHooked = true;",
+    "  var orig = Shiny.setInputValue;",
+    "  Shiny.setInputValue = function(n, v, o) {",
+    "    if (window._otlFired) window._otlFired.push(n);",
+    "    return orig.apply(this, arguments);",
+    "  };",
+    "}"
+  ))
+  app$run_js(click_js)
+  Sys.sleep(0.6)          # the OPEN handler debounces 250ms
+  app$wait_for_idle()
+  app$get_js("JSON.stringify(window._otlFired)")
+}
+
+test_that("clicking a block chip fires outline_open (handlers attached)", {
+  skip_if_no_app()
+  set_view("outline")
+  fired <- fired_inputs("document.querySelector('.blockr-otl-chip').click();")
+  expect_match(fired, "outline_open")
+})
+
+test_that("clicking the report switch fires outline_toggle", {
+  skip_if_no_app()
+  set_view("outline")
+  fired <- fired_inputs(
+    "document.querySelector('.blockr-otl-sw').click();"
+  )
+  expect_match(fired, "outline_toggle")
+  app$wait_for_idle()
+  # Put the flipped block back so later re-runs start from the fixture.
+  set_view("outline")
+})
+
+test_that("the gear button toggles the settings band (client-only handler)", {
+  skip_if_no_app()
+  set_view("outline")
+  # The gear handler sits AFTER the visibility poll in outline_js; if the
+  # poll threw, this handler never attached and the class never toggles.
+  band_open <- function() {
+    app$get_js(paste0(
+      "document.getElementById('", ext("otl_settings"), "')",
+      ".classList.contains('blockr-settings--open')"
+    ))
+  }
+  before <- band_open()
+  app$run_js(sprintf(
+    "document.getElementById('%s').click();", ext("otl_gear")
+  ))
+  app$wait_for_idle()
+  after <- band_open()
+  expect_false(isTRUE(before))
+  expect_true(isTRUE(after))
+})
