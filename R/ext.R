@@ -245,6 +245,18 @@ outline_ext_ui <- function(id, board, ...) {
           placeholder = "Filter blocks…",
           autocomplete = "off",
           spellcheck = "false"
+        ),
+        tags$button(
+          type = "button",
+          class = "blockr-otl-searchclear",
+          title = "Clear filter",
+          `aria-label` = "Clear filter",
+          HTML(paste0(
+            "<svg width='12' height='12' viewBox='0 0 24 24' fill='none' ",
+            "stroke='currentColor' stroke-width='2.4' stroke-linecap='round'>",
+            "<line x1='18' y1='6' x2='6' y2='18'/>",
+            "<line x1='6' y1='6' x2='18' y2='18'/></svg>"
+          ))
         )
       )
     ),

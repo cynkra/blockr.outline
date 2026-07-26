@@ -365,11 +365,11 @@ test_that("instant search filters the outline to matching blocks", {
   expect_true("sub" %in% hit)
   expect_false("data" %in% hit)
 
-  # Clearing restores every row.
-  app$run_js(paste0(
-    "var s = document.querySelector('.blockr-otl-searchinput');",
-    "s.value = ''; s.dispatchEvent(new Event('input', {bubbles:true}));"
-  ))
+  # The clear (x) button empties the box and restores every row.
+  app$run_js("document.querySelector('.blockr-otl-searchclear').click();")
   app$wait_for_idle()
+  expect_equal(
+    app$get_js("document.querySelector('.blockr-otl-searchinput').value"), ""
+  )
   expect_length(jsonlite::fromJSON(visible_blocks()), 4)
 })

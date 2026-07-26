@@ -205,6 +205,9 @@ outline_js <- function(ns) {
         var input = document.querySelector('.blockr-otl-searchinput');
         var q = (input && input.value ? input.value : '').trim().toLowerCase();
 
+        var box = input && input.closest('.blockr-otl-search');
+        if (box) box.classList.toggle('has-value', !!(input && input.value));
+
         if (!q) {
           document.querySelectorAll('.blockr-otl-filtered').forEach(
             function(el) { el.classList.remove('blockr-otl-filtered'); });
@@ -258,6 +261,14 @@ outline_js <- function(ns) {
         if (ev.target && ev.target.classList &&
             ev.target.classList.contains('blockr-otl-searchinput')) {
           applyFilter();
+        }
+      });
+      document.addEventListener('click', function(ev) {
+        var clr = ev.target.closest &&
+          ev.target.closest('.blockr-otl-searchclear');
+        if (clr) {
+          var inp = document.querySelector('.blockr-otl-searchinput');
+          if (inp) { inp.value = ''; applyFilter(); inp.focus(); }
         }
       });
       document.addEventListener('keydown', function(ev) {

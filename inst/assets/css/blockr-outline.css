@@ -244,12 +244,14 @@
 .blockr-otl-hidden { display: none !important; }
 .blockr-otl-filtered { display: none !important; }
 
-/* Instant search box, above the outline body. */
+/* Instant search box: sits in the left column, matching the width of the
+   block chips / toggles (the grid's 168px first track). Pushed down from the
+   title line and pulled close to the content below. */
 .blockr-otl-search { position: relative; display: flex; align-items: center;
-  margin: 4px 0 10px; }
+  width: 168px; margin: 20px 0 2px; }
 .blockr-otl-searchicon { position: absolute; left: 10px;
   color: var(--blockr-grey-400, #9ca3af); pointer-events: none; }
-.blockr-otl-searchinput { width: 100%; height: 32px; padding: 0 10px 0 30px;
+.blockr-otl-searchinput { width: 100%; height: 32px; padding: 0 28px 0 30px;
   font-size: 0.8125rem; color: var(--blockr-grey-800, #1f2937);
   background: var(--blockr-grey-50, #f9fafb);
   border: 1px solid var(--blockr-color-border, #e5e7eb); border-radius: 6px;
@@ -257,6 +259,16 @@
 .blockr-otl-searchinput:focus { background: var(--blockr-color-bg, #fff);
   border-color: var(--blockr-blue-400, #60a5fa); }
 .blockr-otl-searchinput::placeholder { color: var(--blockr-grey-400, #9ca3af); }
+/* Clear (x): only while there is text. */
+.blockr-otl-searchclear { position: absolute; right: 6px; top: 50%;
+  transform: translateY(-50%); display: none; align-items: center;
+  justify-content: center; width: 18px; height: 18px; padding: 0; border: none;
+  background: transparent; color: var(--blockr-grey-400, #9ca3af);
+  cursor: pointer; border-radius: 4px; transition: background 0.12s ease,
+  color 0.12s ease; }
+.blockr-otl-searchclear:hover { background: var(--blockr-grey-100, #f3f4f6);
+  color: var(--blockr-grey-700, #374151); }
+.blockr-otl-search.has-value .blockr-otl-searchclear { display: flex; }
 
 /* chapters, variant B revised (outline-document-styling-proposals.html +
    feedback): ONE thread on the far left from chapter title to the run's
