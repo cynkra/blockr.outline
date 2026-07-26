@@ -40,7 +40,7 @@ outline_js <- function(ns) {
       "REN = '%s', RENSTACK = '%s', SAVE = '%s', CANCEL = '%s', ",
       "ADD = '%s', RM = '%s', CHAP = '%s', NEWCHAP = '%s', ",
       "TOSTACK = '%s', MOVECHAP = '%s', GEAR = '%s', SETTINGS = '%s', ",
-      "PANEL = '%s', VISIBLE = '%s', BULK = '%s';"
+      "PANEL = '%s', VISIBLE = '%s', BULK = '%s', RENTITLE = '%s';"
     ),
     ns("outline_toggle"),
     ns("outline_open"),
@@ -60,7 +60,8 @@ outline_js <- function(ns) {
     ns("otl_settings"),
     ns("otl_panel"),
     ns("otl_visible"),
-    ns("outline_bulk")
+    ns("outline_bulk"),
+    ns("outline_rename_title")
   )
 
   tags$script(HTML(paste0(
@@ -464,6 +465,13 @@ outline_js <- function(ns) {
       });
       document.addEventListener('dblclick', function(ev) {
         clearTimeout(openTimer);
+        var dtl = ev.target.closest && ev.target.closest('.blockr-otl-doctitle');
+        if (dtl) {
+          inlineRename(dtl, dtl.textContent, function(val) {
+            Shiny.setInputValue(RENTITLE, {name: val}, {priority: 'event'});
+          });
+          return;
+        }
         var name = ev.target.closest && ev.target.closest('.blockr-otl-rname');
         if (name) {
           var row = rowOf(name);
@@ -684,7 +692,7 @@ outline_chevron <- function() {
   ))
 }
 
-outline_tags <- function(sects, ns, editing = NULL) {
+outline_tags <- function(sects, ns, editing = NULL, title = NULL) {
 
   accent_of <- function(stk_id) {
     if (is.na(stk_id) || !stk_id %in% names(sects$stack_colors)) {
@@ -999,5 +1007,28 @@ outline_tags <- function(sects, ns, editing = NULL) {
     tagList(chapter, intro, rows)
   })
 
-  div(class = "blockr-otl", grid_rows)
+  # The report title as the top-level "chapter": document title on the left
+  # (double-click to rename -- it is outline state), the board-wide include /
+  # exclude actions on the right, revealed on hover exactly like the
+  # per-chapter actions. The master rules every block's include switch.
+  doc_title <- if (is.character(title) && length(title) && nzchar(title[[1L]])) {
+    title[[1L]]
+  } else {
+    "Board report"
+  }
+  header <- div(
+    class = "blockr-otl-doctitle-row",
+    span(
+      class = "blockr-otl-doctitle",
+      title = "Double-click to rename the report",
+      doc_title
+    ),
+    span(
+      class = "blockr-otl-docacts",
+      span(class = "blockr-otl-bulk", `data-bulk` = "include", "include all"),
+      span(class = "blockr-otl-bulk", `data-bulk` = "exclude", "exclude all")
+    )
+  )
+
+  div(class = "blockr-otl", header, grid_rows)
 }

@@ -296,3 +296,42 @@ test_that("Exclude all / Include all flip every block's report flag", {
   send("outline_toggle", list(id = "audit", report = FALSE))
   expect_equal(off(), 1)
 })
+
+test_that("the report title is shown and renames in place", {
+  skip_if_no_app()
+  set_view("outline")
+
+  # The document title heads the column.
+  expect_equal(
+    app$get_js("document.querySelector('.blockr-otl-doctitle').textContent"),
+    "Iris e2e report"
+  )
+
+  # Double-click -> inline editor seeded with the current title.
+  app$run_js(paste0(
+    "document.querySelector('.blockr-otl-doctitle')",
+    ".dispatchEvent(new MouseEvent('dblclick', {bubbles:true}));"
+  ))
+  editor <- app$get_js(
+    "!!document.querySelector('.blockr-otl-doctitle-row input')"
+  )
+  expect_true(isTRUE(editor))
+
+  # Commit a new title; it re-renders from state.
+  app$run_js(paste0(
+    "var i = document.querySelector('.blockr-otl-doctitle-row input');",
+    "i.value = 'Renamed report';",
+    "i.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', bubbles:true}));",
+    "i.blur();"
+  ))
+  app$wait_for_idle()
+  expect_equal(
+    app$get_js("document.querySelector('.blockr-otl-doctitle').textContent"),
+    "Renamed report"
+  )
+
+  # The document view reflects the new title (proves it is real state).
+  set_view("qmd")
+  expect_match(pre_text(), "Renamed report")
+  set_view("outline")
+})

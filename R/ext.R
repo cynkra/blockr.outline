@@ -265,34 +265,6 @@ outline_settings_band <- function(ns) {
       )
     ),
 
-    div(class = "blockr-settings__title", "Report"),
-    div(
-      class = "blockr-settings__grid",
-      div(
-        class = "blockr-settings__field blockr-settings__field--full",
-        div(
-          class = "blockr-otl-bulkrow",
-          tags$button(
-            type = "button",
-            class = "blockr-otl-bulk",
-            `data-bulk` = "include",
-            "Include all"
-          ),
-          tags$button(
-            type = "button",
-            class = "blockr-otl-bulk",
-            `data-bulk` = "exclude",
-            "Exclude all"
-          )
-        ),
-        div(
-          class = "blockr-settings__hint",
-          "Flip every block in or out of the report at once. Handy on a large ",
-          "board: exclude all, then include the few you want."
-        )
-      )
-    ),
-
     div(class = "blockr-settings__title", "Template"),
     div(
       class = "blockr-settings__grid",
@@ -793,7 +765,7 @@ outline_ext_srv <- function(annotations, block_order, title,
 
               return(
                 tagList(
-                  outline_tags(sects, session$ns, editing()),
+                  outline_tags(sects, session$ns, editing(), rv_title()),
                   NULL
                 )
               )
@@ -935,6 +907,18 @@ outline_ext_srv <- function(annotations, block_order, title,
                 )
               )
             )
+          }
+        )
+
+        # Rename the report title in place (double-click the top heading).
+        # The title is outline state (see the state list returned below), so
+        # this is all that is needed for it to persist.
+        observeEvent(
+          input$outline_rename_title,
+          {
+            nm <- input$outline_rename_title$name
+            req(is.character(nm), nzchar(trimws(nm)))
+            if (!identical(rv_title(), nm)) rv_title(nm)
           }
         )
 

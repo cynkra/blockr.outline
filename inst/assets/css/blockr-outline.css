@@ -462,14 +462,22 @@
 .blockr-settings__hint { font-size: 0.7rem;
   color: var(--blockr-grey-400, #9ca3af); margin-top: 4px; }
 
-/* Board-wide include/exclude pair in the settings band. */
-.blockr-otl-bulkrow { display: flex; gap: 8px; }
-.blockr-otl-bulk { flex: 1 1 0; height: 34px; padding: 0 10px;
-  font-size: 0.8125rem; color: var(--blockr-grey-700, #374151);
-  background: var(--blockr-grey-50, #f9fafb);
-  border: 1px solid var(--blockr-color-border, #e5e7eb); border-radius: 6px;
-  cursor: pointer; transition: background 0.12s ease, border-color 0.12s ease,
-  color 0.12s ease; }
-.blockr-otl-bulk:hover { background: var(--blockr-grey-100, #f3f4f6);
-  border-color: var(--blockr-grey-300, #d1d5db);
-  color: var(--blockr-grey-900, #111827); }
+/* The report title as the top-level chapter: document title on the left,
+   board-wide include / exclude on the right, revealed on hover of the row
+   (mirror of the per-chapter actions). The master rules every block switch. */
+.blockr-otl-doctitle-row { grid-column: 1 / -1; position: relative; display: block;
+  padding: 4px 11px 14px; margin-bottom: 4px;
+  border-bottom: 1px solid var(--blockr-color-border, #e5e7eb); }
+.blockr-otl-doctitle { display: block; width: 100%; font-size: 1.35rem;
+  font-weight: 700; letter-spacing: -0.01em;
+  color: var(--blockr-grey-900, #111827); cursor: text; }
+/* Actions sit on the divider line, bottom-right, so the title keeps the
+   full column width and they never overlap the heading. */
+.blockr-otl-docacts { position: absolute; right: 11px; bottom: 4px;
+  display: inline-flex; align-items: center; gap: 12px;
+  padding-left: 12px; background: var(--blockr-color-bg, #fff);
+  opacity: 0; transition: opacity 0.12s ease; }
+.blockr-otl-doctitle-row:hover .blockr-otl-docacts { opacity: 1; }
+.blockr-otl-bulk { font-size: 0.75rem; color: var(--blockr-grey-400, #9ca3af);
+  cursor: pointer; white-space: nowrap; transition: color 0.12s ease; }
+.blockr-otl-bulk:hover { color: var(--blockr-blue-600, #2563eb); }
