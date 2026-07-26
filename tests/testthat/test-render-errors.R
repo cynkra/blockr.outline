@@ -191,3 +191,54 @@ test_that("a successful render still produces the file", {
   expect_true(file.exists(out))
   expect_gt(file.size(out), 0)
 })
+
+test_that("a runaway render gives up instead of blocking the app", {
+  # The failure this exists for: a render evaluates the board's code in the
+  # Shiny process, so while it runs the process answers nothing -- and a
+  # process that stops answering gets terminated by the host. Every "the
+  # download crashed the app" report had that shape: no error anywhere, four
+  # silent minutes, then a signal. Nothing inside R can catch a signal, so the
+  # render has to give up first.
+  withr::local_options(list(blockr.outline.render_timeout = 2))
+
+  started <- Sys.time()
+  err <- tryCatch(with_render_guard(while (TRUE) {}), error = conditionMessage)
+  elapsed <- as.numeric(difftime(Sys.time(), started, units = "secs"))
+
+  expect_lt(elapsed, 30)
+  expect_match(err, "did not finish within")
+  expect_match(err, "render_timeout")
+})
+
+test_that("the guard passes real outcomes through untouched", {
+  expect_identical(with_render_guard("the value"), "the value")
+
+  # A genuine error keeps its own message rather than being reported as a
+  # timeout.
+  expect_error(with_render_guard(stop("boom in a chunk")), "boom in a chunk")
+})
+
+test_that("the time limit does not outlive the render", {
+  # setTimeLimit() is session state. Leaving it set would abort whatever the
+  # app did next, which is a worse bug than the one being fixed.
+  withr::local_options(list(blockr.outline.render_timeout = 1))
+  invisible(tryCatch(with_render_guard(Sys.sleep(2)), error = function(e) NULL))
+
+  started <- Sys.time()
+  for (i in seq_len(2e6)) NULL
+  expect_lt(as.numeric(difftime(Sys.time(), started, units = "secs")), 20)
+})
+
+test_that("render_timeout falls back on nonsense", {
+  withr::local_options(list(blockr.outline.render_timeout = NULL))
+  expect_identical(render_timeout(), 150)
+
+  withr::local_options(list(blockr.outline.render_timeout = "not a number"))
+  expect_identical(render_timeout(), 150)
+
+  withr::local_options(list(blockr.outline.render_timeout = -1))
+  expect_identical(render_timeout(), 150)
+
+  withr::local_options(list(blockr.outline.render_timeout = 30))
+  expect_identical(render_timeout(), 30)
+})

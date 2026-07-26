@@ -1564,15 +1564,22 @@ outline_ext_srv <- function(annotations, block_order, title,
               input$code_render_format
             )
           },
+          # Guarded HERE rather than inside render_report(): this is the one
+          # place every format passes through, and pptx short-circuits to
+          # officer long before render_report's own error handling. A guard
+          # per renderer would have to be written three times and would still
+          # miss whatever is added fourth.
           content = function(file) {
-            render_report(
-              qmd_txt(),
-              spin_txt(),
-              input$code_render_format,
-              file,
-              rv_title(),
-              template = effective_template(rv_template()),
-              sects = sections()
+            with_render_guard(
+              render_report(
+                qmd_txt(),
+                spin_txt(),
+                input$code_render_format,
+                file,
+                rv_title(),
+                template = effective_template(rv_template()),
+                sects = sections()
+              )
             )
           }
         )

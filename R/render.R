@@ -269,6 +269,70 @@ template_content_width <- function(template) {
 # a deck built through quarto cannot place a table where the slide wants it.
 # The deck is built with officer instead (render_pptx_officer), which honours
 # each exhibit's `pptx_left` / `pptx_top`. html / pdf / docx stay on quarto.
+# Wall-clock budget for one render, in seconds.
+#
+# A render evaluates the board's code in the Shiny process, so while it runs
+# the process answers nothing -- and a process that stops answering gets
+# terminated by the host. That is what "the download crashed the app" has
+# been: not an error anywhere, just work that outlasted the host's patience.
+# Observed kills landed between 3.5 and 5 minutes, so the default sits below
+# the shortest of them: better a render that gives up with an explanation than
+# one that takes every other session down with it.
+render_timeout <- function() {
+  n <- suppressWarnings(
+    as.numeric(getOption("blockr.outline.render_timeout", 150))
+  )
+  if (!length(n) || !is.finite(n) || n <= 0) 150 else n[[1L]]
+}
+
+# Run a render so that no outcome can take the app with it.
+#
+# Bounded: setTimeLimit() aborts R-level work once the budget is spent, and
+# the quarto CLI gets the same budget through system2(timeout=). Caught: an
+# error, a timeout and an interrupt all become one condition the caller
+# reports rather than something that escapes.
+#
+# What this cannot do is survive a signal. If the host kills the process there
+# is no R left to catch anything -- which is exactly why the budget exists,
+# to finish first.
+with_render_guard <- function(expr) {
+
+  limit <- render_timeout()
+
+  setTimeLimit(elapsed = limit, transient = TRUE)
+  on.exit(setTimeLimit(), add = TRUE)
+
+  explain <- function(e) {
+    msg <- conditionMessage(e)
+    if (grepl("elapsed time limit|reached CPU time limit", msg)) {
+      sprintf(
+        paste(
+          "The report did not finish within %.0f seconds and was stopped so",
+          "the app stayed responsive. Reduce what the report includes, or",
+          "raise blockr.outline.render_timeout."
+        ),
+        limit
+      )
+    } else {
+      msg
+    }
+  }
+
+  tryCatch(
+    force(expr),
+    error = function(e) {
+      msg <- explain(e)
+      notify_render_error(msg)
+      stop(msg, call. = FALSE)
+    },
+    interrupt = function(e) {
+      msg <- "The report render was interrupted."
+      notify_render_error(msg)
+      stop(msg, call. = FALSE)
+    }
+  )
+}
+
 # Telling the user a render failed must never be what makes it fail. A
 # download handler may run without a reactive domain, and an unguarded
 # showNotification() then throws IN PLACE OF the render error, replacing the
@@ -398,12 +462,17 @@ quarto_cli_render <- function(input, fmt) {
     stop("The quarto CLI could not be located.", call. = FALSE)
   }
 
+  # Bounded like the R-level work: setTimeLimit() cannot interrupt a blocked
+  # subprocess call, so the CLI needs its own budget or a wedged quarto (a
+  # LaTeX engine waiting on an interactive prompt, say) blocks the app until
+  # the host loses patience.
   out <- suppressWarnings(
     system2(
       bin,
       c("render", shQuote(input), "--to", shQuote(fmt)),
       stdout = TRUE,
-      stderr = TRUE
+      stderr = TRUE,
+      timeout = render_timeout()
     )
   )
 
