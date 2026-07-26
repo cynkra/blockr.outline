@@ -174,7 +174,6 @@ outline_js <- function(ns) {
       }
 
       var dragId = null;
-      var collapseTimer = null;
       var openTimer = null;
       // Collapse is CLIENT-ONLY: no server round trip, no redraw. The set
       // survives renderUI re-renders via the shiny:value re-apply below.
@@ -476,7 +475,6 @@ outline_js <- function(ns) {
         }
         var chl = ev.target.closest && ev.target.closest('.blockr-otl-chlabel');
         if (chl) {
-          clearTimeout(collapseTimer);
           var chap = chl.closest('.blockr-otl-chap');
           // A split stack's later runs read 'Name (continued)'; rename
           // edits the plain name.
@@ -539,17 +537,18 @@ outline_js <- function(ns) {
           fire(ed.classList.contains('dirty') ? SAVE : CANCEL);
           return;
         }
-        var chap = ev.target.closest && ev.target.closest('.blockr-otl-chap');
-        if (chap) {
-          if (ev.target.closest('.blockr-otl-rname-input')) return;
-          // Delay so a double-click (rename) can cancel the collapse.
-          clearTimeout(collapseTimer);
-          collapseTimer = setTimeout(function() {
+        // Collapse is chevron-only: the twisty owns the toggle, the title owns
+        // rename (dblclick). Separate targets mean no single-vs-double
+        // ambiguity, so this fires instantly -- no debounce.
+        var chev = ev.target.closest && ev.target.closest('.blockr-otl-chevwrap');
+        if (chev) {
+          var chap = chev.closest('.blockr-otl-chap');
+          if (chap) {
             var s = chap.dataset.stack;
             if (collapsedStacks.has(s)) collapsedStacks.delete(s);
             else collapsedStacks.add(s);
             applyCollapsed();
-          }, 250);
+          }
           return;
         }
         var row = rowOf(ev.target);

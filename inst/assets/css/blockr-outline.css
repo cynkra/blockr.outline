@@ -231,10 +231,14 @@
    with the sections below, viz structured-table style); collapse is
    client-only; intro = soft stack-tinted box aligned with the title text,
    no border line. */
-.blockr-otl-chevwrap { position: absolute; left: -20px; top: 50%; transform: translateY(-50%);
-                       width: 16px; height: 16px; display: flex; align-items: center;
-                       justify-content: center; color: var(--blockr-grey-400, #9ca3af); }
+.blockr-otl-chevwrap { position: absolute; left: -22px; top: 50%; transform: translateY(-50%);
+                       width: 20px; height: 20px; display: flex; align-items: center;
+                       justify-content: center; color: var(--blockr-grey-400, #9ca3af);
+                       cursor: pointer; border-radius: 5px;
+                       transition: background 0.12s ease, color 0.12s ease; }
 .blockr-otl-chap:hover .blockr-otl-chevwrap { color: var(--blockr-grey-700, #374151); }
+.blockr-otl-chevwrap:hover { background: var(--blockr-grey-100, #f3f4f6);
+                             color: var(--blockr-grey-900, #111827); }
 .blockr-otl-chev { width: 14px; height: 14px; transition: transform 0.15s ease; }
 .blockr-otl-chap.collapsed .blockr-otl-chev { transform: rotate(-90deg); }
 .blockr-otl-hidden { display: none !important; }
@@ -245,11 +249,11 @@
    chapters reveal their blocks' mini icons. */
 .blockr-otl-chapgutter { padding: 24px 0 0; }
 .blockr-otl-chap { grid-column: 2; display: flex; align-items: center; gap: 8px;
-                   padding: 24px 0 2px 11px; cursor: pointer; position: relative; }
+                   padding: 24px 0 2px 11px; position: relative; }
 .blockr-otl-chlabel { font-size: 1.1rem; font-weight: 600; letter-spacing: -0.01em;
                       color: var(--blockr-grey-900, #111827); }
-.blockr-otl-chevwrap { position: absolute; left: -20px; bottom: 6px; top: auto; transform: none;
-                       width: 16px; height: 16px; display: flex; align-items: center;
+.blockr-otl-chevwrap { position: absolute; left: -22px; bottom: 4px; top: auto; transform: none;
+                       width: 20px; height: 20px; display: flex; align-items: center;
                        justify-content: center; color: var(--blockr-grey-400, #9ca3af); }
 .blockr-otl-chap:hover .blockr-otl-chevwrap { color: var(--blockr-grey-700, #374151); }
 /* Pinned to the row's right edge, not trailed after the title: the

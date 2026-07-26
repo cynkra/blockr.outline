@@ -241,3 +241,34 @@ test_that("the gear button toggles the settings band (client-only handler)", {
   expect_false(isTRUE(before))
   expect_true(isTRUE(after))
 })
+
+test_that("the chevron collapses a chapter; the title does not", {
+  skip_if_no_app()
+  set_view("outline")
+
+  # Chevrons only render on grouped chapters; skip if the fixture has none.
+  n_chev <- app$get_js("document.querySelectorAll('.blockr-otl-chevwrap').length")
+  skip_if(identical(n_chev, 0), "no grouped chapter in the fixture")
+
+  collapsed <- function() {
+    app$get_js(paste0(
+      "document.querySelector('.blockr-otl-chevwrap')",
+      ".closest('.blockr-otl-chap').classList.contains('collapsed')"
+    ))
+  }
+
+  # Clicking the title (rename target) must NOT toggle collapse.
+  app$run_js("document.querySelector('.blockr-otl-chlabel').click();")
+  app$wait_for_idle()
+  expect_false(isTRUE(collapsed()))
+
+  # Clicking the chevron collapses immediately (no debounce).
+  app$run_js("document.querySelector('.blockr-otl-chevwrap').click();")
+  app$wait_for_idle()
+  expect_true(isTRUE(collapsed()))
+
+  # And toggles back.
+  app$run_js("document.querySelector('.blockr-otl-chevwrap').click();")
+  app$wait_for_idle()
+  expect_false(isTRUE(collapsed()))
+})
