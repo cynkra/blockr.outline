@@ -274,6 +274,84 @@ render_logged <- function(expr) {
   list(error = err, log = log, value = value)
 }
 
+# Where the report's R code runs.
+#
+#   "quarto"     (default) -- quarto executes the document, which means a
+#                 FRESH R session. Clean-room and reproducible: the report
+#                 depends on nothing but installed packages.
+#   "in-process" -- knit here, in the app's own session, then format the
+#                 result. Necessary when the board's code cannot be
+#                 reproduced from installed packages alone: a package that
+#                 app.R pkgload::load_all()s out of inst/ rather than
+#                 installing, or a function reached through an option set at
+#                 startup. Both are invisible to a fresh session, so quarto
+#                 fails on documents that render perfectly in the app.
+#
+# Deliberately an OPTION rather than an argument on new_outline_extension():
+# this is a property of the deployment (what that server can install), not of
+# the report, and a constructor argument would serialise with the board and
+# travel to a deployment where the answer is different.
+execute_mode <- function() {
+  mode <- getOption("blockr.outline.execute", "quarto")
+  if (!is.character(mode) || length(mode) != 1L ||
+        !mode %in% c("quarto", "in-process")) {
+    warning("`blockr.outline.execute` must be \"quarto\" or \"in-process\"; ",
+            "using \"quarto\".", call. = FALSE)
+    return("quarto")
+  }
+  mode
+}
+
+# Knit the qmd in THIS session and return the markdown path. The chunk env
+# mirrors render_pptx_officer(): a fresh environment whose parent is the
+# global one, so board code cannot collide with our locals while options and
+# load_all()'d namespaces (which live in the process, not the environment)
+# stay reachable.
+knit_in_process <- function(qmd, dir) {
+  if (!requireNamespace("knitr", quietly = TRUE)) {
+    stop("In-process rendering needs the 'knitr' package.", call. = FALSE)
+  }
+
+  # knitr resolves fig.path against the working directory, and the formatter
+  # then resolves those links against the markdown. Both agree only from
+  # inside `dir`.
+  old_wd <- setwd(dir)
+  on.exit(setwd(old_wd), add = TRUE)
+
+  # knitr's chunk options are global to the session. Saved and restored so a
+  # report cannot leave the app rendering everything else with its settings.
+  old_chunk <- knitr::opts_chunk$get()
+  on.exit(knitr::opts_chunk$restore(old_chunk), add = TRUE)
+  # error = FALSE so a failing chunk STOPS, matching quarto. knit() defaults
+  # to TRUE, which would paste the error into the document and hand the user
+  # a downloaded report with a traceback inside it and no other signal.
+  knitr::opts_chunk$set(fig.path = "figure/", error = FALSE)
+
+  md <- knitr::knit(
+    input = basename(qmd),
+    output = "report.md",
+    quiet = FALSE,
+    envir = new.env(parent = globalenv())
+  )
+
+  file.path(dir, basename(md))
+}
+
+# Format already-executed markdown. No chunks survive knitting, so neither
+# quarto nor pandoc starts an R session here -- which is the whole point.
+format_markdown <- function(md, fmt, dir) {
+  if (quarto_usable()) {
+    return(quarto::quarto_render(input = md, output_format = fmt,
+                                 quiet = FALSE))
+  }
+  rmarkdown::pandoc_convert(
+    input = normalizePath(md),
+    to = if (identical(fmt, "html")) "html" else fmt,
+    output = file.path(dir, paste0("report.", fmt)),
+    options = c("--standalone", if (identical(fmt, "html")) "--embed-resources")
+  )
+}
+
 render_report <- function(qmd_txt, spin_txt, fmt, file, title,
                           template = NULL, sects = NULL) {
 
@@ -317,7 +395,9 @@ render_report <- function(qmd_txt, spin_txt, fmt, file, title,
 
   out_name <- paste0("report.", fmt)
 
-  if (quarto_usable()) {
+  in_process <- identical(execute_mode(), "in-process")
+
+  if (quarto_usable() || in_process) {
 
     # A downloaded html report is a single file, so resources (plot pngs)
     # must be embedded. The first "\n---\n" is the yaml closing fence.
@@ -348,9 +428,25 @@ render_report <- function(qmd_txt, spin_txt, fmt, file, title,
     qmd <- file.path(dir, "report.qmd")
     writeLines(qmd_txt, qmd)
 
-    res <- render_logged(
-      quarto::quarto_render(input = qmd, output_format = fmt, quiet = FALSE)
-    )
+    if (in_process) {
+      # Two steps instead of one, and the same document either way: knit the
+      # qmd HERE so the board's code sees this session, then hand the
+      # already-executed markdown to the formatter, which runs no R at all.
+      res <- render_logged(knit_in_process(qmd, dir))
+      if (length(res$log)) {
+        message(paste(res$log, collapse = "\n"))
+      }
+      if (!is.null(res$error)) {
+        render_err(res$error, res$log)
+      }
+
+      res <- render_logged(format_markdown(res$value, fmt, dir))
+    } else {
+      res <- render_logged(
+        quarto::quarto_render(input = qmd, output_format = fmt, quiet = FALSE)
+      )
+    }
+
     if (length(res$log)) {
       message(paste(res$log, collapse = "\n"))
     }
