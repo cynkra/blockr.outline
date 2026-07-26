@@ -22,8 +22,43 @@ test_that("effective_template falls back to the app-level option", {
   expect_identical(effective_template(""), "/app/house.pptx")
   expect_identical(effective_template(NULL), "/app/house.pptx")
   expect_identical(effective_template(character()), "/app/house.pptx")
-  # One typed into the gear still wins.
-  expect_identical(effective_template("/own.pptx"), "/own.pptx")
+
+  # One typed into the gear still wins -- when it is actually there.
+  own <- withr::local_tempfile(fileext = ".pptx")
+  file.create(own)
+  expect_identical(effective_template(own), own)
+})
+
+test_that("a stored template that does not exist here yields to the app deck", {
+  # The stored value is an absolute path from whichever machine last saved the
+  # board, so a board moved between deployments carries one that resolves
+  # nowhere. Returning it anyway does not fail -- render_pptx_officer() checks
+  # file.exists() and quietly drops to officer's stock deck -- so the house
+  # template is silently ignored with the app default sitting unused.
+  house <- withr::local_tempfile(fileext = ".pptx")
+  file.create(house)
+  withr::local_options(list(blockr.outline.template = house))
+
+  expect_message(
+    got <- effective_template("/saved/on/another/machine.pptx"),
+    "does not exist here"
+  )
+  expect_identical(got, house)
+
+  # An existing one is not second-guessed, and says nothing.
+  own <- withr::local_tempfile(fileext = ".pptx")
+  file.create(own)
+  expect_silent(expect_identical(effective_template(own), own))
+})
+
+test_that("a stale template with no app default degrades to the stock deck", {
+  withr::local_options(list(blockr.outline.template = NULL))
+  expect_message(
+    got <- effective_template("/gone.pptx"),
+    "no app default is set"
+  )
+  # "" is what render_pptx_officer() reads as "use officer's own deck".
+  expect_identical(got, "")
 })
 
 test_that("chr_ply / lgl_ply vapply with the right prototype", {

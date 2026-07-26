@@ -27,12 +27,40 @@ pkg_file <- function(...) {
 # reactiveVal: an empty template must keep meaning "whatever this app
 # declares", never "the absolute path that happened to exist on the machine
 # where this board was last saved". A template typed into the gear still wins.
+#
+# A stored path that no longer EXISTS is treated the same as an empty one, and
+# that is the half this used to miss. The stored value is an absolute path from
+# whichever machine last saved the board, so a board moved between deployments
+# (or saved on a laptop and opened on Connect) carries one that resolves
+# nowhere. Returning it anyway does not fail: render_pptx_officer() checks
+# file.exists() and quietly falls back to officer's stock deck -- so the house
+# template is silently ignored while an app-level default sits right there
+# unused. Exactly the "absolute path that happened to exist" case the paragraph
+# above rules out.
 effective_template <- function(x) {
   x <- coal(x, "")
-  if (is.character(x) && length(x) == 1L && nzchar(x)) {
+  usable <- is.character(x) && length(x) == 1L && nzchar(x)
+
+  if (usable && file.exists(x)) {
     return(x)
   }
-  coal(getOption("blockr.outline.template", ""), "")
+
+  fallback <- coal(getOption("blockr.outline.template", ""), "")
+
+  # Worth saying out loud: the render succeeds either way, so a stale path is
+  # otherwise indistinguishable from having no house deck at all.
+  if (usable) {
+    message(
+      "Board template '", x, "' does not exist here; ",
+      if (nzchar(fallback)) {
+        paste0("using the app default '", fallback, "'.")
+      } else {
+        "no app default is set, so the render uses the stock deck."
+      }
+    )
+  }
+
+  fallback
 }
 
 # Call `fn` passing only the named arguments its installed version
