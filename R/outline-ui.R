@@ -40,7 +40,7 @@ outline_js <- function(ns) {
       "REN = '%s', RENSTACK = '%s', SAVE = '%s', CANCEL = '%s', ",
       "ADD = '%s', RM = '%s', CHAP = '%s', NEWCHAP = '%s', ",
       "TOSTACK = '%s', MOVECHAP = '%s', GEAR = '%s', SETTINGS = '%s', ",
-      "PANEL = '%s', VISIBLE = '%s';"
+      "PANEL = '%s', VISIBLE = '%s', BULK = '%s';"
     ),
     ns("outline_toggle"),
     ns("outline_open"),
@@ -59,7 +59,8 @@ outline_js <- function(ns) {
     ns("otl_gear"),
     ns("otl_settings"),
     ns("otl_panel"),
-    ns("otl_visible")
+    ns("otl_visible"),
+    ns("outline_bulk")
   )
 
   tags$script(HTML(paste0(
@@ -506,6 +507,15 @@ outline_js <- function(ns) {
         }
       });
       document.addEventListener('click', function(ev) {
+        // Bulk include/exclude every block, from the settings band. The
+        // per-chapter version of this is .blockr-otl-chapact above.
+        var bulk = ev.target.closest && ev.target.closest('.blockr-otl-bulk');
+        if (bulk) {
+          Shiny.setInputValue(BULK, {
+            act: bulk.dataset.bulk
+          }, {priority: 'event'});
+          return;
+        }
         var chapAct = ev.target.closest &&
           ev.target.closest('.blockr-otl-chapact');
         if (chapAct) {

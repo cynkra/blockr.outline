@@ -265,6 +265,34 @@ outline_settings_band <- function(ns) {
       )
     ),
 
+    div(class = "blockr-settings__title", "Report"),
+    div(
+      class = "blockr-settings__grid",
+      div(
+        class = "blockr-settings__field blockr-settings__field--full",
+        div(
+          class = "blockr-otl-bulkrow",
+          tags$button(
+            type = "button",
+            class = "blockr-otl-bulk",
+            `data-bulk` = "include",
+            "Include all"
+          ),
+          tags$button(
+            type = "button",
+            class = "blockr-otl-bulk",
+            `data-bulk` = "exclude",
+            "Exclude all"
+          )
+        ),
+        div(
+          class = "blockr-settings__hint",
+          "Flip every block in or out of the report at once. Handy on a large ",
+          "board: exclude all, then include the few you want."
+        )
+      )
+    ),
+
     div(class = "blockr-settings__title", "Template"),
     div(
       class = "blockr-settings__grid",
@@ -1198,6 +1226,26 @@ outline_ext_srv <- function(annotations, block_order, title,
               function() isolate(update(list(stacks = payload))),
               once = TRUE
             )
+          }
+        )
+
+        # Board-wide include/exclude from the settings band: set the report
+        # flag on every block at once (the per-chapter version is
+        # input$outline_chapter below).
+        observeEvent(
+          input$outline_bulk,
+          {
+            act <- input$outline_bulk$act
+            req(is.character(act), act %in% c("include", "exclude"))
+
+            want <- identical(act, "include")
+            ann <- rv_ann()
+            for (bid in sections()$ids) {
+              entry <- coal(ann[[bid]], list())
+              entry$report <- want
+              ann[[bid]] <- entry
+            }
+            rv_ann(ann)
           }
         )
 

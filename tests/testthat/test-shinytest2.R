@@ -272,3 +272,27 @@ test_that("the chevron collapses a chapter; the title does not", {
   app$wait_for_idle()
   expect_false(isTRUE(collapsed()))
 })
+
+test_that("Exclude all / Include all flip every block's report flag", {
+  skip_if_no_app()
+  set_view("outline")
+
+  n_chip <- app$get_js("document.querySelectorAll('.blockr-otl-chip').length")
+  off <- function() {
+    app$get_js("document.querySelectorAll('.blockr-otl-offchip').length")
+  }
+
+  # Exclude all -> every chip carries the excluded marker.
+  app$run_js("document.querySelector('.blockr-otl-bulk[data-bulk=\"exclude\"]').click();")
+  app$wait_for_idle()
+  expect_equal(off(), n_chip)
+
+  # Include all -> none excluded.
+  app$run_js("document.querySelector('.blockr-otl-bulk[data-bulk=\"include\"]').click();")
+  app$wait_for_idle()
+  expect_equal(off(), 0)
+
+  # Restore the fixture (audit is report = FALSE by default).
+  send("outline_toggle", list(id = "audit", report = FALSE))
+  expect_equal(off(), 1)
+})
