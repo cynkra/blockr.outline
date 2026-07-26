@@ -231,47 +231,30 @@ notify_render_error <- function(msg) {
   invisible(NULL)
 }
 
-# Run `expr` with R's output and messages teed to a file, returning the error
-# (or NULL) alongside the captured lines. quarto and rmarkdown both report the
-# document session's failures on those streams rather than through the
-# condition, so this is the only place the actual cause exists. The lines are
-# re-emitted by the caller, so nothing that used to be printed is lost -- it
-# just arrives in one batch instead of streaming.
+# Run `expr`, returning the error (or NULL) alongside its value. The renderer's
+# own output is deliberately NOT captured: it streams straight to the app's log
+# as it happens.
+#
+# An earlier version teed both streams to a file with sink(). That was wrong in
+# production and in a way worth recording. sink() is process-wide, so for the
+# length of a render the app logged NOTHING -- and a render is exactly when you
+# want to watch it. Worse, if the process is killed mid-render (a Connect
+# timeout, an interrupt) the sinks never unwind, the temp file goes with the
+# process, and the whole window is lost: a five-minute silence followed by
+# "Execution halted", which is strictly less than what was there before.
+#
+# It was also unnecessary. quarto's condition already carries the child
+# session's failure -- rlang chains the CLI's output into the message, which is
+# where "there is no package called ..." comes from -- so nothing had to be
+# scraped off the stream to report it.
 render_logged <- function(expr) {
-  path <- tempfile("blockr-outline-render-", fileext = ".log")
-  con <- file(path, open = "wt")
-
-  # Recorded so the unwind below restores exactly what we changed. Note the
-  # two types report differently: an undiverted OUTPUT sink is 0, while an
-  # undiverted MESSAGE sink is 2 (stderr's connection number), so a `> 0`
-  # test would be true even with no sink in place.
-  out_sink0 <- sink.number()
-  msg_sink0 <- sink.number(type = "message")
-
-  sink(con, type = "output")
-  sink(con, type = "message")
-
   value <- NULL
   err <- tryCatch({
     value <- force(expr)
     NULL
   }, error = identity)
 
-  # Unwound back to the recorded state, so a renderer that manipulated sinks
-  # itself cannot leave this session with a dangling one -- which would
-  # silence every later message the app writes.
-  if (!identical(sink.number(type = "message"), msg_sink0)) {
-    sink(type = "message")
-  }
-  while (sink.number() > out_sink0) {
-    sink(type = "output")
-  }
-  close(con)
-
-  log <- tryCatch(readLines(path, warn = FALSE), error = function(e) character())
-  unlink(path)
-
-  list(error = err, log = log, value = value)
+  list(error = err, log = character(), value = value)
 }
 
 # Where the report's R code runs.
@@ -377,18 +360,12 @@ render_report <- function(qmd_txt, spin_txt, fmt, file, title,
     stop(msg)
   }
 
-  render_err <- function(e, log = NULL) {
+  render_err <- function(e) {
+    # quarto chains the document session's failure into its own condition, so
+    # conditionMessage() already carries the useful part ("there is no package
+    # called ..."). What used to hide it was the notification below throwing
+    # first; nothing needs to be scraped off the output stream.
     msg <- paste("Report render failed:", conditionMessage(e))
-    # The real cause usually lives in the RENDERER's output, not in the
-    # condition: quarto runs the document in a fresh R session, and that
-    # session's error ("there is no package called ...") reaches us only on
-    # its stdout. Without this the thrown message is whatever quarto's
-    # wrapper happened to signal, which can be as unhelpful as "attempt to
-    # apply non-function".
-    detail <- utils::tail(log[nzchar(log)], 25L)
-    if (length(detail)) {
-      msg <- paste0(msg, "\n", paste(detail, collapse = "\n"))
-    }
     notify_render_error(msg)
     stop(msg, call. = FALSE)
   }
@@ -433,11 +410,8 @@ render_report <- function(qmd_txt, spin_txt, fmt, file, title,
       # qmd HERE so the board's code sees this session, then hand the
       # already-executed markdown to the formatter, which runs no R at all.
       res <- render_logged(knit_in_process(qmd, dir))
-      if (length(res$log)) {
-        message(paste(res$log, collapse = "\n"))
-      }
       if (!is.null(res$error)) {
-        render_err(res$error, res$log)
+        render_err(res$error)
       }
 
       res <- render_logged(format_markdown(res$value, fmt, dir))
@@ -447,11 +421,8 @@ render_report <- function(qmd_txt, spin_txt, fmt, file, title,
       )
     }
 
-    if (length(res$log)) {
-      message(paste(res$log, collapse = "\n"))
-    }
     if (!is.null(res$error)) {
-      render_err(res$error, res$log)
+      render_err(res$error)
     }
 
   } else {
@@ -472,11 +443,8 @@ render_report <- function(qmd_txt, spin_txt, fmt, file, title,
     res <- render_logged(
       rmarkdown::render(rmd, output_format = out_fmt, quiet = FALSE)
     )
-    if (length(res$log)) {
-      message(paste(res$log, collapse = "\n"))
-    }
     if (!is.null(res$error)) {
-      render_err(res$error, res$log)
+      render_err(res$error)
     }
     rendered <- res$value
 
