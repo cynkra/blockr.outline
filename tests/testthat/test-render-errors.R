@@ -64,6 +64,52 @@ test_that("notify_render_error never throws without a session", {
   expect_null(notify_render_error("boom"))
 })
 
+test_that("quarto_cli_detail starts at the diagnosis, not the YAML echo", {
+  # quarto echoes the resolved document metadata before it works, so the
+  # no-TeX failure sits under nine lines of documentclass/papersize and a
+  # plain tail() reports the wrong thing.
+  out <- c(
+    "  documentclass: scrartcl", "  papersize: letter",
+    "  header-includes:", "    - \\KOMAoption{captions}{tableheading}",
+    "  title: T", "Rendering PDF", "running lualatex - 1",
+    "No TeX installation was detected.",
+    "Please run 'quarto install tinytex' to install TinyTex."
+  )
+
+  detail <- quarto_cli_detail(out)
+  expect_identical(detail[[1L]], "No TeX installation was detected.")
+  expect_false(any(grepl("documentclass", detail)))
+
+  # Nothing diagnostic to anchor on -> plain tail rather than nothing.
+  plain <- quarto_cli_detail(c("a", "b", "c"), n = 2L)
+  expect_identical(plain, c("b", "c"))
+
+  expect_identical(quarto_cli_detail(character()), character())
+  expect_identical(quarto_cli_detail(c("", "   ")), character())
+})
+
+test_that("strip_ansi drops the colour codes quarto emits", {
+  expect_identical(strip_ansi("\033[33mWARN: nope\033[39m"), "WARN: nope")
+  expect_identical(strip_ansi("plain"), "plain")
+})
+
+test_that("a quarto failure reports the CLI's own words", {
+  testthat::skip_if_not(quarto_usable(), "no quarto CLI")
+
+  # quarto::quarto_render()'s condition is frequently unusable: the package
+  # formats it through a cli template, and a document whose LaTeX header
+  # contains `{captions}` makes that template fail with "object 'captions' not
+  # found" while the real cause stays on the CLI's stdout.
+  err <- tryCatch(
+    render_report(qmd_doc("nosuchpkg::f()"), "", "html",
+                  tempfile(fileext = ".html"), "T"),
+    error = conditionMessage
+  )
+
+  expect_match(err, "there is no package called 'nosuchpkg'")
+  expect_false(grepl("object 'captions' not found", err, fixed = TRUE))
+})
+
 test_that("execute_mode defaults to quarto and rejects nonsense", {
   withr::local_options(list(blockr.outline.execute = NULL))
   expect_identical(execute_mode(), "quarto")

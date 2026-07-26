@@ -320,12 +320,98 @@ knit_in_process <- function(qmd, dir) {
   file.path(dir, basename(md))
 }
 
+# Run the quarto CLI directly and return its combined output, raising an error
+# carrying that output when it fails.
+#
+# Not quarto::quarto_render(), because its error is frequently unusable: the
+# package formats the failure through a cli template that references an
+# undefined variable, so conditionMessage() comes back as
+# "object 'captions' not found" while the actual cause ("no TeX distribution
+# was found", "there is no package called ...") went to the CLI's stdout.
+#
+# system2() captures the CHILD's pipes. This is the distinction an earlier
+# attempt got wrong by reaching for sink(): sink() diverts R's OWN streams
+# process-wide, so the whole app went silent for the length of a render and a
+# process killed mid-render took the window with it. Nothing here touches R's
+# streams, so the app keeps logging throughout.
+#
+# The trade is that quarto's own progress is batched rather than streamed --
+# it is re-emitted below the moment the render returns. Acceptable: the app's
+# log keeps flowing either way, which is what actually matters when something
+# hangs.
+quarto_cli_render <- function(input, fmt) {
+
+  bin <- quarto::quarto_path()
+
+  if (is.null(bin) || !nzchar(bin)) {
+    stop("The quarto CLI could not be located.", call. = FALSE)
+  }
+
+  out <- suppressWarnings(
+    system2(
+      bin,
+      c("render", shQuote(input), "--to", shQuote(fmt)),
+      stdout = TRUE,
+      stderr = TRUE
+    )
+  )
+
+  status <- attr(out, "status")
+  out <- strip_ansi(out)
+
+  if (length(out)) {
+    message(paste(out, collapse = "\n"))
+  }
+
+  if (!is.null(status) && !identical(as.integer(status), 0L)) {
+    stop(
+      paste(c(sprintf("quarto exited with status %s.", status),
+              quarto_cli_detail(out)),
+            collapse = "\n"),
+      call. = FALSE
+    )
+  }
+
+  invisible(input)
+}
+
+# quarto colours its output; the codes are noise in a notification and in a log.
+strip_ansi <- function(x) {
+  gsub("\033\\[[0-9;]*[A-Za-z]", "", x, perl = TRUE)
+}
+
+# The useful tail of a failed render. quarto echoes the resolved document
+# metadata before it gets to work, so a plain tail() is mostly YAML: the
+# no-TeX failure buries "No TeX installation was detected" under nine lines of
+# documentclass and papersize. Start at the first line that reads like a
+# diagnosis when there is one, and fall back to the tail when nothing matches.
+QUARTO_ERROR_HINT <- paste(
+  "error", "warn", "not found", "no tex", "cannot", "failed", "unable",
+  "^!",
+  sep = "|"
+)
+
+quarto_cli_detail <- function(out, n = 15L) {
+  lines <- out[nzchar(trimws(out))]
+
+  if (!length(lines)) {
+    return(character())
+  }
+
+  hit <- grep(QUARTO_ERROR_HINT, lines, ignore.case = TRUE, perl = TRUE)
+
+  if (length(hit)) {
+    lines <- lines[seq(min(hit), length(lines))]
+  }
+
+  utils::tail(lines, n)
+}
+
 # Format already-executed markdown. No chunks survive knitting, so neither
 # quarto nor pandoc starts an R session here -- which is the whole point.
 format_markdown <- function(md, fmt, dir) {
   if (quarto_usable()) {
-    return(quarto::quarto_render(input = md, output_format = fmt,
-                                 quiet = FALSE))
+    return(quarto_cli_render(md, fmt))
   }
   rmarkdown::pandoc_convert(
     input = normalizePath(md),
@@ -417,7 +503,7 @@ render_report <- function(qmd_txt, spin_txt, fmt, file, title,
       res <- render_logged(format_markdown(res$value, fmt, dir))
     } else {
       res <- render_logged(
-        quarto::quarto_render(input = qmd, output_format = fmt, quiet = FALSE)
+        quarto_cli_render(qmd, fmt)
       )
     }
 
@@ -466,6 +552,30 @@ render_report <- function(qmd_txt, spin_txt, fmt, file, title,
   }
 
   file.copy(file.path(dir, out_name), file, overwrite = TRUE)
+}
+
+# Empty a reference deck of its own slides, keeping masters, layouts and the
+# theme (which is where the fonts and the slide size live).
+#
+# A pandoc reference document carries EXAMPLE slides -- "Presentation Title",
+# "Hello, world.", a two-content demo -- because that is how pandoc learns the
+# styles; it renders the layouts and never emits the examples. officer's
+# read_pptx() has no such notion: it OPENS the deck, so every exhibit is
+# appended after the examples and the download starts with four junk slides.
+# Stripping them makes "reference document" mean the same thing on both render
+# paths (quarto for html/docx, officer for pptx). Best effort: an officer
+# version without remove_slide(), or a deck it refuses to shrink, leaves the
+# slides in place rather than failing the render.
+strip_slides <- function(doc) {
+  tryCatch(
+    {
+      for (i in rev(seq_along(doc))) {
+        doc <- officer::remove_slide(doc, i)
+      }
+      doc
+    },
+    error = function(e) doc
+  )
 }
 
 # Build the pptx deck with officer, one reported exhibit per slide, each
@@ -524,7 +634,7 @@ render_pptx_officer <- function(sects, file, title, template = NULL) {
 
   doc <- tryCatch(
     if (!is.null(template) && nzchar(template) && file.exists(template)) {
-      officer::read_pptx(template)
+      strip_slides(officer::read_pptx(template))
     } else {
       officer::read_pptx()
     },
