@@ -137,6 +137,15 @@ outline_js <- function(ns) {
       (function() {
         var last = null;
         function tick() {
+          // Guard against Shiny not being initialised yet: the immediate
+          // tick() below runs at DOM ready, which can beat Shiny's own
+          // ready handler, so Shiny.setInputValue is not a function yet.
+          // Calling it there threw and aborted the whole outline_js body,
+          // taking every handler defined AFTER this poll (gear, drag, and
+          // the OPEN / ADD / chapter click handlers) with it -- the outline
+          // rendered but was completely inert. Skip until Shiny is up; the
+          // setInterval keeps trying.
+          if (!(window.Shiny && Shiny.setInputValue)) return;
           // Resolve the panel inside the tick, not once at setup: at DOM
           // ready the dock may not have mounted / moved the extension node
           // yet, so a setup-time lookup can miss it and never recover. A
