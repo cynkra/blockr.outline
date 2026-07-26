@@ -218,6 +218,62 @@ template_content_width <- function(template) {
 # a deck built through quarto cannot place a table where the slide wants it.
 # The deck is built with officer instead (render_pptx_officer), which honours
 # each exhibit's `pptx_left` / `pptx_top`. html / pdf / docx stay on quarto.
+# Telling the user a render failed must never be what makes it fail. A
+# download handler may run without a reactive domain, and an unguarded
+# showNotification() then throws IN PLACE OF the render error, replacing the
+# real cause with its own -- which is how a broken report used to reach the
+# browser as a bare "an error has occurred" with nothing useful logged.
+notify_render_error <- function(msg) {
+  try(
+    showNotification(msg, type = "error", duration = 10),
+    silent = TRUE
+  )
+  invisible(NULL)
+}
+
+# Run `expr` with R's output and messages teed to a file, returning the error
+# (or NULL) alongside the captured lines. quarto and rmarkdown both report the
+# document session's failures on those streams rather than through the
+# condition, so this is the only place the actual cause exists. The lines are
+# re-emitted by the caller, so nothing that used to be printed is lost -- it
+# just arrives in one batch instead of streaming.
+render_logged <- function(expr) {
+  path <- tempfile("blockr-outline-render-", fileext = ".log")
+  con <- file(path, open = "wt")
+
+  # Recorded so the unwind below restores exactly what we changed. Note the
+  # two types report differently: an undiverted OUTPUT sink is 0, while an
+  # undiverted MESSAGE sink is 2 (stderr's connection number), so a `> 0`
+  # test would be true even with no sink in place.
+  out_sink0 <- sink.number()
+  msg_sink0 <- sink.number(type = "message")
+
+  sink(con, type = "output")
+  sink(con, type = "message")
+
+  value <- NULL
+  err <- tryCatch({
+    value <- force(expr)
+    NULL
+  }, error = identity)
+
+  # Unwound back to the recorded state, so a renderer that manipulated sinks
+  # itself cannot leave this session with a dangling one -- which would
+  # silence every later message the app writes.
+  if (!identical(sink.number(type = "message"), msg_sink0)) {
+    sink(type = "message")
+  }
+  while (sink.number() > out_sink0) {
+    sink(type = "output")
+  }
+  close(con)
+
+  log <- tryCatch(readLines(path, warn = FALSE), error = function(e) character())
+  unlink(path)
+
+  list(error = err, log = log, value = value)
+}
+
 render_report <- function(qmd_txt, spin_txt, fmt, file, title,
                           template = NULL, sects = NULL) {
 
@@ -239,14 +295,24 @@ render_report <- function(qmd_txt, spin_txt, fmt, file, title,
       "Cannot render: neither the quarto CLI nor pandoc is available to",
       "this R session. Install quarto (quarto.org) or make pandoc visible."
     )
-    showNotification(msg, type = "error", duration = 10)
+    notify_render_error(msg)
     stop(msg)
   }
 
-  render_err <- function(e) {
+  render_err <- function(e, log = NULL) {
     msg <- paste("Report render failed:", conditionMessage(e))
-    showNotification(msg, type = "error", duration = 10)
-    stop(msg)
+    # The real cause usually lives in the RENDERER's output, not in the
+    # condition: quarto runs the document in a fresh R session, and that
+    # session's error ("there is no package called ...") reaches us only on
+    # its stdout. Without this the thrown message is whatever quarto's
+    # wrapper happened to signal, which can be as unhelpful as "attempt to
+    # apply non-function".
+    detail <- utils::tail(log[nzchar(log)], 25L)
+    if (length(detail)) {
+      msg <- paste0(msg, "\n", paste(detail, collapse = "\n"))
+    }
+    notify_render_error(msg)
+    stop(msg, call. = FALSE)
   }
 
   out_name <- paste0("report.", fmt)
@@ -282,10 +348,15 @@ render_report <- function(qmd_txt, spin_txt, fmt, file, title,
     qmd <- file.path(dir, "report.qmd")
     writeLines(qmd_txt, qmd)
 
-    tryCatch(
-      quarto::quarto_render(input = qmd, output_format = fmt, quiet = FALSE),
-      error = render_err
+    res <- render_logged(
+      quarto::quarto_render(input = qmd, output_format = fmt, quiet = FALSE)
     )
+    if (length(res$log)) {
+      message(paste(res$log, collapse = "\n"))
+    }
+    if (!is.null(res$error)) {
+      render_err(res$error, res$log)
+    }
 
   } else {
 
@@ -302,10 +373,16 @@ render_report <- function(qmd_txt, spin_txt, fmt, file, title,
       pdf = "pdf_document"
     )
 
-    rendered <- tryCatch(
-      rmarkdown::render(rmd, output_format = out_fmt, quiet = FALSE),
-      error = render_err
+    res <- render_logged(
+      rmarkdown::render(rmd, output_format = out_fmt, quiet = FALSE)
     )
+    if (length(res$log)) {
+      message(paste(res$log, collapse = "\n"))
+    }
+    if (!is.null(res$error)) {
+      render_err(res$error, res$log)
+    }
+    rendered <- res$value
 
     # rmarkdown writes report.<fmt> straight into `dir`, which is already
     # the out_name path -- copying it onto itself errors. Only move it
@@ -346,10 +423,8 @@ render_pptx_officer <- function(sects, file, title, template = NULL) {
 
   render_err <- function(e) {
     msg <- paste("Deck render failed:", conditionMessage(e))
-    if (exists("showNotification")) {
-      try(showNotification(msg, type = "error", duration = 10), silent = TRUE)
-    }
-    stop(msg)
+    notify_render_error(msg)
+    stop(msg, call. = FALSE)
   }
 
   # Prune to the reported closure, exactly like the qmd / spin exporters:
