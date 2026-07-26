@@ -335,3 +335,41 @@ test_that("the report title is shown and renames in place", {
   expect_match(pre_text(), "Renamed report")
   set_view("outline")
 })
+
+test_that("instant search filters the outline to matching blocks", {
+  skip_if_no_app()
+  set_view("outline")
+
+  visible_blocks <- function() {
+    app$get_js(paste0(
+      "JSON.stringify(Array.from(",
+      "document.querySelectorAll('.blockr-otl-grow[data-blk]'))",
+      ".filter(function(r){return !r.classList.contains('blockr-otl-filtered');})",
+      ".map(function(r){return r.dataset.blk;}))"
+    ))
+  }
+
+  # Nothing filtered at rest: all four blocks show.
+  all4 <- jsonlite::fromJSON(visible_blocks())
+  expect_length(all4, 4)
+
+  # Typing narrows to the rows whose name / description / code match.
+  app$run_js(paste0(
+    "var s = document.querySelector('.blockr-otl-searchinput');",
+    "s.value = 'setosa';",
+    "s.dispatchEvent(new Event('input', {bubbles:true}));"
+  ))
+  app$wait_for_idle()
+  hit <- jsonlite::fromJSON(visible_blocks())
+  # `sub`'s description is "Setosa only."; the dataset row is not.
+  expect_true("sub" %in% hit)
+  expect_false("data" %in% hit)
+
+  # Clearing restores every row.
+  app$run_js(paste0(
+    "var s = document.querySelector('.blockr-otl-searchinput');",
+    "s.value = ''; s.dispatchEvent(new Event('input', {bubbles:true}));"
+  ))
+  app$wait_for_idle()
+  expect_length(jsonlite::fromJSON(visible_blocks()), 4)
+})

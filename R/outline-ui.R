@@ -195,9 +195,83 @@ outline_js <- function(ns) {
           );
         });
       }
+      // Instant search: CLIENT-ONLY filter over the outline. Matches a
+      // block's name / description / code and its chapter name; non-matching
+      // rows get 'blockr-otl-filtered' (display:none). While a query is
+      // active collapse is overridden so matches inside a collapsed chapter
+      // still show; clearing the box restores the collapsed state. Like
+      // collapse, it re-applies after every renderUI via shiny:value.
+      function applyFilter() {
+        var input = document.querySelector('.blockr-otl-searchinput');
+        var q = (input && input.value ? input.value : '').trim().toLowerCase();
+
+        if (!q) {
+          document.querySelectorAll('.blockr-otl-filtered').forEach(
+            function(el) { el.classList.remove('blockr-otl-filtered'); });
+          document.querySelectorAll('.blockr-otl-addrow').forEach(
+            function(el) { el.classList.remove('blockr-otl-filtered'); });
+          document.body.classList.remove('blockr-otl-filtering');
+          applyCollapsed();          // restore collapsed chapters
+          return;
+        }
+
+        document.body.classList.add('blockr-otl-filtering');
+        // Filtering overrides collapse so matches are always visible.
+        document.querySelectorAll('.blockr-otl-hidden').forEach(
+          function(el) { el.classList.remove('blockr-otl-hidden'); });
+
+        var stackHit = {};
+        document.querySelectorAll('.blockr-otl-grow[data-blk]').forEach(
+          function(row) {
+            var hit = (row.textContent || '').toLowerCase().indexOf(q) !== -1;
+            row.classList.toggle('blockr-otl-filtered', !hit);
+            if (hit && row.dataset.stack) stackHit[row.dataset.stack] = true;
+          });
+
+        // Add rows are chrome; hide them while searching.
+        document.querySelectorAll('.blockr-otl-addrow').forEach(
+          function(el) { el.classList.add('blockr-otl-filtered'); });
+
+        // A chapter shows if any member matched or its own name matches;
+        // a name match reveals all of its blocks.
+        document.querySelectorAll('.blockr-otl-chap[data-stack]').forEach(
+          function(ch) {
+            var s = ch.dataset.stack;
+            var lbl = (ch.querySelector('.blockr-otl-chlabel') || {}).textContent || '';
+            var nameHit = lbl.toLowerCase().indexOf(q) !== -1;
+            var show = nameHit || stackHit[s];
+            ch.classList.toggle('blockr-otl-filtered', !show);
+            if (nameHit) {
+              document.querySelectorAll(
+                '.blockr-otl-grow[data-stack=\\\"' + s + '\\\"]'
+              ).forEach(function(row) {
+                row.classList.remove('blockr-otl-filtered');
+              });
+            }
+            var intro = document.querySelector(
+              '.blockr-otl-introrow[data-stack=\\\"' + s + '\\\"]'
+            );
+            if (intro) intro.classList.toggle('blockr-otl-filtered', !show);
+          });
+      }
+      document.addEventListener('input', function(ev) {
+        if (ev.target && ev.target.classList &&
+            ev.target.classList.contains('blockr-otl-searchinput')) {
+          applyFilter();
+        }
+      });
+      document.addEventListener('keydown', function(ev) {
+        if (ev.key === 'Escape' && ev.target && ev.target.classList &&
+            ev.target.classList.contains('blockr-otl-searchinput')) {
+          ev.target.value = '';
+          applyFilter();
+        }
+      });
+
       $(document).on('shiny:value', function(ev) {
         if (ev.name && /outline_out$/.test(ev.name)) {
           setTimeout(applyCollapsed, 0);
+          setTimeout(applyFilter, 0);
 
           // Fill in any push that landed before this render inserted its
           // nodes. renderUI carries current code, so this is a no-op
@@ -692,7 +766,7 @@ outline_chevron <- function() {
   ))
 }
 
-outline_tags <- function(sects, ns, editing = NULL, title = NULL) {
+outline_tags <- function(sects, ns, editing = NULL) {
 
   accent_of <- function(stk_id) {
     if (is.na(stk_id) || !stk_id %in% names(sects$stack_colors)) {
@@ -1007,16 +1081,21 @@ outline_tags <- function(sects, ns, editing = NULL, title = NULL) {
     tagList(chapter, intro, rows)
   })
 
-  # The report title as the top-level "chapter": document title on the left
-  # (double-click to rename -- it is outline state), the board-wide include /
-  # exclude actions on the right, revealed on hover exactly like the
-  # per-chapter actions. The master rules every block's include switch.
+  div(class = "blockr-otl", grid_rows)
+}
+
+# The report title as the top-level "chapter": document title on the left
+# (double-click to rename -- it is outline state), the board-wide include /
+# exclude actions inline right after it, revealed on hover exactly like the
+# per-chapter actions. Rendered separately from the outline body so the
+# search box can sit under it while staying static (focus-stable).
+outline_title_row <- function(title) {
   doc_title <- if (is.character(title) && length(title) && nzchar(title[[1L]])) {
     title[[1L]]
   } else {
     "Board report"
   }
-  header <- div(
+  div(
     class = "blockr-otl-doctitle-row",
     span(
       class = "blockr-otl-doctitle",
@@ -1029,6 +1108,4 @@ outline_tags <- function(sects, ns, editing = NULL, title = NULL) {
       span(class = "blockr-otl-bulk", `data-bulk` = "exclude", "exclude all")
     )
   )
-
-  div(class = "blockr-otl", header, grid_rows)
 }

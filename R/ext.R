@@ -223,6 +223,31 @@ outline_ext_ui <- function(id, board, ...) {
       )
     ),
     outline_settings_band(ns),
+    # The report title and the instant search sit above the outline body and
+    # only in the Outline view (client-only search; the title is state). They
+    # live outside outline_out so the search input stays focus-stable across
+    # the body's renderUI re-renders.
+    conditionalPanel(
+      condition = sprintf("input['%s'] == 'outline'", ns("code_view")),
+      uiOutput(ns("otl_title")),
+      div(
+        class = "blockr-otl-search",
+        HTML(paste0(
+          "<svg class='blockr-otl-searchicon' width='14' height='14' ",
+          "viewBox='0 0 24 24' fill='none' stroke='currentColor' ",
+          "stroke-width='2' stroke-linecap='round' stroke-linejoin='round'>",
+          "<circle cx='11' cy='11' r='8'/><line x1='21' y1='21' x2='16.65' ",
+          "y2='16.65'/></svg>"
+        )),
+        tags$input(
+          type = "text",
+          class = "blockr-otl-searchinput",
+          placeholder = "Filter blocks…",
+          autocomplete = "off",
+          spellcheck = "false"
+        )
+      )
+    ),
     uiOutput(ns("outline_out")),
     outline_js(ns)
   )
@@ -742,6 +767,10 @@ outline_ext_srv <- function(annotations, block_order, title,
           outline_output_map(sections())
         })
 
+        # The report title heads the column, above the search. Kept out of
+        # outline_out so it is not torn down on every body re-render.
+        output$otl_title <- renderUI(outline_title_row(rv_title()))
+
         output$outline_out <- renderUI(
           {
             view <- coal(input$code_view, "outline")
@@ -765,7 +794,7 @@ outline_ext_srv <- function(annotations, block_order, title,
 
               return(
                 tagList(
-                  outline_tags(sects, session$ns, editing(), rv_title()),
+                  outline_tags(sects, session$ns, editing()),
                   NULL
                 )
               )
