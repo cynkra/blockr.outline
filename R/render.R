@@ -752,8 +752,30 @@ render_pptx_officer <- function(sects, file, title, template = NULL) {
     )
   }
 
+  # Which deck this render is styling against, said out loud.
+  #
+  # A missing or unset template is not an error: officer falls back to its own
+  # stock deck and the download succeeds, so "the house template was ignored"
+  # and "the house template was applied" produce the same outcome apart from
+  # the fonts. That is not something to diagnose by squinting at a slide,
+  # especially on a deployment nobody can open a shell on.
+  usable <- !is.null(template) && nzchar(template) && file.exists(template)
+
+  cat(
+    "[deck] ",
+    if (usable) {
+      paste0("template: ", template)
+    } else if (is.null(template) || !nzchar(template)) {
+      "no template set -- officer stock deck"
+    } else {
+      paste0("template MISSING: ", template, " -- officer stock deck")
+    },
+    "\n",
+    sep = "", file = stderr()
+  )
+
   doc <- tryCatch(
-    if (!is.null(template) && nzchar(template) && file.exists(template)) {
+    if (usable) {
       strip_slides(officer::read_pptx(template))
     } else {
       officer::read_pptx()
