@@ -88,6 +88,10 @@ outline_ext_ui <- function(id, board, ...) {
 
   formats <- c("html", "pptx")
 
+  # Logged here, where the decision is made, and only the first time: the
+  # answer is a property of the machine, not of the session.
+  log_pdf_capability()
+
   if (report_pdf_available()) {
     formats <- c(formats, "pdf")
   }

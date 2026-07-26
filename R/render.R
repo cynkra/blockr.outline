@@ -4,6 +4,57 @@ report_pdf_available <- function() {
     (requireNamespace("tinytex", quietly = TRUE) && tinytex::is_tinytex())
 }
 
+# Why the pdf option is or is not offered, written to the log once per process.
+#
+# The check above and the renderer disagree about what "pdf available" means:
+# it looks for pdflatex / xelatex / R's tinytex, while quarto renders with
+# lualatex by default and resolves TeX its own way. So the option can be
+# offered on a machine where quarto can never produce a PDF -- which looks,
+# from the outside, exactly like a broken download.
+#
+# This exists because the deployment that matters is usually one nobody can
+# open a shell on. Everything here is a PATH lookup and a version string: no
+# render, nothing that can fail, and it prints where a Connect log will show
+# it. The definitive answer is still an attempted render, but when the line
+# reads "pdflatex: yes, lualatex: no" it has already been given.
+pdf_capability_logged <- new.env(parent = emptyenv())
+
+log_pdf_capability <- function() {
+
+  if (!is.null(pdf_capability_logged$done)) {
+    return(invisible(NULL))
+  }
+  pdf_capability_logged$done <- TRUE
+
+  yn <- function(x) if (nzchar(x)) x else "no"
+
+  engines <- vapply(
+    c("pdflatex", "xelatex", "lualatex", "tectonic"),
+    function(e) yn(Sys.which(e)),
+    character(1L)
+  )
+
+  tt <- requireNamespace("tinytex", quietly = TRUE) && tinytex::is_tinytex()
+
+  quarto <- if (quarto_usable()) {
+    coal(tryCatch(as.character(quarto::quarto_version()),
+                  error = function(e) NULL), "yes")
+  } else {
+    "no"
+  }
+
+  cat(
+    "[pdf] offered: ", report_pdf_available(),
+    " | ", paste(names(engines), engines, sep = ": ", collapse = "  "),
+    " | R tinytex: ", tt,
+    " | quarto: ", quarto,
+    "\n",
+    sep = "", file = stderr()
+  )
+
+  invisible(NULL)
+}
+
 quarto_usable <- function() {
   requireNamespace("quarto", quietly = TRUE) &&
     !is.null(quarto::quarto_path())
