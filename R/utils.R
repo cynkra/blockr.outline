@@ -12,15 +12,19 @@ pkg_file <- function(...) {
 }
 
 # The bundled fallback beneath the app-level option: a neutral 13.333x7.5in
-# (true 16:9) deck with officer's stock 11-layout "Office Theme" catalog and
-# its original color/font pairing -- same FORM as blockr.bms's template (that
-# one is this deck plus a swapped font scheme and a logo on the master), but
-# with neither, so no deployment gets another's branding just for setting no
-# template. Exists because officer's OWN stock deck (read_pptx() with no
-# path) is 10x7.5in -- 4:3 -- while every exhibit's pptx_width sizes to
-# ~11.9in (gg_attach_pptx_size(), static_table()'s ft_fit_width default):
-# widescreen math laid onto a 4:3 slide, overflowing the right edge on every
-# chart and table, on every board that never configured a house deck.
+# (true 16:9) deck, BUILT from officer's stock Office layouts by
+# dev/make-default-template.R -- no media, no text, Arial.
+#
+# Exists because officer's OWN stock deck (read_pptx() with no path) is
+# 10x7.5in -- 4:3 -- while every exhibit's pptx_width sizes to ~11.9in
+# (gg_attach_pptx_size(), static_table()'s ft_fit_width default): widescreen
+# math laid onto a 4:3 slide, overflowing the right edge on every chart and
+# table, on every board that never configured a house deck.
+#
+# Generated rather than copied, and that is the point. The first version of
+# this file was a client master with the logo deleted, which kept its font
+# scheme and its footer strings inside an open package -- branding nobody
+# asked for on every deployment that sets no template of its own.
 default_template <- function() {
   pkg_file("templates", "widescreen-default.pptx")
 }

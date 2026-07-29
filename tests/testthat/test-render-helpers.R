@@ -107,6 +107,28 @@ local_font_template <- function(face, env = parent.frame()) {
   out
 }
 
+test_that("the bundled fallback deck carries nobody's branding", {
+  tmpl <- default_template()
+  expect_true(file.exists(tmpl))
+
+  parts <- utils::unzip(tmpl, list = TRUE)$Name
+
+  # No logo, no picture: an image in a template can only be somebody's.
+  expect_length(grep("^ppt/media/", parts), 0L)
+
+  # No authored text either. Placeholders carry sample prompts ("Click to edit
+  # Master title style") which never render; a shape WITHOUT a <p:ph> is a
+  # plain text box, and one of those on the master prints on every slide --
+  # which is exactly how a client's footer came to ship in this package.
+  master <- template_part(tmpl, "ppt/slideMasters/slideMaster1.xml")
+  shapes <- regmatches(
+    master, gregexpr("(?s)<p:sp>.*?</p:sp>", master, perl = TRUE)
+  )[[1L]]
+  free <- shapes[!grepl("<p:ph", shapes, fixed = TRUE)]
+
+  expect_length(unlist(regmatches(free, gregexpr("<a:t>[^<]*", free))), 0L)
+})
+
 test_that("template_body_font reads the deck's font scheme, falls back safely", {
   skip_if_not_installed("officer")
   skip_if_not_installed("zip")
