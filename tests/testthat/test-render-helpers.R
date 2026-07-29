@@ -321,7 +321,7 @@ test_that("the Output preview names the error that stopped a block", {
 
   html <- as.character(outline_output_map(s)[["leaf"]])
 
-  expect_match(html, "Could not evaluate this block")
+  expect_match(html, "An upstream block could not be evaluated")
   # Two blocks downstream of the failure, and it still names the ROOT block
   # and the root message: the trail is not re-wrapped at every hop.
   expect_match(html, "upstream block 'src'")
@@ -474,4 +474,68 @@ test_that("a healthy chunk gets no unbound-name noise", {
 
   expect_match(html, "blockr-otl-exhibit")
   expect_no_match(html, "no block on the board binds")
+})
+
+test_that("a block nothing feeds is a wiring note, not an R condition", {
+
+  # The chart has no incoming link, so its chunk still names the input SLOT
+  # (`data`), which no block declares. The raw condition is about
+  # utils::data and says nothing; the link table is what turns it into a
+  # sentence.
+  board <- blockr.core::new_board(
+    blocks = c(
+      src = blockr.core::new_dataset_block("iris"),
+      leaf = blockr.core::new_head_block()
+    )
+  )
+
+  s <- outline_sections(
+    structure(list(src = quote(datasets::iris),
+                   leaf = quote(dplyr::filter(data, TRUE))),
+              pending = character()),
+    board,
+    annotations = list(src = list(report = FALSE), leaf = list(report = TRUE)),
+    stack_annotations = list()
+  )
+
+  html <- as.character(
+    outline_output_map(
+      s, blockr.core::board_block_ids(board), blockr.core::board_links(board)
+    )[["leaf"]]
+  )
+
+  expect_match(html, "Nothing is connected to this block")
+  expect_match(html, "the input slot no block fills")
+  # The condition stays: on a deployment it is the only forensic trace.
+  expect_match(html, "applied to an object of class")
+})
+
+test_that("a linked block that fails is not called unconnected", {
+
+  board <- blockr.core::new_board(
+    blocks = c(
+      src = blockr.core::new_dataset_block("iris"),
+      leaf = blockr.core::new_head_block()
+    ),
+    links = blockr.core::links(from = "src", to = "leaf")
+  )
+
+  s <- outline_sections(
+    structure(list(src = quote(datasets::iris),
+                   leaf = quote(stop("boom"))),
+              pending = character()),
+    board,
+    annotations = list(src = list(report = FALSE), leaf = list(report = TRUE)),
+    stack_annotations = list()
+  )
+
+  html <- as.character(
+    outline_output_map(
+      s, blockr.core::board_block_ids(board), blockr.core::board_links(board)
+    )[["leaf"]]
+  )
+
+  expect_match(html, "Could not evaluate this block")
+  expect_match(html, "boom")
+  expect_no_match(html, "Nothing is connected")
 })

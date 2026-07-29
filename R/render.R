@@ -880,42 +880,62 @@ render_pptx_officer <- function(sects, file, title, template = NULL) {
 # Returns TAG objects (not html strings) so a flextable's own htmlwidget
 # dependency rides along through renderUI; a stringified table would lose
 # its styling. The map is keyed by block id, mirroring outline_code_map().
-outline_output_map <- function(sects, board_ids = character()) {
+#
+# `links` is the board's link table. It is not needed to EVALUATE anything;
+# it is what turns "no applicable method for 'filter' applied to an object
+# of class \"function\"" into "nothing is connected to this block", which is
+# the sentence the reader can act on.
+outline_output_map <- function(sects, board_ids = character(), links = NULL) {
 
   env <- eval_env(sects, board_ids)
-  # NA = evaluated cleanly; a string = the error that stopped this block.
-  # Kept rather than a bare flag because the failure is almost never in the
-  # block you are looking at: an ANCESTOR outside the report (its own row is
-  # not even listed) throws, its variable never binds, and every dependent
-  # dies naming a variable, not a block. Without the message the preview
-  # blames the wrong block and says nothing usable.
-  eval_err <- rep(NA_character_, length(sects$ids))
+
+  # A block nothing feeds. Its chunk still names its input slot (`data`),
+  # which no seed covers because no block declares it, so the raw condition
+  # is about whatever function shares that name.
+  fed <- if (is.null(links)) {
+    rep(NA, length(sects$ids))
+  } else {
+    sects$ids %in% links$to
+  }
+
+  # NULL = evaluated cleanly; a list(head, msg) = the diagnosis. Kept rather
+  # than a bare flag because the failure is almost never in the block you are
+  # looking at: an ANCESTOR outside the report (its own row is not even
+  # listed) throws, its variable never binds, and every dependent dies naming
+  # a variable, not a block.
+  notes <- vector("list", length(sects$ids))
 
   for (i in seq_along(sects$ids)) {
     if (isTRUE(sects$pending[i]) || !isTRUE(sects$exported[i])) {
       next
     }
-    eval_err[i] <- tryCatch(
+    note <- tryCatch(
       {
         eval(parse(text = sect_export_code(sects, i)), envir = env)
-        NA_character_
+        NULL
       },
       error = function(e) {
-        msg <- with_unbound(conditionMessage(e),
-                            sect_export_code(sects, i), env)
+        note <- diagnose_chunk(conditionMessage(e),
+                               sect_export_code(sects, i), env, fed[i])
         # Re-poison: the id stays unbound, so say WHY when a dependent
         # touches it, rather than letting it fall through to the search
         # path (see eval_env).
-        seed_failed(env, sects$ids[i], msg)
-        msg
+        seed_failed(env, sects$ids[i], note$msg)
+        note
       }
     )
+
+    # Guarded: `notes[[i]] <- NULL` DELETES the slot rather than clearing
+    # it, and every later index would then be off by one.
+    if (!is.null(note)) {
+      notes[[i]] <- note
+    }
   }
 
   setNames(
     lapply(
       seq_along(sects$ids),
-      function(i) sect_output_html(sects, env, i, eval_err[i])
+      function(i) sect_output_html(sects, env, i, notes[[i]])
     ),
     sects$ids
   )
@@ -924,7 +944,7 @@ outline_output_map <- function(sects, board_ids = character()) {
 # One block's Output-mode body. A reported, evaluated block resolves its
 # output expression in `env` and renders the result; everything else is a
 # muted note (the offchip already states WHY a block is excluded).
-sect_output_html <- function(sects, env, i, eval_err = NA_character_) {
+sect_output_html <- function(sects, env, i, note = NULL) {
 
   if (isTRUE(sects$pending[i])) {
     return(div(class = "blockr-otl-pending", "Evaluating\u2026"))
@@ -934,8 +954,8 @@ sect_output_html <- function(sects, env, i, eval_err = NA_character_) {
     return("")
   }
 
-  if (!is.na(eval_err)) {
-    return(outnote("Could not evaluate this block", eval_err))
+  if (!is.null(note)) {
+    return(outnote(note$head, note$msg))
   }
 
   # Two distinct failures, told apart: the transform ran but produced
@@ -1030,19 +1050,65 @@ eval_env <- function(sects, board_ids = character()) {
   env
 }
 
-# The failing chunk's own error, plus the names it reads that hold no value
-# here. Seeding covers every id the projection or the board knows; a chunk
-# can still name something NEITHER knows -- a removed block, a slot name
-# that was never substituted -- and such a name resolves up the search path
-# to whatever function happens to share it. The resulting message ("no
-# applicable method for 'filter' applied to an object of class function")
-# names nothing at all, so list the candidates alongside it.
+# One failed chunk, as a headline plus a detail. The headline is the
+# sentence to act on; the R condition rides underneath it, because on a
+# deployment it is the only forensic trace anyone gets.
 #
-# Only names that are absent or resolve to a FUNCTION are listed: a data
-# frame or a pronoun reached from globalenv() is not the failure mode. NSE
-# symbols (column names in a dplyr verb) can land in the list; on a chunk
-# that already failed, a short over-broad list beats none.
-with_unbound <- function(msg, code, env) {
+# Three diagnoses, in the order they are worth reading:
+#
+#   nothing is connected     the chunk names its input SLOT (`data`), which
+#                            no block declares, because the block has no
+#                            incoming link. This is a wiring problem, and
+#                            the raw condition ("no applicable method for
+#                            'filter' applied to an object of class
+#                            \"function\"") is about utils::data, which has
+#                            nothing to do with anything.
+#   an upstream block failed the seeded promise already names the block and
+#                            its root cause (see eval_env).
+#   everything else          the chunk's own error, with any loose names
+#                            listed: a removed block still named by a
+#                            dependent lands here.
+diagnose_chunk <- function(msg, code, env, fed = NA) {
+
+  loose <- loose_names(code, env)
+
+  if (length(loose) && isFALSE(fed)) {
+    return(list(
+      head = "Nothing is connected to this block",
+      msg = paste0(
+        "its code reads ", fmt_names(loose),
+        ", the input slot no block fills. Connect a block to it, or take ",
+        "it out of the report.\n", msg
+      )
+    ))
+  }
+
+  if (grepl("^upstream block '", msg)) {
+    return(list(head = "An upstream block could not be evaluated", msg = msg))
+  }
+
+  list(
+    head = "Could not evaluate this block",
+    msg = if (length(loose)) {
+      paste0(msg, "\n(this chunk reads ", fmt_names(loose),
+             ", which no block on the board binds)")
+    } else {
+      msg
+    }
+  )
+}
+
+# The names a chunk reads that hold no value here. Seeding covers every id
+# the projection or the board knows; a chunk can still name something
+# NEITHER knows -- a removed block, an input slot that was never substituted
+# -- and such a name resolves up the search path to whatever function
+# happens to share it.
+#
+# Only names that are absent or resolve to a FUNCTION count: a data frame or
+# a pronoun reached from globalenv() is not this failure mode. NSE symbols
+# (column names in a dplyr verb) can slip in; on a chunk that already
+# failed, a short over-broad list beats none.
+loose_names <- function(code, env) {
 
   free <- tryCatch(all.vars(parse(text = code)), error = function(e) NULL)
 
@@ -1050,21 +1116,17 @@ with_unbound <- function(msg, code, env) {
   # covers. Never get0() a seeded id: forcing the promise re-throws.
   free <- setdiff(free, ls(env, all.names = TRUE))
 
-  loose <- Filter(
+  Filter(
     function(v) {
       val <- get0(v, envir = env, ifnotfound = NULL)
       is.null(val) || is.function(val)
     },
     free
   )
+}
 
-  if (!length(loose)) {
-    return(msg)
-  }
-
-  paste0(msg, "\n(this chunk reads ",
-         paste0("`", utils::head(loose, 5L), "`", collapse = ", "),
-         ", which no block on the board binds)")
+fmt_names <- function(x) {
+  paste0("`", utils::head(x, 5L), "`", collapse = ", ")
 }
 
 # One unbound block id, as a promise that stops with `why` when forced.

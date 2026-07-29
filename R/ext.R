@@ -923,7 +923,9 @@ outline_ext_srv <- function(annotations, block_order, title,
           # expression is dropped from the projection, and only the board
           # still knows its id (see eval_env).
           outline_output_map(
-            sections(), blockr.core::board_block_ids(board$board)
+            sections(),
+            blockr.core::board_block_ids(board$board),
+            blockr.core::board_links(board$board)
           )
         })
 
