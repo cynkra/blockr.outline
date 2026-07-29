@@ -284,3 +284,74 @@ test_that("a reference deck contributes styling, not slides", {
   expect_length(out, 1L)
   expect_false(any(grepl("^Example ", officer::pptx_summary(out)$text)))
 })
+
+# The Output preview's failure notes. A preview error almost never
+# originates in the block you are looking at -- an ancestor outside the
+# report throws, its variable never binds, and every dependent dies with
+# "object not found" -- so the note has to carry the condition itself.
+test_that("the Output preview names the error that stopped a block", {
+
+  # Ids deliberately unlike any base function: the eval env's parent is
+  # globalenv(), so a block id that shadows one (`sub`, `data`) resolves to
+  # the FUNCTION instead of failing when its upstream never bound.
+  board <- blockr.core::new_board(
+    blocks = c(
+      src = blockr.core::new_dataset_block("iris"),
+      mid = blockr.core::new_subset_block(),
+      leaf = blockr.core::new_head_block()
+    ),
+    links = blockr.core::links(from = c("src", "mid"), to = c("mid", "leaf"))
+  )
+
+  exprs <- structure(
+    list(
+      src = quote(stop("pin not found")),
+      mid = quote(subset(src, Species == "setosa")),
+      leaf = quote(utils::head(mid, 3))
+    ),
+    pending = character()
+  )
+
+  s <- outline_sections(
+    exprs, board,
+    annotations = list(src = list(report = FALSE), mid = list(report = FALSE),
+                       leaf = list(report = TRUE)),
+    stack_annotations = list()
+  )
+
+  html <- as.character(outline_output_map(s)[["leaf"]])
+
+  expect_match(html, "Could not evaluate this block")
+  # The block downstream of the failure reports the MISSING BINDING, not the
+  # ancestor's own message -- which is the trail back to the real culprit.
+  expect_match(html, "object 'mid' not found")
+})
+
+test_that("an exhibit call that throws is told apart from no output", {
+
+  # Fields outline_output_map() reads, hand-built: the failure lives in the
+  # report_call, which no fixture block emits.
+  s <- list(ids = "a", pending = FALSE, exported = TRUE, report = TRUE,
+            code = "a <- 1", report_calls = "stop('no such column')",
+            renderers = "")
+
+  html <- as.character(outline_output_map(s)[["a"]])
+
+  expect_match(html, "Could not render this exhibit")
+  expect_match(html, "no such column")
+})
+
+test_that("a renderer that degrades instead of failing says so", {
+
+  # static_chart() warns and returns the chart's DATA when it cannot draw the
+  # requested type -- the preview then shows a table where a chart belongs.
+  s <- list(ids = "a", pending = FALSE, exported = TRUE, report = TRUE,
+            code = "a <- 1",
+            report_calls = "{ warning('cannot draw scatter'); a }",
+            renderers = "")
+
+  html <- as.character(outline_output_map(s)[["a"]])
+
+  expect_match(html, "blockr-otl-exhibit")
+  expect_match(html, "cannot draw scatter")
+})

@@ -880,26 +880,31 @@ render_pptx_officer <- function(sects, file, title, template = NULL) {
 outline_output_map <- function(sects) {
 
   env <- new.env(parent = globalenv())
-  eval_ok <- rep(TRUE, length(sects$ids))
+  # NA = evaluated cleanly; a string = the error that stopped this block.
+  # Kept rather than a bare flag because the failure is almost never in the
+  # block you are looking at: an ANCESTOR outside the report (its own row is
+  # not even listed) throws, its variable never binds, and every dependent
+  # dies with "object 'xyz' not found". Without the message the preview
+  # blames the wrong block and says nothing usable.
+  eval_err <- rep(NA_character_, length(sects$ids))
 
   for (i in seq_along(sects$ids)) {
     if (isTRUE(sects$pending[i]) || !isTRUE(sects$exported[i])) {
       next
     }
-    ok <- tryCatch(
+    eval_err[i] <- tryCatch(
       {
         eval(parse(text = sect_export_code(sects, i)), envir = env)
-        TRUE
+        NA_character_
       },
-      error = function(e) FALSE
+      error = function(e) conditionMessage(e)
     )
-    eval_ok[i] <- ok
   }
 
   setNames(
     lapply(
       seq_along(sects$ids),
-      function(i) sect_output_html(sects, env, i, eval_ok[i])
+      function(i) sect_output_html(sects, env, i, eval_err[i])
     ),
     sects$ids
   )
@@ -908,7 +913,7 @@ outline_output_map <- function(sects) {
 # One block's Output-mode body. A reported, evaluated block resolves its
 # output expression in `env` and renders the result; everything else is a
 # muted note (the offchip already states WHY a block is excluded).
-sect_output_html <- function(sects, env, i, eval_ok = TRUE) {
+sect_output_html <- function(sects, env, i, eval_err = NA_character_) {
 
   if (isTRUE(sects$pending[i])) {
     return(div(class = "blockr-otl-pending", "Evaluating\u2026"))
@@ -918,20 +923,65 @@ sect_output_html <- function(sects, env, i, eval_ok = TRUE) {
     return("")
   }
 
-  if (!isTRUE(eval_ok)) {
-    return(div(class = "blockr-otl-outnote", "Could not evaluate this block"))
+  if (!is.na(eval_err)) {
+    return(outnote("Could not evaluate this block", eval_err))
   }
 
-  exhibit <- tryCatch(
-    eval(parse(text = sect_output(sects, i)), envir = env),
-    error = function(e) NULL
+  # Two distinct failures, told apart: the transform ran but produced
+  # nothing, or the EXHIBIT call (report_call / static_table wrapper) threw
+  # -- a chart whose mapping names a column the data no longer has lands
+  # here, and "No output" would read as an empty block.
+  err <- NULL
+  warn <- character()
+
+  exhibit <- withCallingHandlers(
+    tryCatch(
+      eval(parse(text = sect_output(sects, i)), envir = env),
+      error = function(e) {
+        err <<- conditionMessage(e)
+        NULL
+      }
+    ),
+    # A renderer that DEGRADES rather than fails is the quieter half of the
+    # problem: static_chart() warns and hands back the chart's data when it
+    # cannot draw the requested type from the block's state, so the preview
+    # shows a table where a chart belongs and nothing says why. Carry the
+    # warning under the exhibit.
+    warning = function(w) {
+      warn <<- c(warn, conditionMessage(w))
+      invokeRestart("muffleWarning")
+    }
   )
+
+  if (!is.null(err)) {
+    return(outnote("Could not render this exhibit", err))
+  }
 
   if (is.null(exhibit)) {
     return(div(class = "blockr-otl-outnote", "No output"))
   }
 
-  div(class = "blockr-otl-exhibit", exhibit_html(exhibit))
+  div(
+    class = "blockr-otl-exhibit",
+    exhibit_html(exhibit),
+    if (length(warn)) {
+      div(class = "blockr-otl-outnote",
+          tags$div(class = "blockr-otl-outerr",
+                   paste(unique(warn), collapse = "\n")))
+    }
+  )
+}
+
+# A preview failure note: the headline plus the R condition verbatim. The
+# message is the whole point (see eval_err in outline_output_map), so it is
+# shown, not logged -- the outline commonly runs on a deployment where
+# nobody can read the console.
+outnote <- function(headline, msg) {
+  div(
+    class = "blockr-otl-outnote",
+    headline,
+    tags$div(class = "blockr-otl-outerr", msg)
+  )
 }
 
 # Render one exhibit object to inline HTML tags. Mirrors place_exhibit()'s

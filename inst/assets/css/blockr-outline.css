@@ -527,6 +527,16 @@
   color: var(--bs-secondary-color, #6c757d);
   opacity: 0.75;
 }
+/* The R condition under the note's headline. Monospaced and wrapped: it is
+   an error message, often naming an upstream variable that never bound. */
+.blockr-otl-outerr {
+  margin-top: 0.2rem;
+  font-family: var(--bs-font-monospace, monospace);
+  font-style: normal;
+  font-size: 0.75rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 
 /* Gear + settings band (blockr.viz / blockr.dplyr settings-band pattern):
    the gear sits at the toolbar's right edge; clicking it expands a
