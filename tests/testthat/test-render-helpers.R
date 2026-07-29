@@ -404,3 +404,37 @@ test_that("a block still building is reported as such downstream", {
 
   expect_match(html, "upstream block 'up' has not finished building")
 })
+
+test_that("a block dropped from the projection is named too", {
+
+  # Second way an id goes missing: `data` reports no expression this flush,
+  # so outline_sections() drops it entirely -- no row, no code, no section --
+  # while the chart's chunk still names it. Only the BOARD still knows the
+  # id, so the preview has to be told about it or the name falls through to
+  # utils::data.
+  board <- blockr.core::new_board(
+    blocks = c(
+      data = blockr.core::new_dataset_block("iris"),
+      leaf = blockr.core::new_head_block()
+    ),
+    links = blockr.core::links(from = "data", to = "leaf")
+  )
+
+  exprs <- structure(list(leaf = quote(dplyr::filter(data, TRUE))),
+                     pending = character())
+
+  s <- outline_sections(
+    exprs, board,
+    annotations = list(data = list(report = FALSE), leaf = list(report = TRUE)),
+    stack_annotations = list()
+  )
+
+  expect_identical(s$ids, "leaf")
+
+  html <- as.character(
+    outline_output_map(s, blockr.core::board_block_ids(board))[["leaf"]]
+  )
+
+  expect_match(html, "upstream block 'data' is not reporting any code")
+  expect_no_match(html, "applied to an object of class")
+})

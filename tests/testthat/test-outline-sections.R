@@ -192,3 +192,17 @@ test_that("desc_oneline collapses whitespace and drops markdown", {
   expect_identical(desc_oneline(""), "")
   expect_identical(desc_oneline("  a  \n\n  *b*  "), "a b")
 })
+
+test_that("dropping a block from an UNSTACKED board still projects", {
+
+  # The narrowing rebuilds the board from blocks + links + stacks. An
+  # unstacked board narrows to no stacks, and new_board() rejects a NULL
+  # there, which aborted the whole projection: the freeze this narrowing
+  # exists to prevent.
+  s <- outline_sections(
+    otl_exprs(keep = c("data", "sub")), otl_board(stacks = FALSE), otl_ann()
+  )
+
+  expect_identical(s$ids, c("data", "sub"))
+  expect_true(all(is.na(s$stack_ids)))
+})

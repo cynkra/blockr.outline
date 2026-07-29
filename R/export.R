@@ -204,7 +204,14 @@ outline_sections <- function(expressions, board, annotations,
     board <- blockr.core::new_board(
       blocks = blockr.core::board_blocks(board)[known],
       links = lnks[lnks$from %in% known & lnks$to %in% known],
-      stacks = if (length(narrowed)) do.call(blockr.core::stacks, narrowed)
+      # An UNSTACKED board narrows to no stacks, and new_board() rejects a
+      # NULL there (as_stacks() has no NULL method), which aborted the whole
+      # projection -- the very freeze this narrowing exists to prevent.
+      stacks = if (length(narrowed)) {
+        do.call(blockr.core::stacks, narrowed)
+      } else {
+        blockr.core::stacks()
+      }
     )
   }
 

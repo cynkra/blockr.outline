@@ -880,9 +880,9 @@ render_pptx_officer <- function(sects, file, title, template = NULL) {
 # Returns TAG objects (not html strings) so a flextable's own htmlwidget
 # dependency rides along through renderUI; a stringified table would lose
 # its styling. The map is keyed by block id, mirroring outline_code_map().
-outline_output_map <- function(sects) {
+outline_output_map <- function(sects, board_ids = character()) {
 
-  env <- eval_env(sects)
+  env <- eval_env(sects, board_ids)
   # NA = evaluated cleanly; a string = the error that stopped this block.
   # Kept rather than a bare flag because the failure is almost never in the
   # block you are looking at: an ANCESTOR outside the report (its own row is
@@ -998,7 +998,13 @@ sect_output_html <- function(sects, env, i, eval_err = NA_character_) {
 # A local binding always beats the search path, so seeding every id closes
 # the hole for good: reading an unevaluated block reports the block. Each
 # successful chunk overwrites its own promise with the real value.
-eval_env <- function(sects) {
+#
+# `board_ids` covers the second way an id goes missing: a block whose
+# expression is NULL this flush is DROPPED from the projection altogether
+# (see the narrowing in outline_sections), while its dependents' chunks
+# still name it. It has no row, no code and no section, so seeding
+# sects$ids alone leaves that name to the search path.
+eval_env <- function(sects, board_ids = character()) {
 
   env <- new.env(parent = globalenv())
 
@@ -1013,6 +1019,10 @@ eval_env <- function(sects) {
         "did not evaluate"
       }
     )
+  }
+
+  for (id in setdiff(board_ids, sects$ids)) {
+    seed_unbound(env, id, "is not reporting any code right now")
   }
 
   env

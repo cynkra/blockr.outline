@@ -919,7 +919,12 @@ outline_ext_srv <- function(annotations, block_order, title,
         # and exhibits are heavier and change less often anyway).
         output_map <- reactive({
           req(identical(coal(input$otl_body, "code"), "output"))
-          outline_output_map(sections())
+          # Board ids, not just the projected ones: a block that reports no
+          # expression is dropped from the projection, and only the board
+          # still knows its id (see eval_env).
+          outline_output_map(
+            sections(), blockr.core::board_block_ids(board$board)
+          )
         })
 
         # The report title heads the column, above the search. Kept out of
