@@ -61,19 +61,12 @@ test_that("quarto_usable reflects quarto availability", {
   expect_false(quarto_usable())
 })
 
-test_that("report_pdf_available is TRUE when a latex engine is on PATH", {
-  local_mocked_bindings(
-    Sys.which = function(x) c(pdflatex = "/usr/bin/pdflatex")[x],
-    .package = "base"
-  )
-  expect_true(report_pdf_available())
-
-  local_mocked_bindings(
-    Sys.which = function(x) setNames("", x),
-    requireNamespace = function(pkg, ...) FALSE,
-    .package = "base"
-  )
-  expect_false(report_pdf_available())
+test_that("only formats that render are offered", {
+  # Not a tautology: pdf was offered off a PATH probe for a toolchain quarto
+  # does not use, so it reached users as a download that failed. Whatever is
+  # in here is a promise the deployment has to keep.
+  expect_equal(report_formats(), c("html", "pptx"))
+  expect_false("pdf" %in% report_formats())
 })
 
 test_that("template_content_width reads the body placeholder, falls back safely", {

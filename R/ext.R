@@ -74,7 +74,7 @@ new_outline_extension <- function(annotations = list(),
     name = "Outline",
     description = paste(
       "Report outline of the board: per-block markdown descriptions,",
-      "include-in-report flags, document order, and html/pptx/pdf render",
+      "include-in-report flags, document order, and html/pptx render",
       "of the generated report."
     ),
     class = "outline_extension",
@@ -86,15 +86,7 @@ outline_ext_ui <- function(id, board, ...) {
 
   ns <- NS(id)
 
-  formats <- c("html", "pptx")
-
-  # Logged here, where the decision is made, and only the first time: the
-  # answer is a property of the machine, not of the session.
-  log_pdf_capability()
-
-  if (report_pdf_available()) {
-    formats <- c(formats, "pdf")
-  }
+  formats <- report_formats()
 
   div(
     class = "blockr-otl-panel",
@@ -179,7 +171,10 @@ outline_ext_ui <- function(id, board, ...) {
             ns("code_render_format"),
             label = NULL,
             choices = formats,
-            selected = "html",
+            # The deck is what this is used for: a board's exhibits are sized,
+            # placed and styled for slides. html is the one you take when you
+            # do not want a deck.
+            selected = "pptx",
             selectize = FALSE,
             width = "88px"
           ),

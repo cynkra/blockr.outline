@@ -1,58 +1,19 @@
-report_pdf_available <- function() {
-  nzchar(Sys.which("pdflatex")) ||
-    nzchar(Sys.which("xelatex")) ||
-    (requireNamespace("tinytex", quietly = TRUE) && tinytex::is_tinytex())
-}
-
-# Why the pdf option is or is not offered, written to the log once per process.
+# Formats the outline offers to download. html and pptx, and nothing else
+# until one is shown to work on the deployment that matters.
 #
-# The check above and the renderer disagree about what "pdf available" means:
-# it looks for pdflatex / xelatex / R's tinytex, while quarto renders with
-# lualatex by default and resolves TeX its own way. So the option can be
-# offered on a machine where quarto can never produce a PDF -- which looks,
-# from the outside, exactly like a broken download.
+# pdf USED to be offered whenever pdflatex / xelatex / R's tinytex was on the
+# PATH. That probe was wrong in the only place it mattered: quarto renders
+# with lualatex by default and resolves TeX its own way, so the option could
+# be offered on a machine where quarto can never produce a PDF -- which
+# presents, from the browser, as a download that simply fails. Offering a
+# format is a promise; this one could not be kept, and a probe that guesses at
+# another program's toolchain was never going to keep it.
 #
-# This exists because the deployment that matters is usually one nobody can
-# open a shell on. Everything here is a PATH lookup and a version string: no
-# render, nothing that can fail, and it prints where a Connect log will show
-# it. The definitive answer is still an attempted render, but when the line
-# reads "pdflatex: yes, lualatex: no" it has already been given.
-pdf_capability_logged <- new.env(parent = emptyenv())
-
-log_pdf_capability <- function() {
-
-  if (!is.null(pdf_capability_logged$done)) {
-    return(invisible(NULL))
-  }
-  pdf_capability_logged$done <- TRUE
-
-  yn <- function(x) if (nzchar(x)) x else "no"
-
-  engines <- vapply(
-    c("pdflatex", "xelatex", "lualatex", "tectonic"),
-    function(e) yn(Sys.which(e)),
-    character(1L)
-  )
-
-  tt <- requireNamespace("tinytex", quietly = TRUE) && tinytex::is_tinytex()
-
-  quarto <- if (quarto_usable()) {
-    coal(tryCatch(as.character(quarto::quarto_version()),
-                  error = function(e) NULL), "yes")
-  } else {
-    "no"
-  }
-
-  cat(
-    "[pdf] offered: ", report_pdf_available(),
-    " | ", paste(names(engines), engines, sep = ": ", collapse = "  "),
-    " | R tinytex: ", tt,
-    " | quarto: ", quarto,
-    "\n",
-    sep = "", file = stderr()
-  )
-
-  invisible(NULL)
+# The render path itself stays format-generic (render_report() takes `fmt`, and
+# quarto is told the format on the command line), so restoring pdf is adding it
+# to this vector -- once a deployment can be shown to render one.
+report_formats <- function() {
+  c("html", "pptx")
 }
 
 quarto_usable <- function() {
