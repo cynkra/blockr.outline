@@ -901,11 +901,13 @@ outline_output_map <- function(sects, board_ids = character()) {
         NA_character_
       },
       error = function(e) {
+        msg <- with_unbound(conditionMessage(e),
+                            sect_export_code(sects, i), env)
         # Re-poison: the id stays unbound, so say WHY when a dependent
         # touches it, rather than letting it fall through to the search
         # path (see eval_env).
-        seed_failed(env, sects$ids[i], conditionMessage(e))
-        conditionMessage(e)
+        seed_failed(env, sects$ids[i], msg)
+        msg
       }
     )
   }
@@ -1026,6 +1028,43 @@ eval_env <- function(sects, board_ids = character()) {
   }
 
   env
+}
+
+# The failing chunk's own error, plus the names it reads that hold no value
+# here. Seeding covers every id the projection or the board knows; a chunk
+# can still name something NEITHER knows -- a removed block, a slot name
+# that was never substituted -- and such a name resolves up the search path
+# to whatever function happens to share it. The resulting message ("no
+# applicable method for 'filter' applied to an object of class function")
+# names nothing at all, so list the candidates alongside it.
+#
+# Only names that are absent or resolve to a FUNCTION are listed: a data
+# frame or a pronoun reached from globalenv() is not the failure mode. NSE
+# symbols (column names in a dplyr verb) can land in the list; on a chunk
+# that already failed, a short over-broad list beats none.
+with_unbound <- function(msg, code, env) {
+
+  free <- tryCatch(all.vars(parse(text = code)), error = function(e) NULL)
+
+  # ls(env) holds every seeded id, so anything left is a name no seed
+  # covers. Never get0() a seeded id: forcing the promise re-throws.
+  free <- setdiff(free, ls(env, all.names = TRUE))
+
+  loose <- Filter(
+    function(v) {
+      val <- get0(v, envir = env, ifnotfound = NULL)
+      is.null(val) || is.function(val)
+    },
+    free
+  )
+
+  if (!length(loose)) {
+    return(msg)
+  }
+
+  paste0(msg, "\n(this chunk reads ",
+         paste0("`", utils::head(loose, 5L), "`", collapse = ", "),
+         ", which no block on the board binds)")
 }
 
 # One unbound block id, as a promise that stops with `why` when forced.

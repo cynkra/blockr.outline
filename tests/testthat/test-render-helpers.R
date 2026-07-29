@@ -438,3 +438,40 @@ test_that("a block dropped from the projection is named too", {
   expect_match(html, "upstream block 'data' is not reporting any code")
   expect_no_match(html, "applied to an object of class")
 })
+
+test_that("a name no block binds is listed next to the error", {
+
+  # Third way, and the one no seeding can cover: the chunk names something
+  # NEITHER the projection nor the board knows (a removed block, a slot name
+  # that was never substituted). `data` then resolves to utils::data and the
+  # error names nothing.
+  board <- blockr.core::new_board(
+    blocks = c(leaf = blockr.core::new_head_block())
+  )
+
+  s <- outline_sections(
+    structure(list(leaf = quote(dplyr::filter(data, TRUE))),
+              pending = character()),
+    board,
+    annotations = list(leaf = list(report = TRUE)),
+    stack_annotations = list()
+  )
+
+  html <- as.character(
+    outline_output_map(s, blockr.core::board_block_ids(board))[["leaf"]]
+  )
+
+  expect_match(html, "no block on the board binds")
+  expect_match(html, "`data`")
+})
+
+test_that("a healthy chunk gets no unbound-name noise", {
+
+  s <- list(ids = "a", pending = FALSE, exported = TRUE, report = TRUE,
+            code = "a <- datasets::iris", report_calls = "", renderers = "")
+
+  html <- as.character(outline_output_map(s, "a")[["a"]])
+
+  expect_match(html, "blockr-otl-exhibit")
+  expect_no_match(html, "no block on the board binds")
+})
