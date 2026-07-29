@@ -905,6 +905,13 @@ outline_output_map <- function(sects, board_ids = character(), links = NULL) {
   # a variable, not a block.
   notes <- vector("list", length(sects$ids))
 
+  # What each id ended up holding, filled in as chunks succeed. A failing
+  # chunk reports the CLASS of every name it reads, which is the one fact no
+  # amount of message-wording gets at: an upstream that evaluated to
+  # something unusable (a function, NULL) looks identical, from the error,
+  # to one that never ran at all.
+  held <- character()
+
   for (i in seq_along(sects$ids)) {
     if (isTRUE(sects$pending[i]) || !isTRUE(sects$exported[i])) {
       next
@@ -912,11 +919,15 @@ outline_output_map <- function(sects, board_ids = character(), links = NULL) {
     note <- tryCatch(
       {
         eval(parse(text = sect_export_code(sects, i)), envir = env)
+        held[[sects$ids[i]]] <- paste(
+          class(get0(sects$ids[i], envir = env, ifnotfound = NULL)),
+          collapse = "/"
+        )
         NULL
       },
       error = function(e) {
         note <- diagnose_chunk(conditionMessage(e),
-                               sect_export_code(sects, i), env, fed[i])
+                               sect_export_code(sects, i), env, fed[i], held)
         # Re-poison: the id stays unbound, so say WHY when a dependent
         # touches it, rather than letting it fall through to the search
         # path (see eval_env).
@@ -1068,9 +1079,31 @@ eval_env <- function(sects, board_ids = character()) {
 #   everything else          the chunk's own error, with any loose names
 #                            listed: a removed block still named by a
 #                            dependent lands here.
-diagnose_chunk <- function(msg, code, env, fed = NA) {
+diagnose_chunk <- function(msg, code, env, fed = NA, held = character()) {
 
   loose <- loose_names(code, env)
+  reads <- chunk_reads(code, held)
+  msg <- paste0(msg, reads_line(reads))
+
+  # An upstream that holds a FUNCTION is not a strange coincidence, it is
+  # this same bug one hop up: a pass-through block with nothing connected
+  # evaluates its own input slot (`id <- data`), binds utils::data, and
+  # SUCCEEDS. It gets no note of its own -- it did not fail -- so the first
+  # visible symptom is here, in a dependent, as an error about a function
+  # nobody wrote. Name the block that actually needs rewiring.
+  fns <- names(reads)[reads == "function"]
+
+  if (length(fns)) {
+    return(list(
+      head = "An upstream block produced a function, not data",
+      msg = paste0(
+        fmt_names(fns), " holds a function, which is what a block reads ",
+        "when nothing is connected to it: its own code fell through to a ",
+        "function of the same name. Check what feeds ", fmt_names(fns),
+        ".\n", msg
+      )
+    ))
+  }
 
   if (length(loose) && isFALSE(fed)) {
     return(list(
@@ -1096,6 +1129,35 @@ diagnose_chunk <- function(msg, code, env, fed = NA) {
       msg
     }
   )
+}
+
+# What the block ids a chunk reads actually hold, once its own assignment
+# target is dropped. "hxjsagdg = function" ends an argument that no wording
+# can settle: a block that evaluated to something unusable and a block that
+# never ran produce the same downstream error, and only the class tells them
+# apart. Empty when the chunk reads no id that has a value yet, which is
+# itself the answer.
+chunk_reads <- function(code, held) {
+
+  free <- tryCatch(all.vars(parse(text = code)), error = function(e) NULL)
+
+  # The target is assigned BY this chunk, so it is not something it reads.
+  tgt <- tryCatch(all.vars(parse(text = code)[[1L]][[2L]]),
+                  error = function(e) NULL)
+
+  held[intersect(setdiff(free, tgt), names(held))]
+}
+
+reads_line <- function(reads) {
+
+  if (!length(reads)) {
+    return("")
+  }
+
+  reads <- utils::head(reads, 5L)
+
+  paste0("\nreads ",
+         paste0(names(reads), " = ", reads, collapse = ", "))
 }
 
 # The names a chunk reads that hold no value here. Seeding covers every id

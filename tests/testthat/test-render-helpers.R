@@ -552,3 +552,51 @@ test_that("a failure note carries the version that wrote it", {
   expect_match(html, "blockr-otl-outver")
   expect_match(html, paste("blockr.outline", pkg_version()), fixed = TRUE)
 })
+
+test_that("an upstream holding a function accuses the upstream, not the leaf", {
+
+  # The shape that survived three rounds of diagnosis: a pass-through block
+  # with nothing connected evaluates its own input slot, binds utils::data
+  # and SUCCEEDS, so it never gets a note. The first visible symptom is a
+  # dependent failing with an error about a function nobody wrote.
+  board <- blockr.core::new_board(
+    blocks = c(
+      up = blockr.core::new_dataset_block("iris"),
+      leaf = blockr.core::new_head_block()
+    ),
+    links = blockr.core::links(from = "up", to = "leaf")
+  )
+
+  s <- outline_sections(
+    structure(list(up = quote(base::sum),
+                   leaf = quote(dplyr::filter(up, TRUE))),
+              pending = character()),
+    board,
+    annotations = list(up = list(report = FALSE), leaf = list(report = TRUE)),
+    stack_annotations = list()
+  )
+
+  html <- as.character(
+    outline_output_map(
+      s, blockr.core::board_block_ids(board), blockr.core::board_links(board)
+    )[["leaf"]]
+  )
+
+  expect_match(html, "An upstream block produced a function, not data")
+  expect_match(html, "Check what feeds `up`")
+  # The class of every id the chunk reads: the fact that settles it.
+  expect_match(html, "reads up = function")
+})
+
+test_that("a healthy chunk reads no failure line", {
+
+  s <- list(ids = c("up", "leaf"), pending = c(FALSE, FALSE),
+            exported = c(TRUE, TRUE), report = c(FALSE, TRUE),
+            code = c("up <- datasets::iris", "leaf <- utils::head(up, 2)"),
+            report_calls = c("", ""), renderers = c("", ""))
+
+  html <- as.character(outline_output_map(s, c("up", "leaf"))[["leaf"]])
+
+  expect_match(html, "blockr-otl-exhibit")
+  expect_no_match(html, "reads up")
+})
