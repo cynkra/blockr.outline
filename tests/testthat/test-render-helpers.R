@@ -322,9 +322,10 @@ test_that("the Output preview names the error that stopped a block", {
   html <- as.character(outline_output_map(s)[["leaf"]])
 
   expect_match(html, "Could not evaluate this block")
-  # The block downstream of the failure reports the MISSING BINDING, not the
-  # ancestor's own message -- which is the trail back to the real culprit.
-  expect_match(html, "object 'mid' not found")
+  # Two blocks downstream of the failure, and it still names the ROOT block
+  # and the root message: the trail is not re-wrapped at every hop.
+  expect_match(html, "upstream block 'src'")
+  expect_match(html, "pin not found")
 })
 
 test_that("an exhibit call that throws is told apart from no output", {
@@ -354,4 +355,52 @@ test_that("a renderer that degrades instead of failing says so", {
 
   expect_match(html, "blockr-otl-exhibit")
   expect_match(html, "cannot draw scatter")
+})
+
+test_that("an unevaluated ancestor is named, not shadowed by a base function", {
+
+  # The eval env chains to globalenv(), so a block id that names a base
+  # function ("data" here) used to resolve to THAT function when the block
+  # never bound: the dependent then failed with "no applicable method for
+  # 'filter' applied to an object of class \"function\"", naming neither the
+  # block nor the cause. The seeded promise wins over the search path.
+  board <- blockr.core::new_board(
+    blocks = c(
+      data = blockr.core::new_dataset_block("iris"),
+      leaf = blockr.core::new_head_block()
+    ),
+    links = blockr.core::links(from = "data", to = "leaf")
+  )
+
+  exprs <- structure(
+    list(data = quote(stop("pin not found")),
+         leaf = quote(dplyr::filter(data, TRUE))),
+    pending = character()
+  )
+
+  s <- outline_sections(
+    exprs, board,
+    annotations = list(data = list(report = FALSE), leaf = list(report = TRUE)),
+    stack_annotations = list()
+  )
+
+  html <- as.character(outline_output_map(s)[["leaf"]])
+
+  expect_match(html, "upstream block 'data'")
+  expect_match(html, "pin not found")
+  expect_no_match(html, "applied to an object of class")
+})
+
+test_that("a block still building is reported as such downstream", {
+
+  s <- list(
+    ids = c("up", "down"), pending = c(TRUE, FALSE),
+    exported = c(TRUE, TRUE), report = c(FALSE, TRUE),
+    code = c("# up: waiting", "down <- utils::head(up, 3)"),
+    report_calls = c("", ""), renderers = c("", "")
+  )
+
+  html <- as.character(outline_output_map(s)[["down"]])
+
+  expect_match(html, "upstream block 'up' has not finished building")
 })

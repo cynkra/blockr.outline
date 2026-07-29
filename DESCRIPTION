@@ -1,6 +1,6 @@
 Package: blockr.outline
 Title: Board Outline, Code and Report Extension for 'blockr'
-Version: 0.0.83
+Version: 0.0.84
 Authors@R:
     c(person(given = "Christoph",
              family = "Sax",

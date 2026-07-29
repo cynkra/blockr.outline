@@ -773,13 +773,16 @@ render_pptx_officer <- function(sects, file, title, template = NULL) {
   # to resolve it, which surfaces as a render error rather than a silent
   # blank -- correct, since the deck cannot show an exhibit whose inputs
   # never evaluated.
-  env <- new.env(parent = globalenv())
+  env <- eval_env(sects)
   for (i in seq_along(sects$ids)) {
     if (isTRUE(sects$pending[i])) next
     code <- sect_export_code(sects, i)
     tryCatch(
       eval(parse(text = code), envir = env),
-      error = function(e) render_err(e)
+      error = function(e) {
+        seed_failed(env, sects$ids[i], conditionMessage(e))
+        render_err(e)
+      }
     )
   }
 
@@ -879,12 +882,12 @@ render_pptx_officer <- function(sects, file, title, template = NULL) {
 # its styling. The map is keyed by block id, mirroring outline_code_map().
 outline_output_map <- function(sects) {
 
-  env <- new.env(parent = globalenv())
+  env <- eval_env(sects)
   # NA = evaluated cleanly; a string = the error that stopped this block.
   # Kept rather than a bare flag because the failure is almost never in the
   # block you are looking at: an ANCESTOR outside the report (its own row is
   # not even listed) throws, its variable never binds, and every dependent
-  # dies with "object 'xyz' not found". Without the message the preview
+  # dies naming a variable, not a block. Without the message the preview
   # blames the wrong block and says nothing usable.
   eval_err <- rep(NA_character_, length(sects$ids))
 
@@ -897,7 +900,13 @@ outline_output_map <- function(sects) {
         eval(parse(text = sect_export_code(sects, i)), envir = env)
         NA_character_
       },
-      error = function(e) conditionMessage(e)
+      error = function(e) {
+        # Re-poison: the id stays unbound, so say WHY when a dependent
+        # touches it, rather than letting it fall through to the search
+        # path (see eval_env).
+        seed_failed(env, sects$ids[i], conditionMessage(e))
+        conditionMessage(e)
+      }
     )
   }
 
@@ -970,6 +979,75 @@ sect_output_html <- function(sects, env, i, eval_err = NA_character_) {
                    paste(unique(warn), collapse = "\n")))
     }
   )
+}
+
+# The environment every block's chunk evaluates in, with each block id
+# pre-bound to a promise that ERRORS when something reads it.
+#
+# The env chains to globalenv() -- it must, the code calls package
+# functions -- so an id that never binds resolves UP THE SEARCH PATH
+# instead of failing. A block called `data`, `filter` or `sub` silently
+# becomes the base function of that name, and its dependent dies with
+# "no applicable method for 'filter' applied to an object of class
+# \"function\"": an error that names neither the block that never ran nor
+# anything a user could act on. (Ids are usually random strings, where the
+# same hole reads as the more honest "object 'xyz' not found" -- but a
+# board that names its source block `data` is the normal case, not a
+# corner one.)
+#
+# A local binding always beats the search path, so seeding every id closes
+# the hole for good: reading an unevaluated block reports the block. Each
+# successful chunk overwrites its own promise with the real value.
+eval_env <- function(sects) {
+
+  env <- new.env(parent = globalenv())
+
+  for (i in seq_along(sects$ids)) {
+    seed_unbound(
+      env, sects$ids[i],
+      if (isTRUE(sects$pending[i])) {
+        "has not finished building yet"
+      } else if (!isTRUE(sects$exported[i])) {
+        "is not part of the report"
+      } else {
+        "did not evaluate"
+      }
+    )
+  }
+
+  env
+}
+
+# One unbound block id, as a promise that stops with `why` when forced.
+seed_unbound <- function(env, id, why) {
+  poison(env, id, paste0("upstream block '", id, "' ", why))
+}
+
+# The failure a block hands its dependents. A message that ALREADY names an
+# upstream block passes through untouched: down a four-block chain, nesting
+# one inside the next would bury the root cause under three wrappers, and
+# the root is the only thing to act on.
+seed_failed <- function(env, id, msg) {
+  poison(
+    env, id,
+    if (grepl("^upstream block '", msg)) {
+      msg
+    } else {
+      paste0("upstream block '", id, "' failed to evaluate: ", msg)
+    }
+  )
+}
+
+poison <- function(env, id, msg) {
+  # force() before the promise: `msg` is itself a promise reaching back into
+  # the caller's loop frame, and the binding below is only read LATER -- by
+  # which time the loop variable has moved on and every block would report
+  # the last one's reason.
+  force(id)
+  force(msg)
+  delayedAssign(id, stop(msg, call. = FALSE), eval.env = environment(),
+                assign.env = env)
+  invisible(NULL)
 }
 
 # A preview failure note: the headline plus the R condition verbatim. The
