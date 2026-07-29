@@ -32,3 +32,24 @@ otl_dock_board <- function() {
 otl_board_args <- function(board = otl_dock_board()) {
   blockr.core::generate_plugin_args(board, mode = "read")[["board"]]
 }
+
+# A visibility bundle the way core builds it: one reactiveVal slot per
+# block, NA = built-but-undeclared. Shared by the download and the Output
+# preview demand tests.
+fake_visibility <- function(ids) {
+  slots <- new.env(parent = emptyenv())
+  for (id in ids) {
+    slots[[id]] <- shiny::reactiveVal(NA)
+  }
+  list(required = slots)
+}
+
+# Board args with `plot` pending: its expr reactive reports nothing, the
+# way an unconstructed / not-yet-reporting block does.
+pending_plot_board <- function() {
+  b <- otl_board_args()
+  isolate(
+    b$blocks[["plot"]]$server$expr <- reactive(req(FALSE))
+  )
+  b
+}

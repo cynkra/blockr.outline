@@ -244,7 +244,7 @@ outline_ext_ui <- function(id, board, ...) {
         tags$input(
           type = "text",
           class = "blockr-otl-searchinput",
-          placeholder = "Filter blocks…",
+          placeholder = "Filter blocks\u2026",
           autocomplete = "off",
           spellcheck = "false"
         ),
@@ -300,6 +300,26 @@ outline_settings_band <- function(ns) {
                       "Heading 2 (##)" = "##", "Heading 3 (###)" = "###",
                       "None" = "none"),
           selected = "caption", selectize = FALSE, width = "100%"
+        )
+      )
+    ),
+
+    div(class = "blockr-settings__title", "Outline"),
+    div(
+      class = "blockr-settings__grid",
+      div(
+        class = "blockr-settings__field blockr-settings__field--full",
+        checkboxInput(
+          ns("otl_show_all"),
+          "Show code for every block",
+          value = FALSE
+        ),
+        div(
+          class = "blockr-settings__hint",
+          paste(
+            "By default only blocks open in the current view show their",
+            "code; the rest condense to title and description."
+          )
         )
       )
     ),
@@ -685,6 +705,51 @@ outline_ext_srv <- function(annotations, block_order, title,
           )
         }
 
+        # Which blocks are ACTIVE in the outline: the ones whose panel is a
+        # member of the active dock view. Activation is expressed as view
+        # membership -- the same thing a dag-node click commits -- so the
+        # dock stays the single writer of core's `required` channel and an
+        # activated block is evaluated exactly like any other block of the
+        # view (upstream closure riding along). Membership, NOT the front
+        # tab: front flips on every tab click inside a view, which must not
+        # churn the outline's skeleton; a member parked behind a tab keeps
+        # its last-reported code from expr_cache. NULL means "no gating"
+        # (not a dock board, or views unreadable) and degrades to the old
+        # show-everything behaviour.
+        view_active_ids <- reactive(
+          {
+            brd <- board$board
+
+            views <- tryCatch(
+              blockr.dock::board_views(brd),
+              error = function(e) NULL
+            )
+
+            if (is.null(views) || !length(views)) {
+              return(NULL)
+            }
+
+            view <- tryCatch(
+              blockr.dock::active_view(views),
+              error = function(e) NULL
+            )
+
+            if (is.null(view) || !view %in% names(views)) {
+              return(NULL)
+            }
+
+            members <- blockr.dock::view_members(views[[view]])
+            ids <- blockr.core::board_block_ids(brd)
+
+            pids <- chr_ply(
+              ids,
+              function(i) as.character(blockr.dock::as_block_panel_id(i))
+            )
+
+            ids[pids %in% members]
+          }
+        )
+
         # Split the projection into the structural skeleton and the
         # per-block code markup, each with its own identical-skip store.
         # Editing a block value (a row count, say) changes only the code,
@@ -701,6 +766,24 @@ outline_ext_srv <- function(annotations, block_order, title,
 
             skel <- full
             skel$code <- NULL
+
+            # Dormant-by-default: a block outside the active view condenses
+            # to title + description and carries no code cell. `active`
+            # rides in the SKELETON so activation (the views-delta a row
+            # click commits) redraws exactly the rows it changes -- which
+            # also means the identical-skip for pure views-deltas no longer
+            # holds by construction, the identical() below decides.
+            # `gated` gates the hide affordance: without view gating (or
+            # with the show-all override) there is nothing to hide from.
+            shown <- view_active_ids()
+            gated <- !isTRUE(input$otl_show_all) && !is.null(shown)
+
+            skel$active <- if (gated) {
+              skel$ids %in% shown
+            } else {
+              rep(TRUE, length(skel$ids))
+            }
+            skel$gated <- gated
             # Keep `pending` IN the skeleton so a block flipping pending ->
             # code redraws the outline. That redraw is how a deferred board
             # (background_construction_delay = Inf) ever shows real code: the
@@ -718,7 +801,13 @@ outline_ext_srv <- function(annotations, block_order, title,
               skel_store(skel)
             }
 
-            codes <- outline_code_map(full)
+            # Only active blocks get code markup: dormant rows render no
+            # code cell, so highlighting their chunks would be pure waste
+            # -- on a large board that waste is most of the content cost
+            # (the map re-runs on every code change). Activation redraws
+            # the skeleton, and that same flush recomputes this map with
+            # the new block included, so renderUI always finds its cell.
+            codes <- outline_code_map(full, full$ids[skel$active])
 
             if (!identical(codes, isolate(code_store()))) {
               code_store(codes)
@@ -1408,6 +1497,34 @@ outline_ext_srv <- function(annotations, block_order, title,
           }
         )
 
+        # The inverse: take the block's panel OUT of the active view, which
+        # returns its outline row to the condensed dormant state. The block
+        # itself is untouched (and stays constructed -- evaluation idles
+        # through the dock's own view bookkeeping, the outline keeps its
+        # last code from expr_cache).
+        observeEvent(
+          input$outline_hide,
+          {
+            blk_id <- input$outline_hide$id
+            req(is.character(blk_id))
+
+            views <- blockr.dock::board_views(board$board)
+            view <- blockr.dock::active_view(views)
+
+            if (is.null(view)) {
+              return()
+            }
+
+            pid <- as.character(blockr.dock::as_block_panel_id(blk_id))
+
+            if (!pid %in% blockr.dock::view_members(views[[view]])) {
+              return()
+            }
+
+            update(list(views = list(mod = setNames(list(list(rm = pid)), view))))
+          }
+        )
+
         # The action half of the two-stage download (see the UI). On a
         # deferred board (background_construction_delay = Inf) a block no
         # view has shown is never constructed, reports no expression, and
@@ -1421,8 +1538,12 @@ outline_ext_srv <- function(annotations, block_order, title,
         # render runs against complete code. Branches outside the export
         # closure are never constructed, mirroring the app's lazy views.
         #
-        # The demanded slots are snapshotted and RESTORED once the download
-        # fires. The dock overloads the `required` axis as its card build
+        # The Output preview shares this machinery (see the otl_body
+        # observer below): same closure, same demand, no download at the
+        # end.
+        #
+        # The demanded slots are snapshotted and RESTORED once the demand
+        # is served. The dock overloads the `required` axis as its card build
         # ledger (non-NA = card built, see blockr.dock::built_cards), so a
         # TRUE left on a block whose card was never built would make the
         # first visit to its view skip the card build -- a blank panel.
@@ -1430,9 +1551,52 @@ outline_ext_srv <- function(annotations, block_order, title,
         # supports (finite-delay background construction produces it), so
         # putting the prior value back is safe: core keeps the constructed
         # block, the dock keeps an honest ledger.
-        awaiting_render <- reactiveVal(FALSE)
+        # What the demand is FOR: NULL (idle), "download" (fire the file
+        # download once the closure reports) or "output" (the Output
+        # preview asked for the closure; nothing to fire, the output map
+        # recomputes by itself as the expressions arrive).
+        awaiting <- reactiveVal(NULL)
         wait_note <- reactiveVal(NULL)
         demanded <- reactiveVal(list())
+
+        # Demand construction of `pending` through core's visibility
+        # channel, snapshotting each slot's prior value for the restore.
+        # FALSE when there is no channel to demand through (an old
+        # container, or none at all).
+        demand_blocks <- function(pending) {
+
+          slots <- if (!is.null(visibility)) visibility$required
+
+          if (is.null(slots)) {
+            return(FALSE)
+          }
+
+          snap <- demanded()
+
+          for (blk_id in pending) {
+            slot <- slots[[blk_id]]
+            if (is.function(slot)) {
+              # A re-demand while already waiting must keep the ORIGINAL
+              # prior value, not the TRUE of the first demand.
+              if (!blk_id %in% names(snap)) {
+                snap[[blk_id]] <- isolate(slot())
+              }
+              slot(TRUE)
+            }
+          }
+
+          demanded(snap)
+
+          TRUE
+        }
+
+        drop_wait_note <- function() {
+          note <- wait_note()
+          if (!is.null(note)) {
+            removeNotification(note)
+            wait_note(NULL)
+          }
+        }
 
         restore_demanded <- function() {
           snap <- demanded()
@@ -1478,9 +1642,7 @@ outline_ext_srv <- function(annotations, block_order, title,
               return()
             }
 
-            slots <- if (!is.null(visibility)) visibility$required
-
-            if (is.null(slots)) {
+            if (!demand_blocks(pending)) {
               # No channel (an old container, or none at all): blocks can
               # only construct through their views, so say so instead of
               # waiting on something that cannot happen.
@@ -1495,28 +1657,16 @@ outline_ext_srv <- function(annotations, block_order, title,
               return()
             }
 
-            snap <- demanded()
-
-            for (blk_id in pending) {
-              slot <- slots[[blk_id]]
-              if (is.function(slot)) {
-                # A re-click while already waiting must keep the ORIGINAL
-                # prior value, not the TRUE of the first click.
-                if (!blk_id %in% names(snap)) {
-                  snap[[blk_id]] <- isolate(slot())
-                }
-                slot(TRUE)
-              }
-            }
-
-            demanded(snap)
-
-            awaiting_render(TRUE)
+            # "download" unconditionally: a click while an Output-preview
+            # demand is in flight upgrades it -- same closure, and the
+            # user now wants the file.
+            awaiting("download")
+            drop_wait_note()
             wait_note(
               showNotification(
                 sprintf(
                   paste(
-                    "Generating R code for %d block%s… the download",
+                    "Generating R code for %d block%s\u2026 the download",
                     "starts when it is ready."
                   ),
                   length(pending),
@@ -1529,24 +1679,86 @@ outline_ext_srv <- function(annotations, block_order, title,
           }
         )
 
+        # The Output preview's pre-step, the same demand the download runs:
+        # on a deferred board the report closure may contain blocks no view
+        # has constructed, which the output map would skip (and their
+        # dependents would fail to evaluate). Flipping to Output demands
+        # exactly those; the preview fills in as their expressions report,
+        # and the demand is withdrawn once the closure is complete. The
+        # side effect is the point: the preview IS the pre-render check.
+        observeEvent(
+          input$otl_body,
+          {
+            if (!identical(input$otl_body, "output")) {
+
+              # Flipping back to Code cancels a preview-only wait (a
+              # pending download keeps going).
+              if (identical(awaiting(), "output")) {
+                awaiting(NULL)
+                restore_demanded()
+                drop_wait_note()
+              }
+
+              return()
+            }
+
+            sects <- tryCatch(sections(), error = function(e) NULL)
+
+            if (is.null(sects)) {
+              return()
+            }
+
+            pending <- pending_exported(sects)
+
+            if (!length(pending)) {
+              return()
+            }
+
+            if (!demand_blocks(pending)) {
+              showNotification(
+                paste(
+                  "Some report blocks are not initialized yet. Open their",
+                  "views to initialize them and the preview fills in."
+                ),
+                type = "warning",
+                duration = 10
+              )
+              return()
+            }
+
+            if (is.null(awaiting())) {
+              awaiting("output")
+              wait_note(
+                showNotification(
+                  sprintf(
+                    "Evaluating %d report block%s for the preview\u2026",
+                    length(pending),
+                    if (length(pending) == 1L) "" else "s"
+                  ),
+                  duration = NULL,
+                  closeButton = FALSE
+                )
+              )
+            }
+          }
+        )
+
         observe(
           {
-            req(awaiting_render())
+            req(!is.null(awaiting()))
 
             if (length(pending_exported(sections()))) {
               return()
             }
 
-            awaiting_render(FALSE)
+            why <- awaiting()
+            awaiting(NULL)
             restore_demanded()
+            drop_wait_note()
 
-            note <- wait_note()
-            if (!is.null(note)) {
-              removeNotification(note)
-              wait_note(NULL)
+            if (identical(why, "download")) {
+              fire_download()
             }
-
-            fire_download()
           }
         )
 

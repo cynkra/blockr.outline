@@ -1,6 +1,6 @@
 Package: blockr.outline
 Title: Board Outline, Code and Report Extension for 'blockr'
-Version: 0.0.73
+Version: 0.0.74
 Authors@R:
     c(person(given = "Christoph",
              family = "Sax",
@@ -48,6 +48,8 @@ Suggests:
     xml2,
     withr,
     jsonlite,
+    dplyr,
+    zip,
     testthat (>= 3.0.0)
 Config/testthat/edition: 3
 Roxygen: list(markdown = TRUE)

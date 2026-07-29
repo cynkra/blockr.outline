@@ -40,7 +40,8 @@ outline_js <- function(ns) {
       "REN = '%s', RENSTACK = '%s', SAVE = '%s', CANCEL = '%s', ",
       "ADD = '%s', RM = '%s', CHAP = '%s', NEWCHAP = '%s', ",
       "TOSTACK = '%s', MOVECHAP = '%s', GEAR = '%s', SETTINGS = '%s', ",
-      "PANEL = '%s', VISIBLE = '%s', BULK = '%s', RENTITLE = '%s';"
+      "PANEL = '%s', VISIBLE = '%s', BULK = '%s', RENTITLE = '%s', ",
+      "HIDE = '%s';"
     ),
     ns("outline_toggle"),
     ns("outline_open"),
@@ -61,7 +62,8 @@ outline_js <- function(ns) {
     ns("otl_panel"),
     ns("otl_visible"),
     ns("outline_bulk"),
-    ns("outline_rename_title")
+    ns("outline_rename_title"),
+    ns("outline_hide")
   )
 
   tags$script(HTML(paste0(
@@ -669,6 +671,10 @@ outline_js <- function(ns) {
           Shiny.setInputValue(RM, {id: id}, {priority: 'event'});
           return;
         }
+        if (ev.target.closest('.blockr-otl-eyeoff')) {
+          Shiny.setInputValue(HIDE, {id: id}, {priority: 'event'});
+          return;
+        }
         if (ev.target.closest('.blockr-otl-sw')) {
           Shiny.setInputValue(TOGGLE, {
             id: id, report: !row.classList.contains('on')
@@ -749,10 +755,14 @@ sect_code_html <- function(sects, i) {
   )
 }
 
-outline_code_map <- function(sects) {
+# `ids` narrows the map to the blocks that render a code cell (the active
+# ones): dormant rows have no cell to fill, so highlighting their chunks
+# would be pure waste on a large board.
+outline_code_map <- function(sects, ids = sects$ids) {
+  keep <- match(intersect(ids, sects$ids), sects$ids)
   setNames(
-    lapply(seq_along(sects$ids), function(i) sect_code_html(sects, i)),
-    sects$ids
+    lapply(keep, function(i) sect_code_html(sects, i)),
+    sects$ids[keep]
   )
 }
 
@@ -785,6 +795,12 @@ outline_chevron <- function() {
 }
 
 outline_tags <- function(sects, ns, editing = NULL) {
+
+  # Older callers (and the qmd/script exporters' sections) carry no
+  # activation info: everything active, nothing gated -- the pre-dormancy
+  # rendering.
+  active <- coal(sects$active, rep(TRUE, length(sects$ids)))
+  gated <- isTRUE(sects$gated)
 
   accent_of <- function(stk_id) {
     if (is.na(stk_id) || !stk_id %in% names(sects$stack_colors)) {
@@ -824,6 +840,27 @@ outline_tags <- function(sects, ns, editing = NULL) {
       span(class = "blockr-otl-tile", tile),
       span(class = "blockr-otl-rname", sects$names[i]),
       span(class = "blockr-otl-sw"),
+      # Return the row to its condensed state by taking the block's panel
+      # out of the active view (the inverse of the row click). Only on
+      # gated boards -- without view gating there is no dormant state to
+      # return to.
+      if (gated && isTRUE(active[i])) {
+        tags$button(
+          class = "blockr-otl-eyeoff",
+          type = "button",
+          title = "Hide from this view (condenses the row)",
+          HTML(paste0(
+            "<svg viewBox=\"0 0 24 24\" width=\"12\" height=\"12\" ",
+            "fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" ",
+            "stroke-linecap=\"round\" stroke-linejoin=\"round\">",
+            "<path d=\"M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8",
+            "a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4",
+            "c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19\"/>",
+            "<path d=\"M14.12 14.12a3 3 0 1 1-4.24-4.24\"/>",
+            "<line x1=\"1\" y1=\"1\" x2=\"23\" y2=\"23\"/></svg>"
+          ))
+        )
+      },
       tags$button(
         class = "blockr-otl-rm",
         type = "button",
@@ -858,6 +895,56 @@ outline_tags <- function(sects, ns, editing = NULL) {
       return(desc_editor_ui(ns, sects$ids[i], sects$descriptions[i]))
     }
 
+    output_mode <- identical(coal(sects$body_mode, "code"), "output")
+
+    # Dormant: not in the active view, so no code cell, no prose block --
+    # one condensed line of description next to the chip. Clicking the row
+    # opens the block's panel in the view (the standard row click), which
+    # activates it. Output mode is exempt: the preview is the document,
+    # and the document does not care which panels are open.
+    if (!output_mode && !isTRUE(active[i])) {
+      desc <- sects$descriptions[i]
+
+      return(
+        div(
+          class = "blockr-otl-sect blockr-otl-dormant",
+          title = paste(
+            "Click to open this block in the view and show its code;",
+            "double-click to edit the description"
+          ),
+          div(
+            class = "blockr-otl-dormline",
+            if (!sects$report[i]) {
+              span(
+                class = "blockr-otl-offchip",
+                if (isTRUE(sects$exported[i])) {
+                  "include=FALSE \u00b7 runs, not shown"
+                } else {
+                  "not in report \u00b7 not evaluated"
+                }
+              )
+            },
+            span(
+              class = "blockr-otl-dormdesc",
+              if (nzchar(desc)) {
+                # One plain-text line; the markdown structure belongs to
+                # the expanded row.
+                gsub(
+                  "\\s+", " ",
+                  trimws(commonmark::markdown_text(desc, extensions = TRUE))
+                )
+              } else {
+                span(
+                  class = "blockr-otl-placeholder",
+                  "No description"
+                )
+              }
+            )
+          )
+        )
+      )
+    }
+
     # Rendered from the pre-computed map so the initial paint and the
     # incremental push (see the code observer in ext.R) go through the
     # same producer and can never drift apart. Code mode holds an HTML
@@ -865,7 +952,6 @@ outline_tags <- function(sects, ns, editing = NULL) {
     # a tag object, so a flextable's html dependency survives -- render it
     # directly rather than through HTML().
     body <- sects$code_html[[sects$ids[i]]]
-    output_mode <- identical(coal(sects$body_mode, "code"), "output")
     code_tag <- div(
       id = ns(paste0("code-", sects$ids[i])),
       class = if (output_mode) "blockr-otl-codewrap blockr-otl-outwrap" else
@@ -1081,7 +1167,8 @@ outline_tags <- function(sects, ns, editing = NULL) {
       div(
         class = paste(
           "blockr-otl-grow",
-          if (sects$report[i]) "on"
+          if (sects$report[i]) "on",
+          if (!isTRUE(active[i])) "dormant"
         ),
         `data-blk` = sects$ids[i],
         `data-stack` = if (grouped) stk_id,

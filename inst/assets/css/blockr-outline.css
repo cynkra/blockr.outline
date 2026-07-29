@@ -347,6 +347,27 @@
 .blockr-otl-rm:hover { color: var(--blockr-color-danger, #dc2626);
                        background: rgba(220, 53, 69, 0.08); }
 
+/* Hide-from-view button: same hover-revealed chrome as the remove x, but
+   neutral -- it condenses the row, it does not destroy anything. */
+.blockr-otl-eyeoff { display: flex; align-items: center; justify-content: center;
+                     width: 18px; height: 18px; padding: 0; background: none; border: none;
+                     border-radius: 4px; color: var(--blockr-grey-400, #9ca3af); cursor: pointer;
+                     opacity: 0; flex-shrink: 0;
+                     transition: opacity 0.15s ease, color 0.15s ease, background 0.15s ease; }
+.blockr-otl-grow:hover .blockr-otl-eyeoff { opacity: 1; }
+.blockr-otl-eyeoff:hover { color: var(--blockr-grey-700, #374151);
+                           background: var(--blockr-grey-100, #f3f4f6); }
+
+/* Dormant rows: blocks outside the active view condense to one line --
+   title on the chip, description beside it, no code cell. Clicking the
+   row opens the block's panel (the standard row click), which expands it. */
+.blockr-otl-grow.dormant .blockr-otl-sect.blockr-otl-dormant { padding: 4px 10px; }
+.blockr-otl-dormline { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.blockr-otl-dormline .blockr-otl-offchip { margin-bottom: 0; flex-shrink: 0; }
+.blockr-otl-dormdesc { flex: 1; min-width: 0; font-size: 0.8125rem;
+                       color: var(--blockr-grey-500, #6b7280);
+                       white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
 /* section management: chapter actions on hover, chapter as drop target */
 .blockr-otl-chapacts { display: inline-flex; align-items: center; gap: 10px; margin-left: 10px;
                        opacity: 0; transition: opacity 0.12s ease; }

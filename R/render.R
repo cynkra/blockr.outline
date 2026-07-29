@@ -911,7 +911,7 @@ outline_output_map <- function(sects) {
 sect_output_html <- function(sects, env, i, eval_ok = TRUE) {
 
   if (isTRUE(sects$pending[i])) {
-    return(div(class = "blockr-otl-pending", "Evaluating…"))
+    return(div(class = "blockr-otl-pending", "Evaluating\u2026"))
   }
 
   if (!isTRUE(sects$report[i])) {
