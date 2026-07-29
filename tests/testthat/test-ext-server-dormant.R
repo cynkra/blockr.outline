@@ -228,3 +228,110 @@ test_that("outline_code_map narrows to the requested ids", {
   # Unknown ids are dropped, not errors.
   expect_identical(names(outline_code_map(sects, c("b", "zzz"))), "b")
 })
+
+# ---- report-only listing + include picker -----------------------------
+
+test_that("the skeleton lists only reported blocks; the rest are addable", {
+  testServer(
+    outline_ext_srv(
+      list(
+        plot = list(report = FALSE),
+        audit = list(report = FALSE)
+      ),
+      character(), "T"
+    ),
+    {
+      session$flushReact()
+
+      skel <- skel_store()
+      expect_setequal(skel$ids, c("data", "sub"))
+      expect_setequal(unname(skel$addable), c("plot", "audit"))
+
+      # Names label the picker entries.
+      expect_true(all(nzchar(names(skel$addable))))
+
+      # The code map narrows to the listed rows.
+      expect_true(all(names(code_store()) %in% c("data", "sub")))
+
+      # Sections stay FULL: the exporters still see the whole document.
+      expect_setequal(sections_store()$ids, c("data", "sub", "plot", "audit"))
+    },
+    args = list(board = otl_board_args(), update = reactiveVal())
+  )
+})
+
+test_that("picking a block from the pool lists it", {
+  testServer(
+    outline_ext_srv(
+      list(plot = list(report = FALSE)),
+      character(), "T"
+    ),
+    {
+      session$flushReact()
+      expect_false("plot" %in% skel_store()$ids)
+
+      session$setInputs(otl_include = "plot")
+      session$flushReact()
+
+      skel <- skel_store()
+      expect_true("plot" %in% skel$ids)
+      expect_false("plot" %in% skel$addable)
+      expect_true(sections_store()$report[sections_store()$ids == "plot"])
+    },
+    args = list(board = otl_board_args(), update = reactiveVal())
+  )
+})
+
+test_that("show-all restores the full board overview", {
+  testServer(
+    outline_ext_srv(
+      list(plot = list(report = FALSE)),
+      character(), "T"
+    ),
+    {
+      session$flushReact()
+      expect_false("plot" %in% skel_store()$ids)
+
+      session$setInputs(otl_show_all = TRUE)
+      session$flushReact()
+
+      skel <- skel_store()
+      expect_setequal(skel$ids, c("data", "sub", "plot", "audit"))
+      expect_length(skel$addable, 0L)
+    },
+    args = list(board = otl_board_args(), update = reactiveVal())
+  )
+})
+
+test_that("display geometry keeps order pinned through hidden blocks", {
+  # a -> b -> c with b hidden: a and c must stay pinned (the dependency
+  # runs THROUGH the hidden block), which only holds when reachability
+  # walks the full graph.
+  b <- blockr.core::new_board(
+    blocks = c(
+      a = blockr.core::new_dataset_block("iris"),
+      b = blockr.core::new_subset_block(),
+      c = blockr.core::new_head_block()
+    ),
+    links = blockr.core::links(from = c("a", "b"), to = c("b", "c"))
+  )
+
+  full <- outline_sections(
+    structure(
+      list(
+        a = quote(iris), b = quote(subset(a)), c = quote(utils::head(b))
+      ),
+      pending = character()
+    ),
+    b, list()
+  )
+
+  disp <- display_sections(full, c("a", "c"), blockr.core::board_links(b))
+
+  expect_identical(disp$ids, c("a", "c"))
+  expect_false(any(disp$movable))
+
+  # Drag ranges collapse to the no-op gap for both rows.
+  expect_identical(disp$drop_lo, c(0L, 1L))
+  expect_identical(disp$drop_hi, c(0L, 1L))
+})

@@ -311,14 +311,15 @@ outline_settings_band <- function(ns) {
         class = "blockr-settings__field blockr-settings__field--full",
         checkboxInput(
           ns("otl_show_all"),
-          "Show code for every block",
+          "Show all blocks",
           value = FALSE
         ),
         div(
           class = "blockr-settings__hint",
           paste(
-            "By default only blocks open in the current view show their",
-            "code; the rest condense to title and description."
+            "By default the outline lists only the report's blocks;",
+            "the rest are added through the picker under the list.",
+            "Show-all restores the full board overview."
           )
         )
       )
@@ -768,12 +769,38 @@ outline_ext_srv <- function(annotations, block_order, title,
         skel_store <- reactiveVal(NULL)
         code_store <- reactiveVal(NULL)
 
+        # Memoises the display-subset drag geometry (see display_sections),
+        # the same trade as geometry_cache above.
+        display_geometry_cache <- new.env(parent = emptyenv())
+
         observe(
           {
             full <- sections()
 
-            skel <- full
+            show_all <- isTRUE(input$otl_show_all)
+
+            # The outline LISTS only the document: blocks with the report
+            # flag. Everything else -- ancestors running invisibly and
+            # branches outside the report alike -- lives in the include
+            # picker below the list, not as rows. On a large board that
+            # is 90% of the blocks. Show-all restores the full board
+            # overview.
+            listed <- if (show_all) full$ids else full$ids[full$report]
+
+            skel <- display_sections(
+              full, listed,
+              lnks = blockr.core::board_links(board$board),
+              cache = display_geometry_cache
+            )
             skel$code <- NULL
+
+            # The picker's pool: every board block not currently listed,
+            # labelled by name (the id disambiguates duplicates). Rides in
+            # the skeleton so the redraw and the choices always agree.
+            skel$addable <- setNames(
+              setdiff(full$ids, listed),
+              full$names[match(setdiff(full$ids, listed), full$ids)]
+            )
 
             # Dormant-by-default: a block outside the active view condenses
             # to title + description and carries no code cell. `active`
@@ -784,7 +811,7 @@ outline_ext_srv <- function(annotations, block_order, title,
             # `gated` gates the hide affordance: without view gating (or
             # with the show-all override) there is nothing to hide from.
             shown <- view_active_ids()
-            gated <- !isTRUE(input$otl_show_all) && !is.null(shown)
+            gated <- !show_all && !is.null(shown)
 
             skel$active <- if (gated) {
               skel$ids %in% shown
@@ -809,13 +836,14 @@ outline_ext_srv <- function(annotations, block_order, title,
               skel_store(skel)
             }
 
-            # Only active blocks get code markup: dormant rows render no
-            # code cell, so highlighting their chunks would be pure waste
-            # -- on a large board that waste is most of the content cost
-            # (the map re-runs on every code change). Activation redraws
-            # the skeleton, and that same flush recomputes this map with
-            # the new block included, so renderUI always finds its cell.
-            codes <- outline_code_map(full, full$ids[skel$active])
+            # Only listed AND active blocks get code markup: dormant and
+            # unlisted rows render no code cell, so highlighting their
+            # chunks would be pure waste -- on a large board that waste is
+            # most of the content cost (the map re-runs on every code
+            # change). Activation redraws the skeleton, and that same
+            # flush recomputes this map with the new block included, so
+            # renderUI always finds its cell.
+            codes <- outline_code_map(full, skel$ids[skel$active])
 
             if (!identical(codes, isolate(code_store()))) {
               code_store(codes)
@@ -905,8 +933,15 @@ outline_ext_srv <- function(annotations, block_order, title,
 
               return(
                 tagList(
-                  outline_tags(sects, session$ns, editing()),
-                  NULL
+                  if (!length(sects$ids)) {
+                    div(
+                      class = "blockr-otl-emptydoc",
+                      "Nothing in the report yet: add a block below."
+                    )
+                  } else {
+                    outline_tags(sects, session$ns, editing())
+                  },
+                  outline_include_picker(session$ns, sects$addable)
                 )
               )
             }
@@ -984,6 +1019,31 @@ outline_ext_srv <- function(annotations, block_order, title,
             ann[[tog$id]] <- entry
             rv_ann(ann)
           }
+        )
+
+        # The include picker: pulling a block out of the pool flips its
+        # report flag, which lists it (and, via the exporters, puts it in
+        # the document). The control re-renders with the next skeleton, so
+        # no reset round trip is needed.
+        observeEvent(
+          input$otl_include,
+          {
+            blk_id <- input$otl_include
+            req(is.character(blk_id), nzchar(blk_id))
+            req(blk_id %in% blockr.core::board_block_ids(board$board))
+
+            ann <- rv_ann()
+
+            if (isTRUE(ann_report(ann, blk_id))) {
+              return()
+            }
+
+            entry <- coal(ann[[blk_id]], list())
+            entry$report <- TRUE
+            ann[[blk_id]] <- entry
+            rv_ann(ann)
+          },
+          ignoreInit = TRUE
         )
 
         observeEvent(

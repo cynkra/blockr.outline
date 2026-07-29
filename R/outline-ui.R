@@ -1189,6 +1189,35 @@ outline_tags <- function(sects, ns, editing = NULL) {
   div(class = "blockr-otl", grid_rows)
 }
 
+# The include picker under the outline: a searchable select over every
+# board block not currently in the report. On a large board this replaces
+# scrolling a list that is 90% excluded blocks -- you never see the pool,
+# you search it. Selecting flips the block's report flag (see the
+# otl_include observer); the skeleton redraw rebuilds the control with the
+# shrunken pool, so no client-side reset is needed. Hidden entirely when
+# the pool is empty (everything is already in the report, or show-all).
+outline_include_picker <- function(ns, addable) {
+
+  if (!length(addable)) {
+    return(NULL)
+  }
+
+  div(
+    class = "blockr-otl-includebar",
+    selectizeInput(
+      ns("otl_include"),
+      label = NULL,
+      choices = c("", addable),
+      selected = "",
+      width = "280px",
+      options = list(
+        placeholder = "Add block to report\u2026",
+        openOnFocus = TRUE
+      )
+    )
+  )
+}
+
 # The report title as the top-level "chapter": document title on the left
 # (double-click to rename -- it is outline state), the board-wide include /
 # exclude actions inline right after it, revealed on hover exactly like the

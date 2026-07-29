@@ -405,6 +405,18 @@
 .blockr-otl-grow.chap-endhot .blockr-otl-gsect::after {
   border-top: 2px solid var(--accent, #2563eb); }
 
+/* Include picker under the outline + the empty-document hint. The picker
+   aligns with the section column (past the gutter). */
+.blockr-otl-includebar { margin: 10px 0 4px 182px; }
+.blockr-otl-includebar .form-group { margin-bottom: 0; }
+.blockr-otl-includebar .selectize-input { font-size: 0.8125rem; min-height: 30px;
+                                          padding: 4px 10px; border-radius: 6px;
+                                          border-color: var(--blockr-grey-200, #e5e7eb); }
+.blockr-otl-includebar .selectize-dropdown { font-size: 0.8125rem; }
+.blockr-otl-emptydoc { margin: 14px 0 4px 182px; font-size: 0.8125rem;
+                       font-style: italic;
+                       color: var(--blockr-grey-400, #9ca3af); }
+
 /* Placeholder for a block that has not reported an expression yet. */
 .blockr-otl-pending {
   padding: 0.5rem 0.75rem;

@@ -327,12 +327,19 @@ outline_sections <- function(expressions, board, annotations,
 }
 
 # The reachability-derived half of the projection: drag affordances, drag
-# ranges, chapter landing targets and the export closure. Pure in its four
+# ranges, chapter landing targets and the export closure. Pure in its
 # arguments -- outline_sections() memoises it on exactly those (see the
-# geometry_cache there). `lnks` arrives already restricted to `ids`.
-outline_geometry <- function(ids, lnks, stack_ids, report) {
+# geometry_cache there). `lnks` arrives already restricted to `universe`.
+#
+# `universe` covers the case where `ids` is a displayed SUBSEQUENCE of the
+# document (the report-only outline): reachability must walk the full
+# graph, or a dependency running through a hidden block would vanish and
+# the drag legality would allow orders the DAG forbids. The edge map is
+# therefore built over the universe; the per-position sweeps stay over
+# `ids`, the rows actually shown.
+outline_geometry <- function(ids, lnks, stack_ids, report, universe = ids) {
 
-  kids <- split(lnks$to, factor(lnks$from, levels = ids))
+  kids <- split(lnks$to, factor(lnks$from, levels = universe))
 
   reaches <- function(a, b) {
     seen <- character()
@@ -551,6 +558,59 @@ block_icon_html <- function(blk) {
   icon_html_cache[[key]] <- val
 
   val
+}
+
+# Narrow a sections projection to the ids the outline LISTS (the report
+# blocks, unless show-all). Like prune_sections(), but for display: the
+# drag-geometry fields are recomputed on the visible subsequence rather
+# than dropped, with reachability over the FULL document (`universe`) so a
+# dependency running through a hidden block still pins the order. `lnks`
+# is the board's link table; `cache` memoises the recomputed geometry the
+# same way outline_sections() does its own.
+display_sections <- function(sects, listed, lnks, cache = NULL) {
+
+  keep <- sects$ids %in% listed
+
+  if (all(keep)) {
+    return(sects)
+  }
+
+  ids <- sects$ids[keep]
+
+  lnks <- lnks[lnks$from %in% sects$ids & lnks$to %in% sects$ids, ]
+
+  per_block <- c(
+    "ids", "pending", "code", "names", "icons", "descriptions", "report",
+    "exported", "kinds", "renderers", "report_calls", "stack_ids",
+    "stack_names"
+  )
+
+  out <- sects
+  for (fld in intersect(per_block, names(out))) {
+    out[[fld]] <- out[[fld]][keep]
+  }
+
+  geo_key <- list(ids = ids, links = lnks, stacks = out$stack_ids,
+                  report = out$report, universe = sects$ids)
+
+  geo <- if (!is.null(cache) && identical(cache$key, geo_key)) {
+    cache$value
+  } else {
+    g <- outline_geometry(ids, lnks, out$stack_ids, out$report,
+                          universe = sects$ids)
+    if (!is.null(cache)) {
+      cache$key <- geo_key
+      cache$value <- g
+    }
+    g
+  }
+
+  out$movable <- geo$movable
+  out$drop_lo <- geo$drop_lo
+  out$drop_hi <- geo$drop_hi
+  out$chap_targets <- geo$chap_targets
+
+  out
 }
 
 # Narrow a sections projection onto its export closure (see `exported` in

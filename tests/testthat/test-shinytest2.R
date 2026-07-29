@@ -99,14 +99,24 @@ pre_text <- function() {
 # Tests
 # ---------------------------------------------------------------------------
 
-test_that("the outline renders chips, chapters and the excluded marker", {
+test_that("the outline lists the report blocks; excluded ones sit in the picker", {
   skip_if_no_app()
   set_view("outline")
 
-  expect_equal(count(".blockr-otl-chip"), 4)
-  # `audit` is report = FALSE -> exactly one "include=FALSE" section marker.
-  expect_equal(count(".blockr-otl-offchip"), 1)
-  # Both chapter headings are present.
+  # `audit` is report = FALSE -> not listed, offered by the include picker.
+  expect_equal(count(".blockr-otl-chip"), 3)
+  expect_equal(count(".blockr-otl-offchip"), 0)
+  expect_equal(count(".blockr-otl-includebar"), 1)
+  # selectize strips the native <option>s; its own store holds the pool.
+  expect_match(
+    app$get_js(paste0(
+      "JSON.stringify(Object.keys($(",
+      "'.blockr-otl-includebar select')[0].selectize.options))"
+    )),
+    "audit"
+  )
+
+  # Both chapter headings are present (Outputs keeps its listed member).
   body <- app$get_js("document.body.innerText")
   expect_match(body, "Data prep")
   expect_match(body, "Outputs")
@@ -133,21 +143,32 @@ test_that("the Document view renders the qmd with the board title", {
   set_view("outline")
 })
 
-test_that("the report toggle updates the projection without a board update", {
+test_that("the report toggle lists and unlists without a board update", {
   skip_if_no_app()
   set_view("outline")
-  expect_equal(count(".blockr-otl-offchip"), 1)
+  expect_equal(count(".blockr-otl-chip"), 3)
 
-  # Include `audit` in the report: the excluded marker disappears.
+  # Include `audit` in the report: its row appears.
   send("outline_toggle", list(id = "audit", report = TRUE))
-  expect_equal(count(".blockr-otl-offchip"), 0)
-
-  # Annotation-only: the outline still shows all four blocks (no board churn).
   expect_equal(count(".blockr-otl-chip"), 4)
+  expect_equal(count(".blockr-otl-offchip"), 0)
 
   # Restore the fixture state for any later test / re-run.
   send("outline_toggle", list(id = "audit", report = FALSE))
-  expect_equal(count(".blockr-otl-offchip"), 1)
+  expect_equal(count(".blockr-otl-chip"), 3)
+})
+
+test_that("the include picker lists a block from the pool", {
+  skip_if_no_app()
+  set_view("outline")
+  expect_equal(count(".blockr-otl-chip"), 3)
+
+  app$set_inputs(!!ext("otl_include") := "audit", wait_ = FALSE)
+  app$wait_for_idle()
+  expect_equal(count(".blockr-otl-chip"), 4)
+
+  send("outline_toggle", list(id = "audit", report = FALSE))
+  expect_equal(count(".blockr-otl-chip"), 3)
 })
 
 test_that("Render downloads a self-contained html report", {
@@ -277,24 +298,24 @@ test_that("Exclude all / Include all flip every block's report flag", {
   skip_if_no_app()
   set_view("outline")
 
-  n_chip <- app$get_js("document.querySelectorAll('.blockr-otl-chip').length")
-  off <- function() {
-    app$get_js("document.querySelectorAll('.blockr-otl-offchip').length")
+  chips <- function() {
+    app$get_js("document.querySelectorAll('.blockr-otl-chip').length")
   }
 
-  # Exclude all -> every chip carries the excluded marker.
+  # Exclude all -> the whole list empties into the picker.
   app$run_js("document.querySelector('.blockr-otl-bulk[data-bulk=\"exclude\"]').click();")
   app$wait_for_idle()
-  expect_equal(off(), n_chip)
+  expect_equal(chips(), 0)
+  expect_equal(count(".blockr-otl-emptydoc"), 1)
 
-  # Include all -> none excluded.
+  # Include all -> every block listed.
   app$run_js("document.querySelector('.blockr-otl-bulk[data-bulk=\"include\"]').click();")
   app$wait_for_idle()
-  expect_equal(off(), 0)
+  expect_equal(chips(), 4)
 
   # Restore the fixture (audit is report = FALSE by default).
   send("outline_toggle", list(id = "audit", report = FALSE))
-  expect_equal(off(), 1)
+  expect_equal(chips(), 3)
 })
 
 test_that("the report title is shown and renames in place", {
@@ -349,9 +370,9 @@ test_that("instant search filters the outline to matching blocks", {
     ))
   }
 
-  # Nothing filtered at rest: all four blocks show.
-  all4 <- jsonlite::fromJSON(visible_blocks())
-  expect_length(all4, 4)
+  # Nothing filtered at rest: the three listed blocks show.
+  all3 <- jsonlite::fromJSON(visible_blocks())
+  expect_length(all3, 3)
 
   # Typing narrows to the rows whose name / description / code match.
   app$run_js(paste0(
@@ -371,5 +392,5 @@ test_that("instant search filters the outline to matching blocks", {
   expect_equal(
     app$get_js("document.querySelector('.blockr-otl-searchinput').value"), ""
   )
-  expect_length(jsonlite::fromJSON(visible_blocks()), 4)
+  expect_length(jsonlite::fromJSON(visible_blocks()), 3)
 })
