@@ -1169,7 +1169,13 @@ outnote <- function(headline, msg) {
   div(
     class = "blockr-otl-outnote",
     headline,
-    tags$div(class = "blockr-otl-outerr", msg)
+    tags$div(class = "blockr-otl-outerr", msg),
+    # The version that WROTE this note. A failure note is the one thing that
+    # reliably gets screenshotted off a deployment, and "is this build the
+    # one I just pushed" was, for three rounds of a real debug, unanswerable
+    # from the note alone.
+    tags$div(class = "blockr-otl-outver", paste("blockr.outline",
+                                                pkg_version()))
   )
 }
 

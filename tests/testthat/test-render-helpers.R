@@ -539,3 +539,16 @@ test_that("a linked block that fails is not called unconnected", {
   expect_match(html, "boom")
   expect_no_match(html, "Nothing is connected")
 })
+
+test_that("a failure note carries the version that wrote it", {
+
+  # A note off a deployment is often the only evidence available; without
+  # the version, "is this the build I just pushed" cannot be answered.
+  s <- list(ids = "a", pending = FALSE, exported = TRUE, report = TRUE,
+            code = "a <- stop('boom')", report_calls = "", renderers = "")
+
+  html <- as.character(outline_output_map(s, "a")[["a"]])
+
+  expect_match(html, "blockr-otl-outver")
+  expect_match(html, paste("blockr.outline", pkg_version()), fixed = TRUE)
+})
