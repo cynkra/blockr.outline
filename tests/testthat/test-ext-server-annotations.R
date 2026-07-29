@@ -3,7 +3,7 @@
 
 test_that("the report toggle flips state without touching the board", {
   upd <- reactiveVal()
-  srv <- outline_ext_srv(list(), character(), "T")
+  srv <- outline_ext_srv(otl_dock_ann(), character(), "T")
   testServer(
     srv,
     {

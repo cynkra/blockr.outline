@@ -63,8 +63,14 @@ board <- new_dock_board(
     blockr.outline::new_outline_extension(
       title = "Deferred board report",
       annotations = list(
-        data = list(description = "The classic **iris** dataset."),
-        ex_head = list(description = "First rows of the cars data."),
+        data = list(
+          description = "The classic **iris** dataset.",
+          report = TRUE
+        ),
+        ex_head = list(
+          description = "First rows of the cars data.",
+          report = TRUE
+        ),
         aud = list(
           description = "QC only, not part of the report.",
           report = FALSE

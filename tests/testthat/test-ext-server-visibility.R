@@ -9,7 +9,7 @@
 
 test_that("panel_visible tracks the client's otl_visible signal", {
   testServer(
-    outline_ext_srv(list(), character(), "T"),
+    outline_ext_srv(otl_dock_ann(), character(), "T"),
     {
       session$flushReact()
       expect_true(panel_visible()) # seeded visible (fail-safe)
@@ -28,7 +28,7 @@ test_that("panel_visible tracks the client's otl_visible signal", {
 
 test_that("a board change while hidden does NOT re-run the projection", {
   testServer(
-    outline_ext_srv(list(), character(), "T"),
+    outline_ext_srv(otl_dock_ann(), character(), "T"),
     {
       session$flushReact()
       # Visible at startup: the projection ran and populated the store.

@@ -73,10 +73,12 @@ board <- new_dock_board(
         cars = list(report = FALSE),
         st2 = list(report = FALSE),
         tbl = list(
-          description = "Sepal length and width by species."
+          description = "Sepal length and width by species.",
+          report = TRUE
         ),
         tbl2 = list(
-          description = "Fuel efficiency by cylinder count and transmission."
+          description = "Fuel efficiency by cylinder count and transmission.",
+          report = TRUE
         )
       )
     )

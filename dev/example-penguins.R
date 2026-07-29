@@ -186,14 +186,16 @@ board <- new_dock_board(
           report = FALSE
         ),
         peek = list(
-          description = "The first few rows of the prepared data."
+          description = "The first few rows of the prepared data.",
+          report = TRUE
         ),
         mdl = list(
           description = paste(
             "Fit body mass as a linear function of **flipper length**,",
             "**bill length** and **species**. Flipper length carries most",
             "of the signal; species shifts the intercept."
-          )
+          ),
+          report = TRUE
         ),
         coefs = list(
           description = paste(
@@ -201,14 +203,16 @@ board <- new_dock_board(
             "extra millimetre of flipper adds a few dozen grams; the species",
             "terms are the baseline differences that flipper length does not",
             "explain."
-          )
+          ),
+          report = TRUE
         ),
         fitstats = list(report = FALSE),
         fit_key = list(
           description = paste(
             "The fit in four numbers -- adjusted R-squared says how much of",
             "the mass variation the model accounts for."
-          )
+          ),
+          report = TRUE
         ),
         fit = list(
           description = paste(
@@ -216,7 +220,8 @@ board <- new_dock_board(
             "coloured by species. The upward trend is the flipper effect;",
             "the colour bands are the species differences the model",
             "estimates."
-          )
+          ),
+          report = TRUE
         ),
         aug = list(report = FALSE),
         pred_actual = list(
@@ -225,7 +230,8 @@ board <- new_dock_board(
             "points hug the diagonal, the better the model predicts; the",
             "scatter around it is what flipper, bill and species leave",
             "unexplained."
-          )
+          ),
+          report = TRUE
         )
       ),
       stack_annotations = list(

@@ -36,7 +36,7 @@ test_that("download demands pending exported blocks and waits for them", {
   vis <- fake_visibility(c("data", "sub", "plot", "audit"))
 
   testServer(
-    outline_ext_srv(list(), character(), "T"),
+    outline_ext_srv(otl_dock_ann(), character(), "T"),
     {
       session$flushReact()
 
@@ -87,7 +87,7 @@ test_that("download fires straight away when nothing exported is pending", {
   vis <- fake_visibility(c("data", "sub", "plot", "audit"))
 
   testServer(
-    outline_ext_srv(list(), character(), "T"),
+    outline_ext_srv(otl_dock_ann(), character(), "T"),
     {
       session$flushReact()
       session$setInputs(code_render_go = 1)
@@ -135,7 +135,7 @@ test_that("pending blocks without a visibility channel warn instead of hang", {
   )
 
   testServer(
-    outline_ext_srv(list(), character(), "T"),
+    outline_ext_srv(otl_dock_ann(), character(), "T"),
     {
       session$flushReact()
       session$setInputs(code_render_go = 1)

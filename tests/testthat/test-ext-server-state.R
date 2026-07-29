@@ -31,8 +31,8 @@ test_that("initial annotations and title round-trip through sanitisation", {
       st <- session$getReturned()$state
       expect_identical(st$title(), "My report")
       expect_identical(st$annotations()[["data"]][["description"]], "hi")
-      # sanitize_annotations fills the report default.
-      expect_true(st$annotations()[["data"]][["report"]])
+      # sanitize_annotations fills the report default: OFF until included.
+      expect_false(st$annotations()[["data"]][["report"]])
     },
     args = list(board = otl_board_args(), update = reactiveVal())
   )

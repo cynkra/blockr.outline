@@ -6,9 +6,9 @@ sects_fixture <- function() {
   outline_sections(
     otl_exprs(),
     otl_board(stacks = TRUE),
-    annotations = list(
-      data = list(description = "The iris data.", report = TRUE),
-      sub  = list(description = "Setosa only.", report = TRUE),
+    annotations = otl_ann(
+      data = list(description = "The iris data."),
+      sub  = list(description = "Setosa only."),
       head = list(report = FALSE)
     ),
     stack_annotations = list(prep = list(description = "Data preparation."))
@@ -43,7 +43,7 @@ test_that("an excluded block stays as include:false iff the report needs it", {
   s <- outline_sections(
     otl_exprs(),
     otl_board(stacks = TRUE),
-    annotations = list(
+    annotations = otl_ann(
       data = list(report = FALSE),
       head = list(report = FALSE)
     )
@@ -82,7 +82,7 @@ test_that("a pending block exports as a comment, never as code", {
   ex$head <- quote(invisible(NULL))
   attr(ex, "pending") <- "head"
 
-  s <- outline_sections(ex, otl_board(stacks = TRUE), list())
+  s <- outline_sections(ex, otl_board(stacks = TRUE), otl_ann())
 
   for (txt in list(export_qmd(s), export_spin(s))) {
     expect_match(txt, "head: waiting for R code to be generated", fixed = TRUE)
@@ -108,7 +108,7 @@ test_that("a run with no report-included block gets no heading", {
   s <- outline_sections(
     otl_exprs(),
     otl_board(stacks = TRUE),
-    annotations = list(
+    annotations = otl_ann(
       data = list(report = FALSE),
       sub  = list(report = FALSE)
     )
@@ -150,7 +150,8 @@ test_that("a block-supplied report call wins the chunk output line", {
     pending = character()
   )
 
-  s <- outline_sections(exprs, board, annotations = list())
+  s <- outline_sections(exprs, board,
+                        annotations = otl_ann(ids = c("data", "ch")))
   expect_match(
     unname(s$report_calls[s$ids == "ch"]),
     "^blockr\\.viz::static_chart\\(ch"
@@ -180,7 +181,8 @@ test_that("viz table blocks print through the flextable report renderer", {
     pending = character()
   )
 
-  s <- outline_sections(exprs, board, annotations = list(),
+  s <- outline_sections(exprs, board,
+                        annotations = otl_ann(ids = c("data", "tbl")),
                         stack_annotations = list())
   expect_identical(unname(s$renderers[s$ids == "tbl"]), "blockr.viz::static_table")
   expect_identical(unname(s$renderers[s$ids == "data"]), "")

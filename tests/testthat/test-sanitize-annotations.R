@@ -15,10 +15,10 @@ test_that("a full entry passes through normalised", {
   expect_false(out$a$report)
 })
 
-test_that("report defaults to TRUE and description to empty string", {
+test_that("report defaults to FALSE and description to empty string", {
   out <- sanitize_annotations(list(a = list()))
   expect_identical(out$a$description, "")
-  expect_true(out$a$report)
+  expect_false(out$a$report)
 })
 
 test_that("description is coerced to a length-one character", {

@@ -51,9 +51,10 @@ test_that("ann_description / ann_report default sensibly", {
   expect_identical(ann_description(ann, "a"), "hi")
   expect_false(ann_report(ann, "a"))
 
-  # Missing entry: empty description, report included by default.
+  # Missing entry: empty description, and OUT of the report -- blocks join
+  # the document only once someone includes them.
   expect_identical(ann_description(ann, "b"), "")
-  expect_true(ann_report(ann, "b"))
+  expect_false(ann_report(ann, "b"))
   expect_identical(ann_description(ann, "missing"), "")
-  expect_true(ann_report(ann, "missing"))
+  expect_false(ann_report(ann, "missing"))
 })

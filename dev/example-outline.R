@@ -121,22 +121,26 @@ board <- new_dock_board(
             "",
             "Used here as stand-in study data.",
             sep = "\n"
-          )
+          ),
+          report = TRUE
         ),
         filt = list(
           description = paste(
             "Drop *virginica*: the two remaining species are the ones that",
             "overlap, which is what makes the comparison interesting."
-          )
+          ),
+          report = TRUE
         ),
         mut = list(
           description = paste(
             "Derive the sepal **ratio**, length over width, as a single",
             "shape measure per flower."
-          )
+          ),
+          report = TRUE
         ),
         summ = list(
-          description = "Mean sepal ratio per species."
+          description = "Mean sepal ratio per species.",
+          report = TRUE
         ),
         plot = list(
           description = paste(
@@ -145,7 +149,8 @@ board <- new_dock_board(
             "- setosa separates cleanly",
             "- versicolor overlaps it only at the margin",
             sep = "\n"
-          )
+          ),
+          report = TRUE
         ),
         audit = list(
           description = paste(

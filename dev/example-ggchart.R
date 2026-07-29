@@ -61,8 +61,11 @@ board <- new_dock_board(
       annotations = list(
         data = list(description = "The classic **iris** dataset.",
                     report = FALSE),
-        bar = list(description = "Row counts per species."),
-        sc = list(description = "Sepal geometry, colored by species.")
+        bar = list(description = "Row counts per species.", report = TRUE),
+        sc = list(
+          description = "Sepal geometry, colored by species.",
+          report = TRUE
+        )
       )
     )
   )

@@ -78,7 +78,8 @@ board <- new_dock_board(
         pretrt = list(report = FALSE),
         trtwk16 = list(report = FALSE),
         attrition = list(
-          description = "Participant disposition through Week 16 (topline attrition plot)."
+          description = "Participant disposition through Week 16 (topline attrition plot).",
+          report = TRUE
         )
       ),
       stack_annotations = list(

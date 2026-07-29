@@ -111,12 +111,14 @@ board <- new_dock_board(
         iris_data = list(report = FALSE),
         st = list(report = FALSE),
         tbl = list(
-          description = "Baseline sepal measures by species (blockr.viz table block via static_table)."
+          description = "Baseline sepal measures by species (blockr.viz table block via static_table).",
+          report = TRUE
         ),
         seed = list(report = FALSE),
         clin = list(report = FALSE),
         ft = list(
-          description = "Demographics, the topline flextable block: colored header bands, positioned by its pptx attributes."
+          description = "Demographics, the topline flextable block: colored header bands, positioned by its pptx attributes.",
+          report = TRUE
         )
       ),
       stack_annotations = list(

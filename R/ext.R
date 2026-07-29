@@ -1895,7 +1895,7 @@ sanitize_annotations <- function(x) {
         description = as.character(
           coal(unlist(entry[["description"]]), "")
         )[1L],
-        report = isTRUE(coal(unlist(entry[["report"]]), TRUE))
+        report = isTRUE(coal(unlist(entry[["report"]]), FALSE))
       )
     }
   )

@@ -31,7 +31,7 @@ otl_two_view_board <- function() {
 
 test_that("blocks outside the active view are dormant in the skeleton", {
   testServer(
-    outline_ext_srv(list(), character(), "T"),
+    outline_ext_srv(otl_dock_ann(), character(), "T"),
     {
       session$flushReact()
 
@@ -55,7 +55,7 @@ test_that("blocks outside the active view are dormant in the skeleton", {
 
 test_that("the show-all override disables the gating", {
   testServer(
-    outline_ext_srv(list(), character(), "T"),
+    outline_ext_srv(otl_dock_ann(), character(), "T"),
     {
       session$flushReact()
       expect_false(all(skel_store()$active))
@@ -77,7 +77,7 @@ test_that("a single-view board keeps every block active", {
   # The default dock board holds all panels in its one view, so nothing
   # condenses -- the pre-dormancy rendering, unchanged.
   testServer(
-    outline_ext_srv(list(), character(), "T"),
+    outline_ext_srv(otl_dock_ann(), character(), "T"),
     {
       session$flushReact()
 
@@ -91,7 +91,7 @@ test_that("a single-view board keeps every block active", {
 
 test_that("outline_hide removes the block's panel from the active view", {
   testServer(
-    outline_ext_srv(list(), character(), "T"),
+    outline_ext_srv(otl_dock_ann(), character(), "T"),
     {
       session$flushReact()
 
@@ -114,7 +114,7 @@ test_that("outline_hide removes the block's panel from the active view", {
 
 test_that("hiding a block not in the active view is a no-op", {
   testServer(
-    outline_ext_srv(list(), character(), "T"),
+    outline_ext_srv(otl_dock_ann(), character(), "T"),
     {
       session$flushReact()
 
@@ -234,7 +234,7 @@ test_that("outline_code_map narrows to the requested ids", {
 test_that("the skeleton lists only reported blocks; the rest are addable", {
   testServer(
     outline_ext_srv(
-      list(
+      otl_dock_ann(
         plot = list(report = FALSE),
         audit = list(report = FALSE)
       ),
@@ -263,7 +263,7 @@ test_that("the skeleton lists only reported blocks; the rest are addable", {
 test_that("picking a block from the pool lists it", {
   testServer(
     outline_ext_srv(
-      list(plot = list(report = FALSE)),
+      otl_dock_ann(plot = list(report = FALSE)),
       character(), "T"
     ),
     {
@@ -285,7 +285,7 @@ test_that("picking a block from the pool lists it", {
 test_that("show-all restores the full board overview", {
   testServer(
     outline_ext_srv(
-      list(plot = list(report = FALSE)),
+      otl_dock_ann(plot = list(report = FALSE)),
       character(), "T"
     ),
     {

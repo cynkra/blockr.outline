@@ -32,8 +32,9 @@ board <- new_dock_board(
   extensions = list(
     new_outline_extension(
       annotations = list(
-        data  = list(description = "The iris dataset."),
-        sub   = list(description = "Setosa only."),
+        data  = list(description = "The iris dataset.", report = TRUE),
+        sub   = list(description = "Setosa only.", report = TRUE),
+        plot  = list(report = TRUE),
         audit = list(report = FALSE)
       ),
       stack_annotations = list(

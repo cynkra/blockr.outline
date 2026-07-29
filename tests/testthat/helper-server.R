@@ -33,6 +33,14 @@ otl_board_args <- function(board = otl_dock_board()) {
   blockr.core::generate_plugin_args(board, mode = "read")[["board"]]
 }
 
+# Annotations for the dock fixture board, every block in the report. The
+# flag defaults OFF, so a server test that expects rows in the skeleton has
+# to put them there. Named arguments override single entries, as in
+# otl_ann().
+otl_dock_ann <- function(...) {
+  otl_ann(..., ids = c("data", "sub", "plot", "audit"))
+}
+
 # A visibility bundle the way core builds it: one reactiveVal slot per
 # block, NA = built-but-undeclared. Shared by the download and the Output
 # preview demand tests.

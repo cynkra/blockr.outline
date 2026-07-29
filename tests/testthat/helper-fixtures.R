@@ -50,6 +50,24 @@ otl_exprs <- function(keep = c("data", "sub", "head"), pending = character()) {
   structure(all[keep], pending = pending)
 }
 
+# Annotations for a fixture board. The report flag defaults OFF in
+# production (a board is not a report until someone says what belongs in
+# it), so a test that means "these blocks are the document" has to say so.
+# otl_ann() says it once: every id is included, and named arguments override
+# individual entries.
+otl_ann <- function(..., ids = c("data", "sub", "head")) {
+
+  out <- stats::setNames(rep(list(list(report = TRUE)), length(ids)), ids)
+
+  over <- list(...)
+
+  for (nm in names(over)) {
+    out[[nm]] <- utils::modifyList(coal(out[[nm]], list()), over[[nm]])
+  }
+
+  out
+}
+
 # A board whose two leaf blocks (`plot`, `audit`) are parallel branches off
 # `sub` -- both movable, and the substrate for the tie-break ordering tests.
 # `plot` is a scatter block (meta category "plot" -> kind "fig").

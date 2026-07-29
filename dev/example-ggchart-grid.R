@@ -88,11 +88,11 @@ board <- new_dock_board(
     blockr.outline::new_outline_extension(
       annotations = list(
         data = list(report = FALSE),
-        bar = list(description = "Mean sepal length per species (chart block via static_chart)."),
+        bar = list(description = "Mean sepal length per species (chart block via static_chart).", report = TRUE),
         p_scatter = list(report = FALSE),
         p_box = list(report = FALSE),
-        grid = list(description = "Two ggplots combined on one slide with patchwork (grid block)."),
-        st = list(description = "Summary statistics by species (summary table via static_table).")
+        grid = list(description = "Two ggplots combined on one slide with patchwork (grid block).", report = TRUE),
+        st = list(description = "Summary statistics by species (summary table via static_table).", report = TRUE)
       ),
       stack_annotations = list(
         deck = list(description = "Charts, a combined plot grid, and a table in one BMS deck.")

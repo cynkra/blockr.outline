@@ -9,8 +9,15 @@ ann_description <- function(annotations, id) {
   coal(annotations[[id]][["description"]], "")
 }
 
+# Default OFF: the outline lists the report, and a board is not a report
+# until someone says what belongs in it. A fresh board therefore opens on an
+# empty document with the search box, rather than on 80 rows the user then
+# has to exclude one by one. Boards annotated before this default flipped
+# carry no `report` key for blocks that were included implicitly, so they
+# reopen with an empty document as well -- adding blocks back is the search
+# box, and the flag is written explicitly from then on.
 ann_report <- function(annotations, id) {
-  isTRUE(coal(annotations[[id]][["report"]], TRUE))
+  isTRUE(coal(annotations[[id]][["report"]], FALSE))
 }
 
 # Same wrapping blockr.core's exporter applies (with()/local(), bquote

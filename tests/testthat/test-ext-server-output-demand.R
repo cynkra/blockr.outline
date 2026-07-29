@@ -28,7 +28,7 @@ test_that("flipping to Output demands the pending exported blocks", {
   vis <- fake_visibility(c("data", "sub", "plot", "audit"))
 
   testServer(
-    outline_ext_srv(list(), character(), "T"),
+    outline_ext_srv(otl_dock_ann(), character(), "T"),
     {
       session$flushReact()
 
@@ -75,7 +75,7 @@ test_that("Output with nothing pending demands nothing", {
   vis <- fake_visibility(c("data", "sub", "plot", "audit"))
 
   testServer(
-    outline_ext_srv(list(), character(), "T"),
+    outline_ext_srv(otl_dock_ann(), character(), "T"),
     {
       session$flushReact()
       session$setInputs(otl_body = "output")
@@ -104,7 +104,7 @@ test_that("flipping back to Code cancels a preview-only demand", {
   vis <- fake_visibility(c("data", "sub", "plot", "audit"))
 
   testServer(
-    outline_ext_srv(list(), character(), "T"),
+    outline_ext_srv(otl_dock_ann(), character(), "T"),
     {
       session$flushReact()
 
@@ -137,7 +137,7 @@ test_that("Output without a visibility channel warns instead of hanging", {
   )
 
   testServer(
-    outline_ext_srv(list(), character(), "T"),
+    outline_ext_srv(otl_dock_ann(), character(), "T"),
     {
       session$flushReact()
       session$setInputs(otl_body = "output")
