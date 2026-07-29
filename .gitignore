@@ -11,3 +11,4 @@ vignettes/*.html
 .Ruserdata
 node_modules/
 tools/meta.json
+tests/testthat/Rplots.pdf

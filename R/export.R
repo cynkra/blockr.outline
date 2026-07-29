@@ -148,7 +148,8 @@ preferred_ordering <- function(ids, board, preference = character()) {
 
 outline_sections <- function(expressions, board, annotations,
                              preference = character(),
-                             stack_annotations = list()) {
+                             stack_annotations = list(),
+                             geometry_cache = NULL) {
 
   # Only project blocks that reported an expression this flush (see the
   # defensive read in the extension server); a block mid-removal or
@@ -232,13 +233,106 @@ outline_sections <- function(expressions, board, annotations,
     )
   }
 
-  # A block is reorderable iff it has slack in the DAG: it may pass its
-  # displayed predecessor (which must then not be an ancestor) or its
-  # successor (which must then not be a descendant). Fully pinned blocks
-  # get no drag affordance -- no valid order could move them anyway.
+  report <- lgl_ply(ids, function(i) ann_report(annotations, i))
+
   lnks <- blockr.core::board_links(board)
   keep <- lnks$from %in% ids & lnks$to %in% ids
-  kids <- split(lnks$to[keep], factor(lnks$from[keep], levels = ids))
+  lnks <- lnks[keep, ]
+
+  # The graph geometry (per-block reachability sweeps) is the projection's
+  # one super-linear step -- ~300ms at 80 blocks against ~30ms for all of
+  # the rest -- and it depends on nothing but the display order, the
+  # links, the stack layout and the report flags. Those change on
+  # structural edits (add / remove / relink / drag / stack / report
+  # toggles), NOT when a block's expression updates -- which is what
+  # invalidates the projection on every value edit. Memoise on exactly
+  # those inputs: an expression-only change reuses the cached geometry
+  # and pays only the cheap content phase. `geometry_cache` is an
+  # environment owned by the caller (one per extension server); NULL
+  # (the exporters, tests) computes fresh.
+  geo_key <- list(ids = ids, links = lnks, stacks = stack_ids,
+                  report = report)
+
+  geo <- if (!is.null(geometry_cache) &&
+               identical(geometry_cache$key, geo_key)) {
+    geometry_cache$value
+  } else {
+    g <- outline_geometry(ids, lnks, stack_ids, report)
+    if (!is.null(geometry_cache)) {
+      geometry_cache$key <- geo_key
+      geometry_cache$value <- g
+    }
+    g
+  }
+
+  list(
+    ids = ids,
+    pending = ids %in% pending_ids,
+    movable = geo$movable,
+    drop_lo = geo$drop_lo,
+    drop_hi = geo$drop_hi,
+    chap_targets = geo$chap_targets,
+    code = chr_ply(
+      lapply(exprs, deparse),
+      paste0,
+      collapse = "\n"
+    ),
+    names = chr_ply(blks, blockr.core::block_name),
+    icons = chr_ply(seq_along(blks), function(i) block_icon_html(blks[[i]])),
+    descriptions = chr_ply(ids, function(i) ann_description(annotations, i)),
+    report = report,
+    exported = geo$exported,
+    # Exhibit kind from the block's CLASS, not its result: results are
+    # gated by evaluation and visibility, so a runtime probe reads NULL
+    # for most blocks and the caption would appear only sometimes. The
+    # class is always there. A block that is neither plot nor data gets
+    # no prefix -- a wrong fig- would leave a broken cross-reference.
+    kinds = vapply(
+      blks,
+      function(b) {
+        # The registry category is the ecosystem-wide answer: every
+        # package declares it, so a ggplot_block (class ggplot_block,
+        # not plot_block) still reports "plot". Class inheritance only
+        # covers blockr.core's own hierarchy.
+        cat <- tryCatch(
+          blockr.core::block_meta_category(b),
+          error = function(e) character()
+        )
+        if (any(cat %in% c("plot", "visualization")) ||
+              inherits(b, "plot_block")) {
+          "fig"
+        } else if (any(cat %in% c("data", "transform", "table")) ||
+                     inherits(b, c("data_block", "transform_block"))) {
+          "tbl"
+        } else {
+          ""
+        }
+      },
+      character(1L)
+    ),
+    renderers = chr_ply(blks, block_report_renderer),
+    report_calls = chr_ply(
+      seq_along(blks),
+      function(i) block_report_call_str(blks[[i]], ids[[i]])
+    ),
+    stack_ids = stack_ids,
+    stack_names = stack_names,
+    stack_colors = stack_colors,
+    stack_descriptions = vapply(
+      setNames(nm = names(stks)),
+      function(s) ann_description(stack_annotations, s),
+      character(1L)
+    )
+  )
+}
+
+# The reachability-derived half of the projection: drag affordances, drag
+# ranges, chapter landing targets and the export closure. Pure in its four
+# arguments -- outline_sections() memoises it on exactly those (see the
+# geometry_cache there). `lnks` arrives already restricted to `ids`.
+outline_geometry <- function(ids, lnks, stack_ids, report) {
+
+  kids <- split(lnks$to, factor(lnks$from, levels = ids))
 
   reaches <- function(a, b) {
     seen <- character()
@@ -255,6 +349,10 @@ outline_sections <- function(expressions, board, annotations,
     FALSE
   }
 
+  # A block is reorderable iff it has slack in the DAG: it may pass its
+  # displayed predecessor (which must then not be an ancestor) or its
+  # successor (which must then not be a descendant). Fully pinned blocks
+  # get no drag affordance -- no valid order could move them anyway.
   movable <- lgl_ply(seq_along(ids), function(i) {
     (i > 1L && !reaches(ids[i - 1L], ids[i])) ||
       (i < length(ids) && !reaches(ids[i], ids[i + 1L]))
@@ -266,7 +364,6 @@ outline_sections <- function(expressions, board, annotations,
   # runs at render) -- on a many-view board the independent branches would
   # otherwise all evaluate for a report that shows none of them. The
   # outline view keeps showing every block; only the exporters prune.
-  report <- lgl_ply(ids, function(i) ann_report(annotations, i))
   reported <- ids[report]
 
   exported <- report | lgl_ply(
@@ -348,63 +445,11 @@ outline_sections <- function(expressions, board, annotations,
   })
 
   list(
-    ids = ids,
-    pending = ids %in% pending_ids,
     movable = movable,
+    exported = exported,
     drop_lo = drop_lo,
     drop_hi = drop_hi,
-    chap_targets = chap_targets,
-    code = chr_ply(
-      lapply(exprs, deparse),
-      paste0,
-      collapse = "\n"
-    ),
-    names = chr_ply(blks, blockr.core::block_name),
-    icons = chr_ply(seq_along(blks), function(i) block_icon_html(blks[[i]])),
-    descriptions = chr_ply(ids, function(i) ann_description(annotations, i)),
-    report = report,
-    exported = exported,
-    # Exhibit kind from the block's CLASS, not its result: results are
-    # gated by evaluation and visibility, so a runtime probe reads NULL
-    # for most blocks and the caption would appear only sometimes. The
-    # class is always there. A block that is neither plot nor data gets
-    # no prefix -- a wrong fig- would leave a broken cross-reference.
-    kinds = vapply(
-      blks,
-      function(b) {
-        # The registry category is the ecosystem-wide answer: every
-        # package declares it, so a ggplot_block (class ggplot_block,
-        # not plot_block) still reports "plot". Class inheritance only
-        # covers blockr.core's own hierarchy.
-        cat <- tryCatch(
-          blockr.core::block_meta_category(b),
-          error = function(e) character()
-        )
-        if (any(cat %in% c("plot", "visualization")) ||
-              inherits(b, "plot_block")) {
-          "fig"
-        } else if (any(cat %in% c("data", "transform", "table")) ||
-                     inherits(b, c("data_block", "transform_block"))) {
-          "tbl"
-        } else {
-          ""
-        }
-      },
-      character(1L)
-    ),
-    renderers = chr_ply(blks, block_report_renderer),
-    report_calls = chr_ply(
-      seq_along(blks),
-      function(i) block_report_call_str(blks[[i]], ids[[i]])
-    ),
-    stack_ids = stack_ids,
-    stack_names = stack_names,
-    stack_colors = stack_colors,
-    stack_descriptions = vapply(
-      setNames(nm = names(stks)),
-      function(s) ann_description(stack_annotations, s),
-      character(1L)
-    )
+    chap_targets = chap_targets
   )
 }
 
@@ -476,8 +521,22 @@ sect_output <- function(sects, i) {
 # helpers are blockr.dock internals (recorded follow-up: export them);
 # resolved dynamically with a letter-tile fallback so a dock without them
 # degrades instead of breaking.
+# Memoised per class: the icon is registry metadata resolved from the
+# block's class, stable within a process, and the double getFromNamespace +
+# data-URI build was half of the projection's warm cost at 80 blocks
+# (it ran per block per projection).
+icon_html_cache <- new.env(parent = emptyenv())
+
 block_icon_html <- function(blk) {
-  tryCatch(
+
+  key <- paste(class(blk), collapse = "|")
+  hit <- icon_html_cache[[key]]
+
+  if (!is.null(hit)) {
+    return(hit)
+  }
+
+  val <- tryCatch(
     {
       meta <- utils::getFromNamespace("blks_metadata", "blockr.dock")(blk)
       uri <- utils::getFromNamespace("blk_icon_data_uri", "blockr.dock")(
@@ -488,6 +547,10 @@ block_icon_html <- function(blk) {
     },
     error = function(e) NA_character_
   )
+
+  icon_html_cache[[key]] <- val
+
+  val
 }
 
 # Narrow a sections projection onto its export closure (see `exported` in

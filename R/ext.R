@@ -547,6 +547,13 @@ outline_ext_srv <- function(annotations, block_order, title,
           }
         )
 
+        # Memoises the projection's reachability geometry across flushes:
+        # an expression-only change (the common case -- any value edit on
+        # any constructed block) reuses it and the projection drops from
+        # ~300ms to ~30ms at 80 blocks. Structural edits change the key
+        # and pay the full sweep, which is when it is actually owed.
+        geometry_cache <- new.env(parent = emptyenv())
+
         sections_calc <- reactive(
           {
             # Gate FIRST, before board_exprs is even read: the projection
@@ -569,7 +576,8 @@ outline_ext_srv <- function(annotations, block_order, title,
                 board$board,
                 rv_ann(),
                 rv_order(),
-                rv_stack_ann()
+                rv_stack_ann(),
+                geometry_cache = geometry_cache
               ),
               error = function(e) {
                 message(

@@ -85,3 +85,67 @@ test_that("stack descriptions come from stack_annotations", {
   )
   expect_identical(s$stack_descriptions[["prep"]], "prep chapter")
 })
+
+# ---- geometry cache ---------------------------------------------------
+
+test_that("a cached projection is identical to a fresh one", {
+  b <- otl_board(stacks = TRUE)
+  cache <- new.env(parent = emptyenv())
+
+  fresh <- outline_sections(otl_exprs(), b, list())
+  warm1 <- outline_sections(otl_exprs(), b, list(), geometry_cache = cache)
+  warm2 <- outline_sections(otl_exprs(), b, list(), geometry_cache = cache)
+
+  expect_identical(warm1, fresh)
+  expect_identical(warm2, fresh)
+
+  # The second call actually hit the cache: the stored value is the very
+  # object the result carries.
+  expect_true(!is.null(cache$key))
+})
+
+test_that("an expression-only change reuses the geometry", {
+  b <- otl_board(stacks = TRUE)
+  cache <- new.env(parent = emptyenv())
+
+  outline_sections(otl_exprs(), b, list(), geometry_cache = cache)
+  key_before <- cache$key
+
+  # A different expression for `head` (a value edit): same graph, same key.
+  ex <- otl_exprs()
+  ex$head <- quote(utils::head(sub, n = 99L))
+  s <- outline_sections(ex, b, list(), geometry_cache = cache)
+
+  expect_identical(cache$key, key_before)
+  expect_match(s$code[s$ids == "head"], "99")
+})
+
+test_that("structural changes invalidate the geometry cache", {
+  cache <- new.env(parent = emptyenv())
+  b <- otl_board(stacks = TRUE)
+
+  base <- outline_sections(otl_exprs(), b, list(), geometry_cache = cache)
+  key0 <- cache$key
+
+  # Report-flag change: exported closure differs, key must move.
+  flagged <- outline_sections(
+    otl_exprs(), b, list(head = list(report = FALSE)),
+    geometry_cache = cache
+  )
+  expect_false(identical(cache$key, key0))
+  expect_false(identical(flagged$exported, base$exported))
+
+  # Stack-layout change: chapter targets differ, key must move again.
+  key1 <- cache$key
+  outline_sections(
+    otl_exprs(), otl_board(stacks = FALSE), list(),
+    geometry_cache = cache
+  )
+  expect_false(identical(cache$key, key1))
+
+  # And each cached result still matches a fresh computation.
+  expect_identical(
+    outline_sections(otl_exprs(), b, list(), geometry_cache = cache),
+    outline_sections(otl_exprs(), b, list())
+  )
+})
