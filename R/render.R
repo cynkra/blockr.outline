@@ -780,7 +780,7 @@ render_pptx_officer <- function(sects, file, title, template = NULL) {
     tryCatch(
       eval(parse(text = code), envir = env),
       error = function(e) {
-        seed_failed(env, sects$ids[i], conditionMessage(e))
+        seed_failed(env, sects$ids[i], conditionMessage(e), id_labels(sects))
         render_err(e)
       }
     )
@@ -887,7 +887,12 @@ render_pptx_officer <- function(sects, file, title, template = NULL) {
 # the sentence the reader can act on.
 outline_output_map <- function(sects, board_ids = character(), links = NULL) {
 
-  env <- eval_env(sects, board_ids)
+  # Ids are what the code says; NAMES are what the board shows. A note that
+  # says only `hxjsagdg` is a lookup the reader cannot perform -- the id
+  # appears nowhere in the UI.
+  labs <- id_labels(sects)
+
+  env <- eval_env(sects, board_ids, labs)
 
   # A block nothing feeds. Its chunk still names its input slot (`data`),
   # which no seed covers because no block declares it, so the raw condition
@@ -927,11 +932,12 @@ outline_output_map <- function(sects, board_ids = character(), links = NULL) {
       },
       error = function(e) {
         note <- diagnose_chunk(conditionMessage(e),
-                               sect_export_code(sects, i), env, fed[i], held)
+                               sect_export_code(sects, i), env, fed[i], held,
+                               labs)
         # Re-poison: the id stays unbound, so say WHY when a dependent
         # touches it, rather than letting it fall through to the search
         # path (see eval_env).
-        seed_failed(env, sects$ids[i], note$msg)
+        seed_failed(env, sects$ids[i], note$msg, labs)
         note
       }
     )
@@ -1037,13 +1043,13 @@ sect_output_html <- function(sects, env, i, note = NULL) {
 # (see the narrowing in outline_sections), while its dependents' chunks
 # still name it. It has no row, no code and no section, so seeding
 # sects$ids alone leaves that name to the search path.
-eval_env <- function(sects, board_ids = character()) {
+eval_env <- function(sects, board_ids = character(), labs = character()) {
 
   env <- new.env(parent = globalenv())
 
   for (i in seq_along(sects$ids)) {
     seed_unbound(
-      env, sects$ids[i],
+      env, sects$ids[i], labs,
       if (isTRUE(sects$pending[i])) {
         "has not finished building yet"
       } else if (!isTRUE(sects$exported[i])) {
@@ -1055,7 +1061,7 @@ eval_env <- function(sects, board_ids = character()) {
   }
 
   for (id in setdiff(board_ids, sects$ids)) {
-    seed_unbound(env, id, "is not reporting any code right now")
+    seed_unbound(env, id, labs, "is not reporting any code right now")
   }
 
   env
@@ -1079,11 +1085,10 @@ eval_env <- function(sects, board_ids = character()) {
 #   everything else          the chunk's own error, with any loose names
 #                            listed: a removed block still named by a
 #                            dependent lands here.
-diagnose_chunk <- function(msg, code, env, fed = NA, held = character()) {
+diagnose_chunk <- function(msg, code, env, fed = NA, held = character(),
+                           labs = character()) {
 
-  loose <- loose_names(code, env)
   reads <- chunk_reads(code, held)
-  msg <- paste0(msg, reads_line(reads))
 
   # An upstream that holds a FUNCTION is not a strange coincidence, it is
   # this same bug one hop up: a pass-through block with nothing connected
@@ -1094,16 +1099,26 @@ diagnose_chunk <- function(msg, code, env, fed = NA, held = character()) {
   fns <- names(reads)[reads == "function"]
 
   if (length(fns)) {
+    who <- paste(vapply(fns, lab, character(1L), labs = labs), collapse = ", ")
     return(list(
       head = "An upstream block produced a function, not data",
       msg = paste0(
-        fmt_names(fns), " holds a function, which is what a block reads ",
-        "when nothing is connected to it: its own code fell through to a ",
-        "function of the same name. Check what feeds ", fmt_names(fns),
-        ".\n", msg
+        who, " holds a function, which is what a block reads when nothing ",
+        "is connected to it: its own code fell through to a function of the ",
+        "same name. Connect a block to it, or take it out of the report.\n",
+        msg, reads_line(reads)
       )
     ))
   }
+
+  # Already names a block and its root cause. Appending a list of names to
+  # that only buries the sentence that matters.
+  if (grepl("^upstream block ", msg)) {
+    return(list(head = "An upstream block could not be evaluated", msg = msg))
+  }
+
+  loose <- loose_names(code, env)
+  msg <- paste0(msg, reads_line(reads))
 
   if (length(loose) && isFALSE(fed)) {
     return(list(
@@ -1114,10 +1129,6 @@ diagnose_chunk <- function(msg, code, env, fed = NA, held = character()) {
         "it out of the report.\n", msg
       )
     ))
-  }
-
-  if (grepl("^upstream block '", msg)) {
-    return(list(head = "An upstream block could not be evaluated", msg = msg))
   }
 
   list(
@@ -1178,11 +1189,12 @@ loose_names <- function(code, env) {
   # covers. Never get0() a seeded id: forcing the promise re-throws.
   free <- setdiff(free, ls(env, all.names = TRUE))
 
+  # FUNCTIONS only. An absent name is usually an NSE symbol (a column inside
+  # a dplyr verb) and listing those buries the one that matters, while a
+  # genuinely absent BLOCK is already named by R's own "object 'xyz' not
+  # found". A name that resolves to a function IS the shadowing hazard.
   Filter(
-    function(v) {
-      val <- get0(v, envir = env, ifnotfound = NULL)
-      is.null(val) || is.function(val)
-    },
+    function(v) is.function(get0(v, envir = env, ifnotfound = NULL)),
     free
   )
 }
@@ -1192,21 +1204,43 @@ fmt_names <- function(x) {
 }
 
 # One unbound block id, as a promise that stops with `why` when forced.
-seed_unbound <- function(env, id, why) {
-  poison(env, id, paste0("upstream block '", id, "' ", why))
+seed_unbound <- function(env, id, labs, why) {
+  poison(env, id, paste0("upstream block ", lab(id, labs), " ", why))
+}
+
+# A block, as the reader can find it: its NAME, with the id it goes by in
+# the code. Falls back to the bare id for a block the projection does not
+# carry a name for (one dropped from it, say).
+lab <- function(id, labs = character()) {
+
+  nm <- if (id %in% names(labs)) labs[[id]] else NA_character_
+
+  if (!is.na(nm) && nzchar(nm) && !identical(nm, id)) {
+    paste0("`", nm, "` (", id, ")")
+  } else {
+    paste0("`", id, "`")
+  }
+}
+
+id_labels <- function(sects) {
+  nms <- sects$names
+  if (is.null(nms)) {
+    return(stats::setNames(character(), character()))
+  }
+  stats::setNames(as.character(nms), sects$ids)
 }
 
 # The failure a block hands its dependents. A message that ALREADY names an
 # upstream block passes through untouched: down a four-block chain, nesting
 # one inside the next would bury the root cause under three wrappers, and
 # the root is the only thing to act on.
-seed_failed <- function(env, id, msg) {
+seed_failed <- function(env, id, msg, labs = character()) {
   poison(
     env, id,
-    if (grepl("^upstream block '", msg)) {
+    if (grepl("^upstream block ", msg)) {
       msg
     } else {
-      paste0("upstream block '", id, "' failed to evaluate: ", msg)
+      paste0("upstream block ", lab(id, labs), " failed to evaluate: ", msg)
     }
   )
 }

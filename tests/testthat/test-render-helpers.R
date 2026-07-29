@@ -324,7 +324,7 @@ test_that("the Output preview names the error that stopped a block", {
   expect_match(html, "An upstream block could not be evaluated")
   # Two blocks downstream of the failure, and it still names the ROOT block
   # and the root message: the trail is not re-wrapped at every hop.
-  expect_match(html, "upstream block 'src'")
+  expect_match(html, "upstream block `Dataset` \\(src\\)")
   expect_match(html, "pin not found")
 })
 
@@ -386,7 +386,7 @@ test_that("an unevaluated ancestor is named, not shadowed by a base function", {
 
   html <- as.character(outline_output_map(s)[["leaf"]])
 
-  expect_match(html, "upstream block 'data'")
+  expect_match(html, "upstream block `Dataset` \\(data\\)")
   expect_match(html, "pin not found")
   expect_no_match(html, "applied to an object of class")
 })
@@ -402,7 +402,7 @@ test_that("a block still building is reported as such downstream", {
 
   html <- as.character(outline_output_map(s)[["down"]])
 
-  expect_match(html, "upstream block 'up' has not finished building")
+  expect_match(html, "upstream block `up` has not finished building")
 })
 
 test_that("a block dropped from the projection is named too", {
@@ -435,7 +435,7 @@ test_that("a block dropped from the projection is named too", {
     outline_output_map(s, blockr.core::board_block_ids(board))[["leaf"]]
   )
 
-  expect_match(html, "upstream block 'data' is not reporting any code")
+  expect_match(html, "upstream block `data` is not reporting any code")
   expect_no_match(html, "applied to an object of class")
 })
 
@@ -583,7 +583,8 @@ test_that("an upstream holding a function accuses the upstream, not the leaf", {
   )
 
   expect_match(html, "An upstream block produced a function, not data")
-  expect_match(html, "Check what feeds `up`")
+  # The block's NAME, with the id: an id alone appears nowhere in the UI.
+  expect_match(html, "`Dataset` \\(up\\)")
   # The class of every id the chunk reads: the fact that settles it.
   expect_match(html, "reads up = function")
 })
@@ -599,4 +600,33 @@ test_that("a healthy chunk reads no failure line", {
 
   expect_match(html, "blockr-otl-exhibit")
   expect_no_match(html, "reads up")
+})
+
+test_that("seeded messages carry the block name too", {
+
+  board <- blockr.core::new_board(
+    blocks = c(
+      up = blockr.core::new_dataset_block("iris"),
+      leaf = blockr.core::new_head_block()
+    ),
+    links = blockr.core::links(from = "up", to = "leaf")
+  )
+
+  s <- outline_sections(
+    structure(list(up = quote(stop("pin not found")),
+                   leaf = quote(utils::head(up, 3))),
+              pending = character()),
+    board,
+    annotations = list(up = list(report = FALSE), leaf = list(report = TRUE)),
+    stack_annotations = list()
+  )
+
+  html <- as.character(
+    outline_output_map(
+      s, blockr.core::board_block_ids(board), blockr.core::board_links(board)
+    )[["leaf"]]
+  )
+
+  expect_match(html, "upstream block `Dataset` \\(up\\)")
+  expect_match(html, "pin not found")
 })
