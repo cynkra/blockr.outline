@@ -221,29 +221,49 @@ highlight_qmd_code <- function(txt) {
   paste0("<pre class=\"chroma\">", paste(out, collapse = "\n"), "</pre>")
 }
 
+# One part of a pptx (which is a zip) as a single XML string, or NULL when the
+# deck or the part cannot be read. Everything that introspects the reference
+# template goes through here, and every caller has a fallback: a template we
+# could not open must degrade to a default, never fail a render.
+template_part <- function(template, part) {
+
+  if (is.null(template) || !nzchar(template) || !file.exists(template)) {
+    return(NULL)
+  }
+
+  dir <- tempfile("blockr-tmpl-")
+  dir.create(dir)
+  on.exit(unlink(dir, recursive = TRUE), add = TRUE)
+
+  # A deck that does not carry this part is an answer, not a failure: unzip
+  # warns about the file it could not find and the caller falls back.
+  tryCatch(
+    {
+      suppressWarnings(utils::unzip(template, files = part, exdir = dir))
+
+      f <- file.path(dir, part)
+      if (!file.exists(f)) return(NULL)
+
+      paste(readLines(f, warn = FALSE), collapse = "")
+    },
+    error = function(e) NULL
+  )
+}
+
 # Usable table width (inches) for a pptx slide: the reference template's
 # body/content placeholder width, or a 16:9 widescreen fallback. Read from
-# the master's body placeholder `ext cx` (EMU, 914400 = 1in). Everything is
-# guarded -- a missing / unreadable template just yields the fallback, never
-# an error in the render path.
+# the master's body placeholder `ext cx` (EMU, 914400 = 1in).
 template_content_width <- function(template) {
   fallback <- 12.0
 
-  if (is.null(template) || !nzchar(template) || !file.exists(template)) {
+  xml <- template_part(template, "ppt/slideMasters/slideMaster1.xml")
+
+  if (is.null(xml)) {
     return(fallback)
   }
 
   out <- tryCatch(
     {
-      dir <- tempfile("bms-tmpl-")
-      dir.create(dir)
-      on.exit(unlink(dir, recursive = TRUE), add = TRUE)
-      utils::unzip(template, exdir = dir)
-
-      master <- file.path(dir, "ppt", "slideMasters", "slideMaster1.xml")
-      if (!file.exists(master)) return(fallback)
-      xml <- paste(readLines(master, warn = FALSE), collapse = "")
-
       # The body placeholder's shape carries `type="body"` then, further on,
       # its `<a:ext cx=.. cy=..>`. Grab the first ext after the body ph.
       body <- regmatches(
@@ -258,6 +278,42 @@ template_content_width <- function(template) {
   )
 
   if (length(out) == 1L && is.finite(out) && out > 0) out else fallback
+}
+
+# The deck's own body typeface: the theme's MINOR latin font (PowerPoint's
+# "body font"; the major one is for titles). NULL when the template carries no
+# readable font scheme.
+#
+# Why the render reads this at all. Everything the template draws itself -- the
+# title placeholder, the footer -- is already set in the master's face, because
+# PowerPoint resolves those against the theme. An exhibit does not: flextable
+# writes an explicit `<a:latin typeface=..>` on every run, so a table lands on
+# the slide in whatever font the renderer defaulted to, and it is the one thing
+# on the slide that does not match its own master. That mismatch is also
+# invisible where it is authored (the browser has the font; the machine that
+# opens the pptx substitutes something else), which is why the deck is asked
+# rather than the app.
+template_body_font <- function(template) {
+
+  xml <- template_part(template, "ppt/theme/theme1.xml")
+
+  if (is.null(xml)) {
+    return(NULL)
+  }
+
+  minor <- regmatches(
+    xml,
+    regexpr("<a:minorFont>.*?<a:latin typeface=\"[^\"]*\"", xml)
+  )
+
+  if (!length(minor)) {
+    return(NULL)
+  }
+
+  face <- regmatches(minor, regexpr("typeface=\"[^\"]*\"", minor))
+  face <- sub("\"$", "", sub("^typeface=\"", "", face))
+
+  if (!length(face) || !nzchar(face)) NULL else face
 }
 
 # Render the qmd (quarto) or the spin script (rmarkdown fallback) into
@@ -732,7 +788,21 @@ render_pptx_officer <- function(sects, file, title, template = NULL) {
   # Size tables to the slide's usable width so they do not overflow: the
   # static_table() default reads this option.
   fit_w <- template_content_width(template)
-  old <- options(blockr.viz.ft_fit_width = fit_w)
+
+  # ... and set them in the deck's own face, so the table matches the title
+  # above it. Only when nothing else has: a theme that names an exhibit font
+  # (`exhibits = list(ft_font = ..)`) has said what it wants, and the app is
+  # then the more specific answer than the file.
+  font <- if (is.null(getOption("blockr.viz.ft_font"))) {
+    template_body_font(template)
+  }
+
+  old <- options(
+    c(
+      list(blockr.viz.ft_fit_width = fit_w),
+      if (!is.null(font)) list(blockr.viz.ft_font = font)
+    )
+  )
   on.exit(options(old), add = TRUE)
 
   # Evaluate every exported block's code once, in order, in a fresh env --
@@ -770,6 +840,8 @@ render_pptx_officer <- function(sects, file, title, template = NULL) {
     } else {
       paste0("template MISSING: ", template, " -- officer stock deck")
     },
+    " | exhibit font: ",
+    coal(getOption("blockr.viz.ft_font"), "renderer default"),
     "\n",
     sep = "", file = stderr()
   )

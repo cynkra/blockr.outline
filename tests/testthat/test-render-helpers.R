@@ -82,12 +82,89 @@ test_that("template_content_width reads the body placeholder, falls back safely"
   expect_equal(template_content_width(""), 12.0)
   expect_equal(template_content_width("/no/such/file.pptx"), 12.0)
 
-  tmpl <- system.file("templates", "bms-template.pptx",
-                      package = "blockr.topline")
-  skip_if(!nzchar(tmpl), "blockr.topline template not available")
-  w <- template_content_width(tmpl)
-  # the BMS body placeholder is ~12.53in wide
-  expect_true(w > 10 && w < 13)
+  # The bundled fallback deck is widescreen: a body placeholder wider than
+  # the 10in stock reference doc.
+  w <- template_content_width(default_template())
+  expect_true(w > 10 && w < 13.34)
+})
+
+# A reference deck whose theme font scheme is `face`, built from officer's
+# stock deck so the fixture needs no asset of its own.
+local_font_template <- function(face, env = parent.frame()) {
+  src <- withr::local_tempfile(fileext = ".pptx", .local_envir = env)
+  print(officer::read_pptx(), target = src)
+
+  dir <- withr::local_tempdir(.local_envir = env)
+  utils::unzip(src, exdir = dir)
+
+  theme <- file.path(dir, "ppt", "theme", "theme1.xml")
+  xml <- paste(readLines(theme, warn = FALSE), collapse = "")
+  writeLines(gsub("<a:latin typeface=\"[^\"]*\"",
+                  paste0("<a:latin typeface=\"", face, "\""), xml), theme)
+
+  out <- withr::local_tempfile(fileext = ".pptx", .local_envir = env)
+  zip::zip(out, list.files(dir), root = dir, mode = "cherry-pick")
+  out
+}
+
+test_that("template_body_font reads the deck's font scheme, falls back safely", {
+  skip_if_not_installed("officer")
+  skip_if_not_installed("zip")
+
+  expect_null(template_body_font(NULL))
+  expect_null(template_body_font(""))
+  expect_null(template_body_font("/no/such/file.pptx"))
+
+  expect_equal(template_body_font(local_font_template("Papyrus")), "Papyrus")
+
+  # The bundled deck names one face, whatever it is.
+  face <- template_body_font(default_template())
+  expect_type(face, "character")
+  expect_true(nzchar(face))
+})
+
+test_that("a deck sets its exhibits in the template's own font", {
+  skip_if_not_installed("officer")
+  skip_if_not_installed("flextable")
+  skip_if_not_installed("blockr.viz")
+  skip_if_not_installed("zip")
+
+  tmpl <- local_font_template("Papyrus")
+
+  sects <- outline_sections(
+    structure(list(data = quote(datasets::iris)), pending = character()),
+    blockr.core::new_board(
+      blocks = c(data = blockr.core::new_dataset_block("iris"))
+    ),
+    annotations = list(data = list(report = TRUE)),
+    stack_annotations = list()
+  )
+
+  slide_xml <- function(f) {
+    paste(readLines(utils::unzip(f, "ppt/slides/slide1.xml",
+                                 exdir = withr::local_tempdir()),
+                    warn = FALSE),
+          collapse = "")
+  }
+
+  f <- withr::local_tempfile(fileext = ".pptx")
+  withr::with_options(list(blockr.viz.ft_font = NULL), {
+    render_pptx_officer(sects, f, "Deck", template = tmpl)
+  })
+  expect_match(slide_xml(f), "Papyrus")
+
+  # An app that named a font has said what it wants; the deck does not
+  # overrule it.
+  g <- withr::local_tempfile(fileext = ".pptx")
+  withr::with_options(list(blockr.viz.ft_font = "Trebuchet MS"), {
+    render_pptx_officer(sects, g, "Deck", template = tmpl)
+  })
+  x <- slide_xml(g)
+  expect_match(x, "Trebuchet MS")
+  expect_false(grepl("Papyrus", x, fixed = TRUE))
+
+  # ... and the option is left exactly as it was found.
+  expect_null(getOption("blockr.viz.ft_font"))
 })
 
 test_that("place_exhibit positions a flextable at its pptx attributes", {
