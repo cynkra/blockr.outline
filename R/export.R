@@ -567,6 +567,50 @@ block_icon_html <- function(blk) {
   val
 }
 
+na_blank <- function(x) {
+  if (length(x) != 1L || is.na(x)) "" else as.character(x)
+}
+
+# A markdown description as one plain-text line: what the condensed
+# dormant row shows, and what the search menu shows under a block's name.
+desc_oneline <- function(x) {
+
+  if (!length(x) || !nzchar(x)) {
+    return("")
+  }
+
+  gsub("\\s+", " ", trimws(commonmark::markdown_text(x, extensions = TRUE)))
+}
+
+# The search catalogue: one entry per board block, the listed ones first
+# and each group in document order. The search box is a single control over
+# the whole board -- a listed block is a "go to", an unlisted one an "add"
+# -- so it needs the document and the pool in one payload. `runs` marks a
+# block the report already depends on: including it only makes its output
+# visible, it was going to be evaluated either way.
+outline_catalog <- function(sects, listed) {
+
+  is_listed <- sects$ids %in% listed
+  ord <- c(which(is_listed), which(!is_listed))
+
+  lapply(
+    ord,
+    function(i) {
+      # `[[` throughout: names / icons / descriptions are NAMED vectors, and
+      # a named element serialises as a JSON object, not a string.
+      list(
+        id = sects$ids[[i]],
+        name = sects$names[[i]],
+        icon = na_blank(sects$icons[[i]]),
+        chapter = na_blank(sects$stack_names[[i]]),
+        desc = desc_oneline(sects$descriptions[[i]]),
+        listed = is_listed[[i]],
+        runs = isTRUE(sects$exported[[i]]) && !isTRUE(sects$report[[i]])
+      )
+    }
+  )
+}
+
 # Narrow a sections projection to the ids the outline LISTS (the report
 # blocks, unless show-all). Like prune_sections(), but for display: the
 # drag-geometry fields are recomputed on the visible subsequence rather

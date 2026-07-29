@@ -41,7 +41,7 @@ outline_js <- function(ns) {
       "ADD = '%s', RM = '%s', CHAP = '%s', NEWCHAP = '%s', ",
       "TOSTACK = '%s', MOVECHAP = '%s', GEAR = '%s', SETTINGS = '%s', ",
       "PANEL = '%s', VISIBLE = '%s', BULK = '%s', RENTITLE = '%s', ",
-      "HIDE = '%s';"
+      "HIDE = '%s', INCLUDE = '%s';"
     ),
     ns("outline_toggle"),
     ns("outline_open"),
@@ -63,7 +63,8 @@ outline_js <- function(ns) {
     ns("otl_visible"),
     ns("outline_bulk"),
     ns("outline_rename_title"),
-    ns("outline_hide")
+    ns("outline_hide"),
+    ns("otl_include")
   )
 
   tags$script(HTML(paste0(
@@ -197,94 +198,243 @@ outline_js <- function(ns) {
           );
         });
       }
-      // Instant search: CLIENT-ONLY filter over the outline. Matches a
-      // block's name / description / code and its chapter name; non-matching
-      // rows get 'blockr-otl-filtered' (display:none). While a query is
-      // active collapse is overridden so matches inside a collapsed chapter
-      // still show; clearing the box restores the collapsed state. Like
-      // collapse, it re-applies after every renderUI via shiny:value.
-      function applyFilter() {
-        var input = document.querySelector('.blockr-otl-searchinput');
-        var q = (input && input.value ? input.value : '').trim().toLowerCase();
+      // ---- search: one box over the whole board -------------------------
+      // The catalogue (every block, the listed ones first) is pushed by the
+      // server; the menu is rendered HERE so the input never re-renders and
+      // never loses focus mid-query. A listed block is a \"go to\" -- its row
+      // is in the DOM -- and an unlisted one an \"add\", which writes
+      // otl_include, the same input the old include picker fed. The menu
+      // stays open after an add so building a document is type, Enter,
+      // type, Enter.
+      //
+      // The rows ARE the block browser's rows: same classes, same
+      // stylesheet (blockr.dock ships sidebar-block.css and the dock
+      // pre-renders the browser sidebar on every board, so it is already on
+      // the page). Picking a block looks the same everywhere in the app,
+      // and this file owns no row styling. Two deliberate divergences: the
+      // second line is the DESCRIPTION rather than the package name (on a
+      // report board that is what tells two similar tables apart), and the
+      // package pill carries the \"runs\" marker instead.
+      var catalog = [];
+      var hot = 0;
 
-        var box = input && input.closest('.blockr-otl-search');
-        if (box) box.classList.toggle('has-value', !!(input && input.value));
-
-        if (!q) {
-          document.querySelectorAll('.blockr-otl-filtered').forEach(
-            function(el) { el.classList.remove('blockr-otl-filtered'); });
-          document.querySelectorAll('.blockr-otl-addrow').forEach(
-            function(el) { el.classList.remove('blockr-otl-filtered'); });
-          document.body.classList.remove('blockr-otl-filtering');
-          applyCollapsed();          // restore collapsed chapters
-          return;
-        }
-
-        document.body.classList.add('blockr-otl-filtering');
-        // Filtering overrides collapse so matches are always visible.
-        document.querySelectorAll('.blockr-otl-hidden').forEach(
-          function(el) { el.classList.remove('blockr-otl-hidden'); });
-
-        var stackHit = {};
-        document.querySelectorAll('.blockr-otl-grow[data-blk]').forEach(
-          function(row) {
-            var hit = (row.textContent || '').toLowerCase().indexOf(q) !== -1;
-            row.classList.toggle('blockr-otl-filtered', !hit);
-            if (hit && row.dataset.stack) stackHit[row.dataset.stack] = true;
-          });
-
-        // Add rows are chrome; hide them while searching.
-        document.querySelectorAll('.blockr-otl-addrow').forEach(
-          function(el) { el.classList.add('blockr-otl-filtered'); });
-
-        // A chapter shows if any member matched or its own name matches;
-        // a name match reveals all of its blocks.
-        document.querySelectorAll('.blockr-otl-chap[data-stack]').forEach(
-          function(ch) {
-            var s = ch.dataset.stack;
-            var lbl = (ch.querySelector('.blockr-otl-chlabel') || {}).textContent || '';
-            var nameHit = lbl.toLowerCase().indexOf(q) !== -1;
-            var show = nameHit || stackHit[s];
-            ch.classList.toggle('blockr-otl-filtered', !show);
-            if (nameHit) {
-              document.querySelectorAll(
-                '.blockr-otl-grow[data-stack=\\\"' + s + '\\\"]'
-              ).forEach(function(row) {
-                row.classList.remove('blockr-otl-filtered');
-              });
-            }
-            var intro = document.querySelector(
-              '.blockr-otl-introrow[data-stack=\\\"' + s + '\\\"]'
-            );
-            if (intro) intro.classList.toggle('blockr-otl-filtered', !show);
+      function searchRoot() {
+        return document.querySelector('.blockr-otl-search');
+      }
+      function searchInput() {
+        return document.querySelector('.blockr-otl-searchinput');
+      }
+      function searchQuery() {
+        var inp = searchInput();
+        return (inp && inp.value ? inp.value : '').trim().toLowerCase();
+      }
+      function esc(s) {
+        return String(s == null ? '' : s).replace(/[&<>]/g, function(c) {
+          return {'&': '&amp;', '<': '&lt;', '>': '&gt;'}[c];
+        });
+      }
+      // Mark the matched substring, on escaped text.
+      function mark(text, q) {
+        var t = String(text == null ? '' : text);
+        if (!q) return esc(t);
+        var i = t.toLowerCase().indexOf(q);
+        if (i < 0) return esc(t);
+        return esc(t.slice(0, i)) + '<mark>' + esc(t.slice(i, i + q.length)) +
+          '</mark>' + esc(t.slice(i + q.length));
+      }
+      // Match on everything the entry shows plus the id, which is what
+      // disambiguates two blocks carrying the same name.
+      function searchHits(q) {
+        return catalog.filter(function(b) {
+          if (!q) return true;
+          return (b.name + ' ' + b.desc + ' ' + b.chapter + ' ' + b.id)
+            .toLowerCase().indexOf(q) >= 0;
+        });
+      }
+      function cardHtml(b, q, idx) {
+        var meta = [];
+        if (b.chapter) meta.push(mark(b.chapter, q));
+        meta.push(b.desc ? mark(b.desc, q) : esc(b.id));
+        return '<div class=\"blockr-block-browser-card\" data-blk=\"' +
+          esc(b.id) + '\" data-idx=\"' + idx + '\" data-listed=\"' +
+          (b.listed ? '1' : '0') + '\">' +
+          '<div class=\"blockr-block-browser-card-header\">' +
+            '<span class=\"blockr-block-browser-card-icon\">' +
+              (b.icon || '') + '</span>' +
+            '<div class=\"blockr-block-browser-card-body\">' +
+              '<div class=\"blockr-block-browser-card-titles\">' +
+                '<span class=\"blockr-block-browser-card-name\">' +
+                  mark(b.name, q) + '</span>' +
+                (b.runs && !b.listed ?
+                  '<span class=\"blockr-block-browser-card-package\">runs' +
+                  '</span>' : '') +
+                '<span class=\"blockr-otl-optact\">' +
+                  (b.listed ? 'Go to' : 'Add') + '</span>' +
+              '</div>' +
+              '<p class=\"blockr-otl-optdesc\">' + meta.join(' \\u00b7 ') +
+                '</p>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+      }
+      function sectionHtml(title, items, q, start) {
+        if (!items.length) return '';
+        var html = '<div class=\"blockr-block-browser-category\"><h3>' +
+          title + '</h3><div class=\"blockr-block-browser-cards\">';
+        items.forEach(function(b, k) { html += cardHtml(b, q, start + k); });
+        return html + '</div></div>';
+      }
+      // Keyboard selection, the browser's own marker class. Scrolls only
+      // when the arrows moved it, so a re-render never jumps the panel.
+      function selectHot(scroll) {
+        var root = searchRoot();
+        if (!root) return;
+        root.querySelectorAll('.blockr-block-browser-card').forEach(
+          function(c, i) {
+            var on = i === hot;
+            c.classList.toggle('card-selected', on);
+            if (on && scroll) c.scrollIntoView({block: 'nearest'});
           });
       }
+      function renderMenu() {
+        var root = searchRoot();
+        var menu = root && root.querySelector('.blockr-otl-searchmenu');
+        if (!menu) return;
+
+        var q = searchQuery();
+        var all = searchHits(q);
+        var inn = all.filter(function(b) { return b.listed; });
+        var out = all.filter(function(b) { return !b.listed; });
+        if (hot >= all.length) hot = Math.max(0, all.length - 1);
+
+        var count = root.querySelector('.blockr-otl-searchcount');
+        if (count) {
+          var pool = catalog.filter(function(b) { return !b.listed; }).length;
+          count.textContent = pool ? pool + ' not in report' : '';
+        }
+        root.classList.toggle('has-value', !!q);
+
+        menu.classList.toggle('is-empty', !all.length);
+        menu.innerHTML =
+          '<div class=\"blockr-block-browser-categories\">' +
+            sectionHtml('In the report', inn, q, 0) +
+            sectionHtml('Add to the report', out, q, inn.length) +
+          '</div>' +
+          '<div class=\"blockr-block-browser-empty\">' +
+            'No blocks match your search.</div>';
+        selectHot(false);
+      }
+      function searchOpen() {
+        var root = searchRoot();
+        if (!root) return;
+        root.classList.add('open');
+        renderMenu();
+      }
+      function searchClose() {
+        var root = searchRoot();
+        if (root) root.classList.remove('open');
+      }
+      // Reveal a listed row: uncollapse its chapter if needed, scroll it
+      // into the middle of the panel and flash it, so a jump on a long
+      // document lands somewhere visible.
+      function gotoRow(id) {
+        var row = document.querySelector(
+          '.blockr-otl-grow[data-blk=\"' + id + '\"]'
+        );
+        if (!row) return;
+        if (row.dataset.stack && collapsedStacks.has(row.dataset.stack)) {
+          collapsedStacks.delete(row.dataset.stack);
+          applyCollapsed();
+        }
+        row.scrollIntoView({block: 'center', behavior: 'smooth'});
+        row.classList.remove('blockr-otl-flash');
+        void row.offsetWidth;
+        row.classList.add('blockr-otl-flash');
+      }
+      function searchChoose(idx) {
+        var q = searchQuery();
+        var all = searchHits(q);
+        var inn = all.filter(function(b) { return b.listed; });
+        var out = all.filter(function(b) { return !b.listed; });
+        var b = inn.concat(out)[idx];
+        if (!b) return;
+        if (b.listed) {
+          searchClose();
+          var inp = searchInput();
+          if (inp) inp.blur();
+          gotoRow(b.id);
+          return;
+        }
+        // Add: the server flips the report flag and pushes a new catalogue,
+        // which re-renders the menu with the entry moved to the first group.
+        Shiny.setInputValue(INCLUDE, b.id, {priority: 'event'});
+      }
+
+      Shiny.addCustomMessageHandler('blockr-outline-catalog', function(msg) {
+        catalog = msg.items || [];
+        renderMenu();
+      });
+
       document.addEventListener('input', function(ev) {
         if (ev.target && ev.target.classList &&
             ev.target.classList.contains('blockr-otl-searchinput')) {
-          applyFilter();
+          // Top hit selected on every keystroke, so Enter always does
+          // something (the block browser's behaviour).
+          hot = 0;
+          searchOpen();
         }
       });
-      document.addEventListener('click', function(ev) {
-        var clr = ev.target.closest &&
-          ev.target.closest('.blockr-otl-searchclear');
-        if (clr) {
-          var inp = document.querySelector('.blockr-otl-searchinput');
-          if (inp) { inp.value = ''; applyFilter(); inp.focus(); }
-        }
-      });
-      document.addEventListener('keydown', function(ev) {
-        if (ev.key === 'Escape' && ev.target && ev.target.classList &&
+      document.addEventListener('focusin', function(ev) {
+        if (ev.target && ev.target.classList &&
             ev.target.classList.contains('blockr-otl-searchinput')) {
-          ev.target.value = '';
-          applyFilter();
+          searchOpen();
+        }
+      });
+      // mousedown, not click: click fires after blur, and blurring the
+      // input would have to close the menu first.
+      document.addEventListener('mousedown', function(ev) {
+        var card = ev.target.closest &&
+          ev.target.closest('.blockr-otl-searchmenu .blockr-block-browser-card');
+        if (!card) return;
+        ev.preventDefault();
+        searchChoose(parseInt(card.dataset.idx, 10));
+      });
+      // CAPTURE phase on purpose: choosing an entry re-renders the menu and
+      // detaches the clicked node, so a bubble-phase listener would see a
+      // target that is no longer inside the box and close it on every add.
+      document.addEventListener('mousedown', function(ev) {
+        var root = searchRoot();
+        if (root && !root.contains(ev.target)) searchClose();
+      }, true);
+      document.addEventListener('keydown', function(ev) {
+        if (!(ev.target && ev.target.classList &&
+              ev.target.classList.contains('blockr-otl-searchinput'))) {
+          return;
+        }
+        var n = searchHits(searchQuery()).length;
+        if (ev.key === 'ArrowDown') {
+          // Wrapping, like the block browser.
+          hot = n ? (hot + 1) % n : 0;
+          selectHot(true); ev.preventDefault();
+        } else if (ev.key === 'ArrowUp') {
+          hot = n ? (hot + n - 1) % n : 0;
+          selectHot(true); ev.preventDefault();
+        } else if (ev.key === 'Enter') {
+          searchChoose(hot); ev.preventDefault();
+        } else if (ev.key === 'Escape') {
+          // The browser leaves Escape to its sidebar; this box has no
+          // container to close it, so it clears first and closes second.
+          if (ev.target.value) {
+            ev.target.value = ''; hot = 0; searchOpen();
+          } else {
+            searchClose(); ev.target.blur();
+          }
         }
       });
 
       $(document).on('shiny:value', function(ev) {
         if (ev.name && /outline_out$/.test(ev.name)) {
           setTimeout(applyCollapsed, 0);
-          setTimeout(applyFilter, 0);
 
           // Fill in any push that landed before this render inserted its
           // nodes. renderUI carries current code, so this is a no-op
@@ -929,10 +1079,7 @@ outline_tags <- function(sects, ns, editing = NULL) {
               if (nzchar(desc)) {
                 # One plain-text line; the markdown structure belongs to
                 # the expanded row.
-                gsub(
-                  "\\s+", " ",
-                  trimws(commonmark::markdown_text(desc, extensions = TRUE))
-                )
+                desc_oneline(desc)
               } else {
                 span(
                   class = "blockr-otl-placeholder",
@@ -1187,35 +1334,6 @@ outline_tags <- function(sects, ns, editing = NULL) {
   })
 
   div(class = "blockr-otl", grid_rows)
-}
-
-# The include picker under the outline: a searchable select over every
-# board block not currently in the report. On a large board this replaces
-# scrolling a list that is 90% excluded blocks -- you never see the pool,
-# you search it. Selecting flips the block's report flag (see the
-# otl_include observer); the skeleton redraw rebuilds the control with the
-# shrunken pool, so no client-side reset is needed. Hidden entirely when
-# the pool is empty (everything is already in the report, or show-all).
-outline_include_picker <- function(ns, addable) {
-
-  if (!length(addable)) {
-    return(NULL)
-  }
-
-  div(
-    class = "blockr-otl-includebar",
-    selectizeInput(
-      ns("otl_include"),
-      label = NULL,
-      choices = c("", addable),
-      selected = "",
-      width = "280px",
-      options = list(
-        placeholder = "Add block to report\u2026",
-        openOnFocus = TRUE
-      )
-    )
-  )
 }
 
 # The report title as the top-level "chapter": document title on the left

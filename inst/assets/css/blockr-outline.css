@@ -242,33 +242,97 @@
 .blockr-otl-chev { width: 14px; height: 14px; transition: transform 0.15s ease; }
 .blockr-otl-chap.collapsed .blockr-otl-chev { transform: rotate(-90deg); }
 .blockr-otl-hidden { display: none !important; }
-.blockr-otl-filtered { display: none !important; }
 
-/* Instant search box: sits in the left column, matching the width of the
-   block chips / toggles (the grid's 168px first track). Pushed down from the
-   title line and pulled close to the content below. */
-.blockr-otl-search { position: relative; display: flex; align-items: center;
-  width: 168px; margin: 20px 0 2px; }
-.blockr-otl-searchicon { position: absolute; left: 10px;
-  color: var(--blockr-grey-400, #9ca3af); pointer-events: none; }
-.blockr-otl-searchinput { width: 100%; height: 32px; padding: 0 28px 0 30px;
-  font-size: 0.8125rem; color: var(--blockr-grey-800, #1f2937);
-  background: var(--blockr-grey-50, #f9fafb);
-  border: 1px solid var(--blockr-color-border, #e5e7eb); border-radius: 6px;
-  outline: none; transition: border-color 0.12s ease, background 0.12s ease; }
-.blockr-otl-searchinput:focus { background: var(--blockr-color-bg, #fff);
-  border-color: var(--blockr-blue-400, #60a5fa); }
-.blockr-otl-searchinput::placeholder { color: var(--blockr-grey-400, #9ca3af); }
-/* Clear (x): only while there is text. */
-.blockr-otl-searchclear { position: absolute; right: 6px; top: 50%;
-  transform: translateY(-50%); display: none; align-items: center;
-  justify-content: center; width: 18px; height: 18px; padding: 0; border: none;
-  background: transparent; color: var(--blockr-grey-400, #9ca3af);
-  cursor: pointer; border-radius: 4px; transition: background 0.12s ease,
-  color 0.12s ease; }
-.blockr-otl-searchclear:hover { background: var(--blockr-grey-100, #f3f4f6);
-  color: var(--blockr-grey-700, #374151); }
-.blockr-otl-search.has-value .blockr-otl-searchclear { display: flex; }
+/* Search box (decision record: outline-search-proposals.html, variant A,
+   restyled onto the block browser). ONE full-width control over the whole
+   board: the document it lists and the pool it does not are two sections
+   of one menu, a listed block is a "go to" and an unlisted one an "add".
+   It replaced both the 168px row filter and the include picker under the
+   list.
+
+   The field, the menu and its rows wear blockr.dock's block-browser
+   classes, so picking a block looks the same here as in the add-block
+   sidebar and this file owns no row styling. sidebar-block.css is already
+   on the page (the dock pre-renders that sidebar on every board). What is
+   left below is only what the browser cannot know: the menu is a dropdown
+   rather than a sidebar column, and the field carries the pool count. */
+/* The card classes read blockr.dock's private --bb-* tokens, which that
+   stylesheet declares on its own roots. Wearing one of those roots would
+   also opt into the browser's input binding and search JS, so the tokens
+   are mapped here instead -- onto the --blockr-* scale, which is where
+   the design system wants them to end up anyway. */
+.blockr-otl-search {
+  position: relative; margin: 16px 0 2px;
+  --bb-grey-50: var(--blockr-grey-50, #f9fafb);
+  --bb-grey-100: var(--blockr-grey-100, #f3f4f6);
+  --bb-grey-200: var(--blockr-grey-200, #e5e7eb);
+  --bb-grey-300: var(--blockr-grey-300, #d1d5db);
+  --bb-grey-400: var(--blockr-grey-400, #9ca3af);
+  --bb-grey-500: var(--blockr-grey-500, #6b7280);
+  --bb-grey-600: var(--blockr-grey-600, #4b5563);
+  --bb-grey-700: var(--blockr-grey-700, #374151);
+  --bb-grey-900: var(--blockr-grey-900, #111827);
+  --bb-blue-100: var(--blockr-blue-100, #dbeafe);
+  --bb-blue-500: var(--blockr-blue-500, #3b82f6);
+  --bb-blue-600: var(--blockr-blue-600, #2563eb);
+  --bb-blue-700: var(--blockr-blue-700, #1d4ed8);
+  --bb-icon: 32px;
+  --bb-gap: 12px;
+}
+/* Room for the count, which the browser's own field has no slot for. */
+.blockr-otl-search .blockr-otl-searchinput { padding-right: 108px; }
+.blockr-otl-searchcount { position: absolute; right: 12px; top: 50%;
+  transform: translateY(-50%); pointer-events: none; font-size: 0.75rem;
+  color: var(--blockr-grey-400, #9ca3af); }
+/* Gone once there is a query: the native search clear sits there. */
+.blockr-otl-search.has-value .blockr-otl-searchcount { display: none; }
+.blockr-otl-search.has-value .blockr-otl-searchinput { padding-right: 12px; }
+
+/* The menu overlays the document rather than pushing it down: the
+   question the search answers is usually "what is this document still
+   missing", and the answer reads better with the document left in place.
+   The block-browser root is a full-height sidebar column, so its box
+   model is the one thing overridden here. */
+.blockr-otl-search .blockr-otl-searchmenu { display: none; position: absolute;
+  left: 0; right: 0; top: calc(100% + 4px); z-index: 30; margin: 0;
+  padding: 6px 0; height: auto; max-height: 320px; gap: 0;
+  background: var(--blockr-color-bg, #fff);
+  border: 1px solid var(--blockr-color-border, #e5e7eb); border-radius: 8px;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12); }
+.blockr-otl-search.open .blockr-otl-searchmenu { display: flex; }
+.blockr-otl-searchmenu .blockr-block-browser-categories { gap: 6px; }
+/* The browser toggles its empty state from its root; this menu is its
+   own root, so the same two rules are restated for it. */
+.blockr-otl-searchmenu.is-empty .blockr-block-browser-categories {
+  display: none; }
+.blockr-otl-searchmenu.is-empty .blockr-block-browser-empty { display: flex; }
+/* The icons the outline projects are self-contained tinted tiles (the
+   dock's data-uri form), so the wrapper carries no tint of its own and
+   the glyph fills it. */
+.blockr-otl-searchmenu .blockr-block-browser-card-icon { background: none; }
+.blockr-otl-searchmenu .blockr-block-browser-card-icon svg,
+.blockr-otl-searchmenu .blockr-block-browser-card-icon img {
+  width: 32px; height: 32px; }
+.blockr-otl-searchmenu mark { background: #fef08a; color: inherit;
+  border-radius: 2px; padding: 0 1px; }
+/* What the row does when chosen, in the browser's trailing slot. */
+.blockr-otl-optact { flex: 0 0 auto; font-size: 0.75rem; font-weight: 500;
+  color: var(--blockr-grey-400, #9ca3af); }
+.blockr-block-browser-card:hover .blockr-otl-optact,
+.blockr-block-browser-card.card-selected .blockr-otl-optact {
+  color: var(--blockr-blue-600, #2563eb); }
+/* The description, where the browser puts the package name: on a report
+   board it is what tells two similar tables apart. */
+.blockr-otl-optdesc { margin: 1px 0 0; font-size: 0.75rem; line-height: 1.35;
+  color: var(--blockr-grey-500, #6b7280); white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; }
+
+/* Landing mark for a "go to": the jumped-to row fades from a blue wash. */
+.blockr-otl-flash .blockr-otl-gsect { animation: blockr-otl-flash 1.1s ease; }
+@keyframes blockr-otl-flash {
+  0% { background: var(--blockr-blue-50, #eff6ff); }
+  100% { background: transparent; }
+}
 
 /* chapters, variant B revised (outline-document-styling-proposals.html +
    feedback): ONE thread on the far left from chapter title to the run's
@@ -405,15 +469,11 @@
 .blockr-otl-grow.chap-endhot .blockr-otl-gsect::after {
   border-top: 2px solid var(--accent, #2563eb); }
 
-/* Include picker under the outline + the empty-document hint. The picker
-   aligns with the section column (past the gutter). */
-.blockr-otl-includebar { margin: 10px 0 4px 182px; }
-.blockr-otl-includebar .form-group { margin-bottom: 0; }
-.blockr-otl-includebar .selectize-input { font-size: 0.8125rem; min-height: 30px;
-                                          padding: 4px 10px; border-radius: 6px;
-                                          border-color: var(--blockr-grey-200, #e5e7eb); }
-.blockr-otl-includebar .selectize-dropdown { font-size: 0.8125rem; }
-.blockr-otl-emptydoc { margin: 14px 0 4px 182px; font-size: 0.8125rem;
+/* The empty-document hint. Aligned with the search box above it, not with
+   the section column: there are no rows to line up with, and the box is
+   what the hint points at. A fresh board opens on this, since the report
+   flag defaults off. */
+.blockr-otl-emptydoc { margin: 16px 0 4px 2px; font-size: 0.8125rem;
                        font-style: italic;
                        color: var(--blockr-grey-400, #9ca3af); }
 

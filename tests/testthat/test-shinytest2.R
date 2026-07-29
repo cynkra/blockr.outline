@@ -99,21 +99,19 @@ pre_text <- function() {
 # Tests
 # ---------------------------------------------------------------------------
 
-test_that("the outline lists the report blocks; excluded ones sit in the picker", {
+test_that("the outline lists the report blocks; the rest are searchable", {
   skip_if_no_app()
   set_view("outline")
 
-  # `audit` is report = FALSE -> not listed, offered by the include picker.
+  # `audit` is report = FALSE -> not listed, offered by the search box.
   expect_equal(count(".blockr-otl-chip"), 3)
   expect_equal(count(".blockr-otl-offchip"), 0)
-  expect_equal(count(".blockr-otl-includebar"), 1)
-  # selectize strips the native <option>s; its own store holds the pool.
+  expect_equal(count(".blockr-otl-search"), 1)
+
+  # The pool count sits in the control, before anything is typed.
   expect_match(
-    app$get_js(paste0(
-      "JSON.stringify(Object.keys($(",
-      "'.blockr-otl-includebar select')[0].selectize.options))"
-    )),
-    "audit"
+    app$get_js("document.querySelector('.blockr-otl-searchcount').textContent"),
+    "not in report"
   )
 
   # Both chapter headings are present (Outputs keeps its listed member).
@@ -158,13 +156,13 @@ test_that("the report toggle lists and unlists without a board update", {
   expect_equal(count(".blockr-otl-chip"), 3)
 })
 
-test_that("the include picker lists a block from the pool", {
+test_that("otl_include lists a block from the pool", {
   skip_if_no_app()
   set_view("outline")
   expect_equal(count(".blockr-otl-chip"), 3)
 
-  app$set_inputs(!!ext("otl_include") := "audit", wait_ = FALSE)
-  app$wait_for_idle()
+  # The input the search menu writes when a pool entry is chosen.
+  send("otl_include", "audit")
   expect_equal(count(".blockr-otl-chip"), 4)
 
   send("outline_toggle", list(id = "audit", report = FALSE))
@@ -357,40 +355,87 @@ test_that("the report title is shown and renames in place", {
   set_view("outline")
 })
 
-test_that("instant search filters the outline to matching blocks", {
+test_that("the search box lists the document and the pool in one menu", {
   skip_if_no_app()
   set_view("outline")
 
-  visible_blocks <- function() {
-    app$get_js(paste0(
+  entries <- function() {
+    jsonlite::fromJSON(app$get_js(paste0(
       "JSON.stringify(Array.from(",
-      "document.querySelectorAll('.blockr-otl-grow[data-blk]'))",
-      ".filter(function(r){return !r.classList.contains('blockr-otl-filtered');})",
-      ".map(function(r){return r.dataset.blk;}))"
+      "document.querySelectorAll('.blockr-otl-searchmenu ",
+      ".blockr-block-browser-card'))",
+      ".map(function(o){return o.dataset.blk + ':' + ",
+      "(o.dataset.listed === '1' ? 'in' : 'out');}))"
+    )))
+  }
+  type <- function(q) {
+    app$run_js(paste0(
+      "var s = document.querySelector('.blockr-otl-searchinput');",
+      "s.focus(); s.value = '", q, "';",
+      "s.dispatchEvent(new Event('input', {bubbles:true}));"
     ))
+    app$wait_for_idle()
   }
 
-  # Nothing filtered at rest: the three listed blocks show.
-  all3 <- jsonlite::fromJSON(visible_blocks())
-  expect_length(all3, 3)
+  # Focus with no query opens on the WHOLE board: three listed blocks plus
+  # the excluded one, each labelled by what choosing it would do.
+  type("")
+  all4 <- entries()
+  expect_setequal(all4, c("data:in", "sub:in", "plot:in", "audit:out"))
+  # Listed first, pool after.
+  expect_identical(all4[[4L]], "audit:out")
 
-  # Typing narrows to the rows whose name / description / code match.
+  # Typing narrows across both groups (audit is a head block named "Head").
+  type("setosa")
+  expect_identical(entries(), "sub:in")
+
+  # Escape clears the query, the menu is back on the whole board.
   app$run_js(paste0(
     "var s = document.querySelector('.blockr-otl-searchinput');",
-    "s.value = 'setosa';",
-    "s.dispatchEvent(new Event('input', {bubbles:true}));"
+    "s.dispatchEvent(new KeyboardEvent('keydown', ",
+    "{key: 'Escape', bubbles: true}));"
   ))
-  app$wait_for_idle()
-  hit <- jsonlite::fromJSON(visible_blocks())
-  # `sub`'s description is "Setosa only."; the dataset row is not.
-  expect_true("sub" %in% hit)
-  expect_false("data" %in% hit)
-
-  # The clear (x) button empties the box and restores every row.
-  app$run_js("document.querySelector('.blockr-otl-searchclear').click();")
   app$wait_for_idle()
   expect_equal(
     app$get_js("document.querySelector('.blockr-otl-searchinput').value"), ""
   )
-  expect_length(jsonlite::fromJSON(visible_blocks()), 3)
+  expect_length(entries(), 4)
+})
+
+test_that("choosing a pool entry adds it to the report, menu stays open", {
+  skip_if_no_app()
+  set_view("outline")
+
+  app$run_js(paste0(
+    "var s = document.querySelector('.blockr-otl-searchinput');",
+    "s.focus(); s.dispatchEvent(new Event('input', {bubbles:true}));"
+  ))
+  app$wait_for_idle()
+
+  # Click the pool entry (mousedown is what the handler listens for).
+  app$run_js(paste0(
+    "document.querySelector('.blockr-otl-searchmenu ",
+    ".blockr-block-browser-card[data-blk=\"audit\"]')",
+    ".dispatchEvent(new MouseEvent('mousedown', {bubbles: true}));"
+  ))
+  app$wait_for_idle()
+
+  # It is a row now, and the menu is still open with the entry moved into
+  # the first group.
+  expect_equal(count(".blockr-otl-chip"), 4)
+  expect_true(app$get_js(
+    "document.querySelector('.blockr-otl-search').classList.contains('open')"
+  ))
+  expect_identical(app$get_js(paste0(
+    "document.querySelector('.blockr-otl-searchmenu ",
+    ".blockr-block-browser-card[data-blk=\"audit\"]').dataset.listed"
+  )), "1")
+
+  # Put the board back the way the other tests expect it.
+  send("outline_toggle", list(id = "audit", report = FALSE))
+  app$run_js(
+    "document.querySelector('.blockr-otl-searchinput').blur();"
+  )
+  app$wait_for_idle()
+  expect_equal(count(".blockr-otl-chip"), 3)
 })

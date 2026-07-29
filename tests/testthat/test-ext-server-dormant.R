@@ -229,9 +229,9 @@ test_that("outline_code_map narrows to the requested ids", {
   expect_identical(names(outline_code_map(sects, c("b", "zzz"))), "b")
 })
 
-# ---- report-only listing + include picker -----------------------------
+# ---- report-only listing + the search catalogue -----------------------
 
-test_that("the skeleton lists only reported blocks; the rest are addable", {
+test_that("the skeleton lists only reported blocks; the rest are searchable", {
   testServer(
     outline_ext_srv(
       otl_dock_ann(
@@ -245,10 +245,20 @@ test_that("the skeleton lists only reported blocks; the rest are addable", {
 
       skel <- skel_store()
       expect_setequal(skel$ids, c("data", "sub"))
-      expect_setequal(unname(skel$addable), c("plot", "audit"))
 
-      # Names label the picker entries.
-      expect_true(all(nzchar(names(skel$addable))))
+      # The catalogue carries the WHOLE board: the listed blocks first
+      # (a "go to"), the pool after (an "add").
+      cat <- catalog_store()
+      expect_identical(
+        vapply(cat, `[[`, character(1L), "id"),
+        c("data", "sub", "audit", "plot")
+      )
+      expect_identical(
+        vapply(cat, `[[`, logical(1L), "listed"),
+        c(TRUE, TRUE, FALSE, FALSE)
+      )
+      # Every entry is labelled by its block name.
+      expect_true(all(nzchar(vapply(cat, `[[`, character(1L), "name"))))
 
       # The code map narrows to the listed rows.
       expect_true(all(names(code_store()) %in% c("data", "sub")))
@@ -275,8 +285,11 @@ test_that("picking a block from the pool lists it", {
 
       skel <- skel_store()
       expect_true("plot" %in% skel$ids)
-      expect_false("plot" %in% skel$addable)
       expect_true(sections_store()$report[sections_store()$ids == "plot"])
+
+      # And the catalogue now calls it listed, so the menu offers "go to".
+      entry <- Filter(function(e) identical(e$id, "plot"), catalog_store())
+      expect_true(entry[[1L]]$listed)
     },
     args = list(board = otl_board_args(), update = reactiveVal())
   )
@@ -297,7 +310,8 @@ test_that("show-all restores the full board overview", {
 
       skel <- skel_store()
       expect_setequal(skel$ids, c("data", "sub", "plot", "audit"))
-      expect_length(skel$addable, 0L)
+      # Show-all lists everything, so nothing is left to add.
+      expect_true(all(vapply(catalog_store(), `[[`, logical(1L), "listed")))
     },
     args = list(board = otl_board_args(), update = reactiveVal())
   )

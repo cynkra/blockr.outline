@@ -150,3 +150,45 @@ test_that("structural changes invalidate the geometry cache", {
   )
 })
 
+# ---- search catalogue -------------------------------------------------
+
+test_that("the catalogue puts listed blocks first and flags the pool", {
+  b <- otl_board(stacks = TRUE)
+  s <- outline_sections(
+    otl_exprs(), b,
+    otl_ann(
+      data = list(description = "The **iris** data.", report = FALSE),
+      head = list(report = FALSE)
+    )
+  )
+
+  cat <- outline_catalog(s, listed = "sub")
+
+  expect_identical(
+    vapply(cat, `[[`, character(1L), "id"), c("sub", "data", "head")
+  )
+  expect_identical(
+    vapply(cat, `[[`, logical(1L), "listed"), c(TRUE, FALSE, FALSE)
+  )
+
+  # `data` is excluded but `sub` (reported) needs it, so it runs anyway;
+  # `head` is excluded and nothing needs it.
+  runs <- setNames(vapply(cat, `[[`, logical(1L), "runs"),
+                   vapply(cat, `[[`, character(1L), "id"))
+  expect_true(runs[["data"]])
+  expect_false(runs[["head"]])
+
+  # Markdown is flattened to the one line the menu shows.
+  desc <- Filter(function(e) identical(e$id, "data"), cat)[[1L]]$desc
+  expect_identical(desc, "The iris data.")
+
+  # The chapter labels the entry.
+  expect_identical(
+    Filter(function(e) identical(e$id, "sub"), cat)[[1L]]$chapter, "Stack"
+  )
+})
+
+test_that("desc_oneline collapses whitespace and drops markdown", {
+  expect_identical(desc_oneline(""), "")
+  expect_identical(desc_oneline("  a  \n\n  *b*  "), "a b")
+})

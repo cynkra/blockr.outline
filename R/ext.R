@@ -225,41 +225,39 @@ outline_ext_ui <- function(id, board, ...) {
       )
     ),
     outline_settings_band(ns),
-    # The report title and the instant search sit above the outline body and
-    # only in the Outline view (client-only search; the title is state). They
-    # live outside outline_out so the search input stays focus-stable across
-    # the body's renderUI re-renders.
+    # The report title and the search box sit above the outline body and
+    # only in the Outline view (the title is state; the search is client
+    # logic over a pushed catalogue). They live outside outline_out so the
+    # input stays focus-stable across the body's renderUI re-renders --
+    # which is also why the menu is filled by JS rather than rendered
+    # server-side: re-rendering the control would drop focus mid-query.
     conditionalPanel(
       condition = sprintf("input['%s'] == 'outline'", ns("code_view")),
       uiOutput(ns("otl_title")),
+      # The field and the menu are the block browser's: same classes, hence
+      # the same magnifier, focus ring, rows, icon tiles and section
+      # headers, from the stylesheet blockr.dock already puts on the page.
+      # `type = "search"` also gives the native clear affordance the
+      # browser relies on.
       div(
+        # NOT .blockr-block-browser: that class is the block browser's
+        # Shiny input binding and its search JS, which would adopt this
+        # control as a browser instance and filter it by data attributes
+        # these cards do not carry. The card classes below are inert
+        # styling, and blockr-outline.css maps the --bb-* tokens they read.
         class = "blockr-otl-search",
-        HTML(paste0(
-          "<svg class='blockr-otl-searchicon' width='14' height='14' ",
-          "viewBox='0 0 24 24' fill='none' stroke='currentColor' ",
-          "stroke-width='2' stroke-linecap='round' stroke-linejoin='round'>",
-          "<circle cx='11' cy='11' r='8'/><line x1='21' y1='21' x2='16.65' ",
-          "y2='16.65'/></svg>"
-        )),
         tags$input(
-          type = "text",
-          class = "blockr-otl-searchinput",
-          placeholder = "Filter blocks\u2026",
+          type = "search",
+          class = "blockr-block-browser-search blockr-otl-searchinput",
+          # Short on purpose: a dock panel is often 375px wide, and the
+          # pool count sits on the same line.
+          placeholder = "Search or add a block\u2026",
+          `aria-label` = "Search blocks",
           autocomplete = "off",
           spellcheck = "false"
         ),
-        tags$button(
-          type = "button",
-          class = "blockr-otl-searchclear",
-          title = "Clear filter",
-          `aria-label` = "Clear filter",
-          HTML(paste0(
-            "<svg width='12' height='12' viewBox='0 0 24 24' fill='none' ",
-            "stroke='currentColor' stroke-width='2.4' stroke-linecap='round'>",
-            "<line x1='18' y1='6' x2='6' y2='18'/>",
-            "<line x1='6' y1='6' x2='18' y2='18'/></svg>"
-          ))
-        )
+        span(class = "blockr-otl-searchcount"),
+        div(class = "blockr-otl-searchmenu")
       )
     ),
     uiOutput(ns("outline_out")),
@@ -768,6 +766,7 @@ outline_ext_srv <- function(annotations, block_order, title,
         # wholesale, which is correct and rare.
         skel_store <- reactiveVal(NULL)
         code_store <- reactiveVal(NULL)
+        catalog_store <- reactiveVal(NULL)
 
         # Memoises the display-subset drag geometry (see display_sections),
         # the same trade as geometry_cache above.
@@ -794,13 +793,14 @@ outline_ext_srv <- function(annotations, block_order, title,
             )
             skel$code <- NULL
 
-            # The picker's pool: every board block not currently listed,
-            # labelled by name (the id disambiguates duplicates). Rides in
-            # the skeleton so the redraw and the choices always agree.
-            skel$addable <- setNames(
-              setdiff(full$ids, listed),
-              full$names[match(setdiff(full$ids, listed), full$ids)]
-            )
+            # The search catalogue: EVERY board block, listed ones first, in
+            # document order. The search box is one control over the whole
+            # board -- a listed block is a "go to", an unlisted one an "add"
+            # -- so it needs the pool and the document in one payload. It is
+            # pushed to the client (below) rather than rendered, because the
+            # control is static UI: re-rendering it would drop focus
+            # mid-query.
+            catalog_store(outline_catalog(full, listed))
 
             # Dormant-by-default: a block outside the active view condenses
             # to title + description and carries no code cell. `active`
@@ -848,6 +848,22 @@ outline_ext_srv <- function(annotations, block_order, title,
             if (!identical(codes, isolate(code_store()))) {
               code_store(codes)
             }
+          }
+        )
+
+        # The search menu is filled client-side from this payload. Pushed
+        # whole rather than diffed: it is one small array (id, name, icon,
+        # chapter, one description line per block) and it only moves when
+        # the projection does.
+        observe(
+          {
+            cat <- catalog_store()
+            req(!is.null(cat))
+
+            session$sendCustomMessage(
+              "blockr-outline-catalog",
+              list(items = cat)
+            )
           }
         )
 
@@ -931,19 +947,16 @@ outline_ext_srv <- function(annotations, block_order, title,
                 sects$code_html <- isolate(code_store())
               }
 
-              return(
-                tagList(
-                  if (!length(sects$ids)) {
-                    div(
-                      class = "blockr-otl-emptydoc",
-                      "Nothing in the report yet: add a block below."
-                    )
-                  } else {
-                    outline_tags(sects, session$ns, editing())
-                  },
-                  outline_include_picker(session$ns, sects$addable)
+              if (!length(sects$ids)) {
+                return(
+                  div(
+                    class = "blockr-otl-emptydoc",
+                    "Nothing in the report yet: search for a block above."
+                  )
                 )
-              )
+              }
+
+              return(outline_tags(sects, session$ns, editing()))
             }
 
             txt <- if (identical(view, "qmd")) qmd_txt() else spin_txt()
