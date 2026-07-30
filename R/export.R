@@ -519,6 +519,22 @@ block_report_call_str <- function(blk, var) {
     return("")
   }
 
+  # blockr.viz >= 0.2.36 compiles chart state to a plain dplyr + ggplot2
+  # pipeline and ships chart_code(), which formats any report call one
+  # pipeline stage / layer per line (nested data-threading rendered in pipe
+  # form). Older blockr.viz: plain deparse, as before.
+  fmt <- tryCatch(
+    getExportedValue("blockr.viz", "chart_code"),
+    error = function(e) NULL
+  )
+
+  if (is.function(fmt)) {
+    out <- tryCatch(fmt(cl), error = function(e) NULL)
+    if (is.character(out) && length(out) == 1L && nzchar(out)) {
+      return(out)
+    }
+  }
+
   paste(deparse(cl), collapse = "\n")
 }
 
