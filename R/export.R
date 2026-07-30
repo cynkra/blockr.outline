@@ -296,34 +296,7 @@ outline_sections <- function(expressions, board, annotations,
     descriptions = chr_ply(ids, function(i) ann_description(annotations, i)),
     report = report,
     exported = geo$exported,
-    # Exhibit kind from the block's CLASS, not its result: results are
-    # gated by evaluation and visibility, so a runtime probe reads NULL
-    # for most blocks and the caption would appear only sometimes. The
-    # class is always there. A block that is neither plot nor data gets
-    # no prefix -- a wrong fig- would leave a broken cross-reference.
-    kinds = vapply(
-      blks,
-      function(b) {
-        # The registry category is the ecosystem-wide answer: every
-        # package declares it, so a ggplot_block (class ggplot_block,
-        # not plot_block) still reports "plot". Class inheritance only
-        # covers blockr.core's own hierarchy.
-        cat <- tryCatch(
-          blockr.core::block_meta_category(b),
-          error = function(e) character()
-        )
-        if (any(cat %in% c("plot", "visualization")) ||
-              inherits(b, "plot_block")) {
-          "fig"
-        } else if (any(cat %in% c("data", "transform", "table")) ||
-                     inherits(b, c("data_block", "transform_block"))) {
-          "tbl"
-        } else {
-          ""
-        }
-      },
-      character(1L)
-    ),
+    kinds = chr_ply(blks, block_exhibit_kind),
     renderers = chr_ply(blks, block_report_renderer),
     report_calls = chr_ply(
       seq_along(blks),
@@ -475,22 +448,81 @@ outline_geometry <- function(ids, lnks, stack_ids, report, universe = ids) {
   )
 }
 
-# The report renderer wrapped around a block's printed result ("" = bare
-# print). The blockr.viz table blocks return a bare annotated data frame --
-# their styled table lives in the block's Shiny UI, so a bare print degrades
-# to df-print:kable. Wrapping the result variable in the static flextable
-# renderer restores the styled table, and flextable is the one engine whose
-# knit_print emits real OpenXML tables in pptx and docx (it renders in html
-# and pdf too), so a single wrapper serves every format. Class check only,
-# like `kinds`: blockr.viz need not be installed to project the sections;
-# the emitted call self-qualifies and the render session loads blockr.viz
-# anyway (the block's own code calls it).
-block_report_renderer <- function(blk) {
-  if (inherits(blk, c("table_block", "summary_table_block"))) {
-    "blockr.viz::static_table"
+# Exhibit kind from the block's CLASS, not its result: results are gated by
+# evaluation and visibility, so a runtime probe reads NULL for most blocks and
+# the caption would appear only sometimes. The class is always there. A block
+# that is neither plot nor data gets no prefix -- a wrong fig- would leave a
+# broken cross-reference. The registry category is the ecosystem-wide answer:
+# every package declares it, so a ggplot_block (class ggplot_block, not
+# plot_block) still reports "plot". Class inheritance only covers blockr.core's
+# own hierarchy.
+block_exhibit_kind <- function(b) {
+
+  cat <- tryCatch(
+    blockr.core::block_meta_category(b),
+    error = function(e) character()
+  )
+
+  if (any(cat %in% c("plot", "visualization")) || inherits(b, "plot_block")) {
+    "fig"
+  } else if (any(cat %in% c("data", "transform", "table")) ||
+               inherits(b, c("data_block", "transform_block"))) {
+    "tbl"
   } else {
     ""
   }
+}
+
+# The report renderer wrapped around a block's printed result ("" = bare
+# print). A block that returns a display table returns a bare annotated data
+# frame -- the styled table lives in the block's Shiny UI, so a bare print
+# degrades to df-print:kable, dot-columns and all. Wrapping the result variable
+# in the static flextable renderer restores the styled table, and flextable is
+# the one engine whose knit_print emits real OpenXML tables in pptx and docx
+# (it renders in html and pdf too), so a single wrapper serves every format.
+#
+# The wrapper is blockr.viz::static_exhibit(), which decides at RENDER time
+# from the value: a data frame or an as_annotated_df()-coercible object (a
+# composer table straight out of a function block, say) becomes the styled
+# table; a ggplot / gt / htmlwidget / anything else comes back untouched, so
+# the wrap can never be worse than the bare print. That is deliberately NOT a
+# block-class check: the structure that makes a table a table lives in the
+# annotated data frame, not in the block that renders it, so the interactive
+# table block stays a dashboard component instead of a report requirement.
+# Figures skip the wrap -- it would be a no-op on a ggplot and only clutters
+# the generated script.
+#
+# Resolved defensively (same pattern as block_report_call_str): blockr.viz need
+# not be installed to project the sections, and a blockr.viz older than 0.2.38
+# has no static_exhibit(), so the previous class-gated static_table() wrap
+# stands in. The emitted call self-qualifies; the render session loads
+# blockr.viz anyway (the block's own code calls it).
+block_report_renderer <- function(blk) {
+
+  if (identical(block_exhibit_kind(blk), "fig")) {
+    return("")
+  }
+
+  if (!requireNamespace("blockr.viz", quietly = TRUE)) {
+    return("")
+  }
+
+  has_exhibit <- is.function(
+    tryCatch(
+      getExportedValue("blockr.viz", "static_exhibit"),
+      error = function(e) NULL
+    )
+  )
+
+  if (has_exhibit) {
+    return("blockr.viz::static_exhibit")
+  }
+
+  if (inherits(blk, c("table_block", "summary_table_block"))) {
+    return("blockr.viz::static_table")
+  }
+
+  ""
 }
 
 # A block-supplied report call, deparsed for the document. blockr.viz's

@@ -831,9 +831,9 @@ render_pptx_officer <- function(sects, file, title, template = NULL) {
   for (i in seq_along(sects$ids)) {
     if (!isTRUE(sects$report[i]) || isTRUE(sects$pending[i])) next
 
-    # The exhibit object: the SAME expression the qmd prints -- a table
-    # block resolves through static_table(), a plot / raw flextable stays as
-    # itself.
+    # The exhibit object: the SAME expression the qmd prints -- a table-shaped
+    # result resolves through static_exhibit() (whatever block produced it), a
+    # plot / raw flextable stays as itself.
     exhibit <- tryCatch(
       eval(parse(text = sect_output(sects, i)), envir = env),
       error = function(e) NULL
@@ -1279,7 +1279,10 @@ outnote <- function(headline, msg) {
 # type dispatch: flextables (static_table and the topline block) keep their
 # styling via htmltools_value; ggplots rasterize to a data-URI img at the
 # aspect ratio the block chose; a bare data frame goes through static_table so
-# the preview matches the deck; anything else prints verbatim.
+# the preview matches the deck; anything else prints verbatim. The data-frame
+# branch is a backstop -- the emitted output line already wraps table-shaped
+# results in static_exhibit() -- and it keeps a directly-supplied exhibit
+# (blockr.viz absent from the chunk) rendering as a table.
 exhibit_html <- function(exhibit) {
 
   if (inherits(exhibit, "flextable") &&

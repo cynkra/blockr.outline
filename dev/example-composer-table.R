@@ -12,11 +12,19 @@
 # THE SEAM: the table block's OUTPUT is an annotated data frame. In the live
 # app that annotated df is drawn as the interactive widget. A report / deck
 # is static -- no widget -- so the outline does NOT ship the widget; it
-# applies a STATIC print function to the SAME output, `blockr.viz::static_table`,
-# which renders the annotated df as a styled flextable. Look at the R script
-# / Document view: the `viz` chunk ends in `blockr.viz::static_table(viz)`. That
-# is the whole mechanism -- one alternative renderer on the block's output,
-# not a different block. (Charts work the same way via static_chart.)
+# applies a STATIC print function to the SAME output,
+# `blockr.viz::static_exhibit`, which renders any table-shaped value as a
+# styled flextable (and returns anything else untouched). Look at the R script
+# / Document view: the reported chunks end in
+# `blockr.viz::static_exhibit(<id>)`. That is the whole mechanism -- one
+# alternative renderer on the block's output, not a different block. (Charts
+# work the same way via static_chart.)
+#
+# Which is why the `composer` block is ALSO reported here, with nothing after
+# it: static_exhibit() coerces the raw composed_table itself, so that slide is
+# identical to the one built from the table block. The render block is a
+# dashboard component (search / sort / drill / Excel download), not a report
+# requirement.
 #
 #   Rscript blockr.outline/dev/example-composer-table.R [port]
 
@@ -120,13 +128,19 @@ board <- new_dock_board(
     blockr.outline::new_outline_extension(
       annotations = list(
         data = list(report = FALSE),
-        composer = list(report = FALSE),
+        # BOTH arms are exhibits, and the deck shows them as the SAME table.
+        # The composer block returns a raw composed_table and has no table
+        # block after it: static_exhibit() coerces and renders it at print
+        # time, so the render block is only needed for the interactive
+        # dashboard table (search / sort / drill).
+        composer = list(
+          report = TRUE,
+          description = "The composed_table straight out of the function block -- no render block in front of it."
+        ),
         to_df = list(report = FALSE),
-        # The one exhibit: the table block. In the report its output prints
-        # through blockr.viz::static_table (see the R script / Document view).
         viz = list(
           report = TRUE,
-          description = "Table 1 demographics, composed by composer and rendered for the deck through static_table()."
+          description = "The same Table 1 through the interactive table block. Identical on the slide."
         )
       ),
       stack_annotations = list(

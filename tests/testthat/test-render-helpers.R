@@ -630,3 +630,60 @@ test_that("seeded messages carry the block name too", {
   expect_match(html, "upstream block `Dataset` \\(up\\)")
   expect_match(html, "pin not found")
 })
+
+test_that("a table-shaped result prints the same with or without a table block", {
+  skip_if_not_installed("blockr.viz", "0.2.38")
+  skip_if_not_installed("flextable")
+  skip_if_not_installed("officer")
+
+  # The interactive table block is a DASHBOARD component: the structure that
+  # makes a display table a table lives in the annotated data frame it passes
+  # along. So a block that just returns such a frame (a function block wrapping
+  # composer, say -- a head block stands in here) must reach the deck as the
+  # same styled table, with no render block spliced in front of it.
+  board <- blockr.core::new_board(
+    blocks = c(
+      data = blockr.core::new_dataset_block("iris"),
+      direct = blockr.core::new_head_block(),
+      tbl = blockr.viz::new_table_block()
+    ),
+    links = blockr.core::links(from = c("data", "data"),
+                               to = c("direct", "tbl"))
+  )
+  summ <- quote(
+    blockr.viz::summary_table(data, vars = "Sepal.Length", by = "Species")
+  )
+  exprs <- structure(
+    list(
+      data = quote(datasets::iris),
+      direct = summ,
+      tbl = bquote(dplyr::filter(blockr.viz::as_annotated_df(.(summ)), TRUE))
+    ),
+    pending = character()
+  )
+
+  s <- outline_sections(exprs, board,
+    annotations = list(data = list(report = FALSE), direct = list(report = TRUE),
+                       tbl = list(report = TRUE)),
+    stack_annotations = list())
+
+  env <- new.env(parent = globalenv())
+  for (i in seq_along(s$ids)) {
+    eval(parse(text = sect_export_code(s, i)), envir = env)
+  }
+  ex <- lapply(
+    which(s$ids %in% c("direct", "tbl")),
+    function(i) eval(parse(text = sect_output(s, i)), envir = env)
+  )
+
+  expect_s3_class(ex[[1L]], "flextable")
+  expect_equal(ex[[1L]]$body$dataset, ex[[2L]]$body$dataset)
+  expect_equal(ex[[1L]]$header$dataset, ex[[2L]]$header$dataset)
+
+  # ... and both land on a slide as a real table (a:tbl), not a text box
+  f <- withr::local_tempfile(fileext = ".pptx")
+  render_pptx_officer(s, f, "Deck", template = NULL)
+  smry <- officer::pptx_summary(officer::read_pptx(f))
+  expect_equal(sum(smry$content_type == "table cell") > 0L, TRUE)
+  expect_length(unique(smry$slide_id[smry$content_type == "table cell"]), 2L)
+})

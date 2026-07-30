@@ -18,7 +18,7 @@
       #| label: data
       #| tbl-cap: "Dataset"
       data <- datasets::iris
-      data
+      blockr.viz::static_exhibit(data)
       ```
       
       Setosa only.
@@ -27,7 +27,7 @@
       #| label: sub
       #| tbl-cap: "Subset"
       sub <- subset(data, Species == "setosa")
-      sub
+      blockr.viz::static_exhibit(sub)
       ```
 
 # export_spin renders the expected script
@@ -42,11 +42,11 @@
       #' The iris data.
       #+ data
       data <- datasets::iris
-      data
+      blockr.viz::static_exhibit(data)
       
       #' **Subset**
       #' Setosa only.
       #+ sub
       sub <- subset(data, Species == "setosa")
-      sub
+      blockr.viz::static_exhibit(sub)
 

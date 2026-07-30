@@ -162,11 +162,14 @@ test_that("a block-supplied report call wins the chunk output line", {
   }
 })
 
-test_that("viz table blocks print through the flextable report renderer", {
-  # A blockr.viz table / summary_table block returns a bare annotated data
-  # frame (the styled table lives in its Shiny UI), so the exporters wrap
-  # the result variable in blockr.viz::static_table(). Class check only -- a
-  # head block wearing the class stands in, no blockr.viz needed.
+test_that("data-shaped blocks print through the static exhibit renderer", {
+  # A block that returns a display table returns a bare annotated data frame
+  # (the styled table lives in its Shiny UI), so the exporters wrap the result
+  # variable in blockr.viz::static_exhibit(), which picks the renderer from the
+  # VALUE at render time. Deliberately not a table-block class check: a
+  # function block emitting a composer table must print the same way.
+  skip_if_not_installed("blockr.viz", "0.2.38")
+
   blocks <- c(
     data = blockr.core::new_dataset_block("iris"),
     tbl  = blockr.core::new_head_block()
@@ -184,12 +187,21 @@ test_that("viz table blocks print through the flextable report renderer", {
   s <- outline_sections(exprs, board,
                         annotations = otl_ann(ids = c("data", "tbl")),
                         stack_annotations = list())
-  expect_identical(unname(s$renderers[s$ids == "tbl"]), "blockr.viz::static_table")
-  expect_identical(unname(s$renderers[s$ids == "data"]), "")
+  expect_identical(unname(s$renderers[s$ids == "tbl"]),
+                   "blockr.viz::static_exhibit")
+  expect_identical(unname(s$renderers[s$ids == "data"]),
+                   "blockr.viz::static_exhibit")
 
   for (txt in list(export_qmd(s), export_spin(s))) {
-    expect_match(txt, "blockr.viz::static_table(tbl)", fixed = TRUE)
-    # the untouched block still prints bare
-    expect_match(txt, "\ndata\n", fixed = TRUE)
+    expect_match(txt, "blockr.viz::static_exhibit(tbl)", fixed = TRUE)
+    expect_match(txt, "blockr.viz::static_exhibit(data)", fixed = TRUE)
   }
+})
+
+test_that("figure blocks are not wrapped", {
+  # static_exhibit() is a no-op on a ggplot, so wrapping one would only
+  # clutter the generated script.
+  blk <- blockr.core::new_head_block()
+  class(blk) <- c("plot_block", class(blk))
+  expect_identical(block_report_renderer(blk), "")
 })
