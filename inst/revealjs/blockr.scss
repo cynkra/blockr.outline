@@ -1,0 +1,227 @@
+/*-- scss:defaults --*/
+
+// The deck's typography, and the app's. blockr.ui's table CSS sets no
+// font-family -- it inherits from the page -- so declaring the stack here is
+// what puts the same typeface in the prose, the headings AND every table cell.
+//
+// Inter first because that is the house face (it is also what
+// blockr.viz.ft_font names for the pptx exhibits). Source Sans Pro is the font
+// quarto's revealjs already bundles, so it is the tail that keeps a machine
+// without Inter looking deliberate rather than falling through to a default
+// serif-ish sans. See dev/revealjs-theme.md on embedding Inter itself.
+$font-family-sans-serif: Inter, "Inter var", "Source Sans Pro", system-ui,
+  -apple-system, "Segoe UI", Roboto, sans-serif !default;
+
+// Text colours, matching blockr.ui's --blockr-color-text-* defaults so the
+// prose and the tables read as one document rather than two.
+$body-color: #111827 !default;
+$body-bg: #ffffff !default;
+
+// Slide titles: smaller and lighter than reveal's default, which sets a
+// 2.5em/700 headline that on an exhibit slide competes with the exhibit. A
+// slide title is a label, not a headline -- the table is the content.
+$presentation-heading-font-weight: 600 !default;
+$presentation-heading-color: #111827 !default;
+$presentation-h1-font-size: 1.9em !default;
+$presentation-h2-font-size: 1.28em !default;
+$presentation-h3-font-size: 1.05em !default;
+
+$presentation-font-size-root: 32px !default;
+$presentation-line-height: 1.4 !default;
+
+// The accent. #0072B2 is the first colour of the chart palette
+// (DD_PALETTE_FALLBACK), so the rule under a slide title is the same blue as
+// the bars on it.
+$link-color: #0072b2 !default;
+
+/*-- scss:rules --*/
+
+// The blockr text-colour variables blockr.ui's table CSS reads. Set here so
+// the tables inherit the deck's palette instead of falling back to their own
+// hardcoded defaults -- one place to retune the greys.
+:root {
+  --blockr-color-text-primary: #111827;
+  --blockr-color-text-muted: #6b7280;
+  --blockr-color-text-subtle: #9ca3af;
+  --blockr-accent: #0072b2;
+}
+
+.reveal {
+  // Lining figures of equal width, everywhere. A column of counts and
+  // percentages that does not align on the digit is the single thing that
+  // makes a clinical table look unfinished.
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+
+// Left edge everywhere: a chart slide and a table slide share one origin.
+.reveal .slides section {
+  text-align: left;
+}
+
+// Content slides start their content at the same height, so the title does not
+// jump as exhibits of different heights go past. Scoped to level-2 slides:
+// reveal marks the title slide and the chapter dividers `.center` and places
+// them itself, and overriding that is what pinned them to the top of an
+// otherwise empty slide.
+.reveal .slides section.level2:not(.center) {
+  top: 0 !important;
+}
+
+// Slide title: tight to its accent rule, generous to the content below.
+.reveal h2 {
+  margin: 0 0 0.55em;
+  padding-bottom: 0.28em;
+  border-bottom: 2px solid var(--blockr-accent);
+  letter-spacing: -0.01em;
+  text-transform: none;
+  line-height: 1.15;
+}
+
+// The block description: the paragraph immediately after a slide title is the
+// exhibit's own prose. Muted and smaller, so the eye goes title -> exhibit and
+// takes the sentence on the way past rather than reading it as body copy.
+.reveal section > h2 + p,
+.reveal section > h1 + p {
+  color: var(--blockr-color-text-muted);
+  font-size: 0.68em;
+  line-height: 1.45;
+  max-width: 46em;
+  margin: -0.2em 0 1.1em;
+}
+
+// Chapter dividers (a stack, level 1) and the title slide. No accent RULE:
+// the point of a divider is that it does not look like a content slide. It
+// gets a short accent bar above the heading instead -- the same blue, a
+// different gesture, so the deck's structure is legible at a glance.
+.reveal h1 {
+  margin: 0 0 0.4em;
+  border-bottom: 0;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.reveal section.level1.center > h1::before,
+#title-slide .title::before {
+  content: "";
+  display: block;
+  width: 3rem;
+  height: 4px;
+  margin-bottom: 0.7rem;
+  background: var(--blockr-accent);
+}
+
+// The divider's own line (the stack description) sits under the heading at
+// body scale rather than the smaller exhibit-prose size: on a slide with
+// nothing else on it, 0.68em reads as an afterthought.
+.reveal section.level1.center > h1 + p {
+  font-size: 0.78em;
+  max-width: 34em;
+  margin: 0;
+}
+
+// Tables. The markup and its own CSS come from the app (blockr.ui's table
+// preview plus blockr.viz's delta); these rules only undo reveal's defaults,
+// which centre tables and set their own font size.
+.reveal table {
+  font-size: inherit;
+  margin: 0;
+}
+
+.reveal .blockr-html-table-container {
+  font-size: 0.62em;
+  margin: 0;
+}
+
+// Figures sit on the same left edge as the tables rather than centred, so a
+// chart slide and a table slide share one layout.
+.reveal .quarto-figure,
+.reveal figure {
+  margin: 0;
+}
+
+.reveal figure > figcaption,
+.reveal .figure-caption {
+  color: var(--blockr-color-text-subtle);
+  font-size: 0.55em;
+  text-align: left;
+  margin-top: 0.5em;
+}
+
+.reveal section img {
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+  margin: 0;
+}
+
+// Title slide: the study name, not a poster. Left-aligned to the same edge as
+// every other slide, which is what stops the opening from reading as a
+// different document from the one that follows.
+#title-slide {
+  text-align: left;
+}
+
+#title-slide .title {
+  font-size: 1.6em;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin-bottom: 0.3em;
+}
+
+#title-slide .subtitle,
+#title-slide .date,
+#title-slide .author {
+  color: var(--blockr-color-text-muted);
+  font-size: 0.7em;
+  font-weight: 400;
+}
+
+// Chrome: present but quiet. The progress bar reads as a hairline in the
+// accent colour; the slide number stops competing with the content.
+.reveal .progress {
+  height: 2px;
+  color: var(--blockr-accent);
+}
+
+.reveal .slide-number {
+  background: transparent;
+  color: var(--blockr-color-text-subtle);
+  font-size: 0.42em;
+}
+
+// The running head. Aligned to the content's left edge, not the viewport's, so
+// it reads as part of the layout; subtle enough to be ignored while presenting
+// and legible enough in a screenshot.
+//
+// `div.footer` and !important because quarto emits its own `.reveal .footer`
+// rule AFTER the theme and forces the properties it sets -- same specificity
+// later in the cascade, so a plain `.reveal .footer` here loses.
+.reveal div.footer {
+  color: var(--blockr-color-text-subtle);
+  font-size: 0.4em;
+  text-align: left !important;
+  // Clear of reveal's menu button, which sits in the same bottom-left corner.
+  padding-left: 72px;
+  bottom: 12px;
+}
+
+// A divider is a divider, and the title slide already says the title: no
+// running head on either. Reveal renders ONE footer element for the whole deck
+// rather than one per slide, so this cannot be a descendant selector -- it has
+// to ask what the deck is currently showing. Both the title slide and the
+// chapter dividers carry reveal's `.center`.
+//
+// Written so that a browser without :has() drops the rule and shows the footer
+// everywhere, which is merely redundant. The other direction would hide it
+// everywhere, which is a missing running head.
+.reveal:has(.slides section.center.present) div.footer {
+  display: none !important;
+}
+
+// Code, when a deck shows any. Same face as the app's editors.
+.reveal code,
+.reveal pre code {
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo,
+    Consolas, monospace;
+}

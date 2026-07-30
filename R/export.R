@@ -974,7 +974,7 @@ export_qmd <- function(sects, title = "Board report",
   yaml <- paste(
     c(
       "---",
-      paste0("title: \"", gsub("\"", "\\\\\"", title), "\""),
+      paste0("title: \"", yaml_dq(title), "\""),
       # Render plain data.frames / tibbles as kable tables rather than
       # verbatim console output, so the report reads like a document. A
       # top-level quarto option, so it holds across html / pdf / pptx.

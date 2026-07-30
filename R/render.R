@@ -33,6 +33,51 @@ slide_format <- function(fmt) {
   identical(fmt, "revealjs")
 }
 
+# The scss layered over quarto's default revealjs theme: typography, the text
+# greys blockr.ui's table CSS reads, and the accent taken from the chart
+# palette, so a deck reads as the app rather than as reveal.js.
+#
+# `blockr.outline.revealjs_theme` swaps it wholesale -- a deployment with its
+# own house deck styles it there, the same way `blockr.outline.template` names
+# the pptx reference document. An unreadable path is dropped rather than
+# failing the render: a deck in the stock theme is worth more than no deck.
+revealjs_theme <- function() {
+
+  opt <- getOption("blockr.outline.revealjs_theme", "")
+
+  path <- if (is.character(opt) && length(opt) == 1L && nzchar(opt)) {
+    opt
+  } else {
+    pkg_file("revealjs", "blockr.scss")
+  }
+
+  if (!nzchar(path) || !file.exists(path)) {
+    return("")
+  }
+
+  normalizePath(path, winslash = "/", mustWork = FALSE)
+}
+
+# Place the theme in the render directory and return the name to write into the
+# yaml, or "" when there is no theme to place. See the call site for why the
+# file has to travel rather than be pointed at.
+copy_revealjs_theme <- function(dir) {
+
+  src <- revealjs_theme()
+
+  if (!nzchar(src)) {
+    return("")
+  }
+
+  dest <- "blockr-theme.scss"
+
+  if (!isTRUE(file.copy(src, file.path(dir, dest), overwrite = TRUE))) {
+    return("")
+  }
+
+  dest
+}
+
 quarto_usable <- function() {
   requireNamespace("quarto", quietly = TRUE) &&
     !is.null(quarto::quarto_path())
@@ -636,26 +681,43 @@ render_report <- function(qmd_txt, spin_txt, fmt, file, title,
     }
 
     # Slides. embed-resources for the same reason as html (one file to walk
-    # away with, reveal.js and all). The other three are what a board's
-    # exhibits need to fit a slide: `scrollable` keeps a long table on its
-    # slide instead of letting it run off the bottom, `smaller` sizes the body
-    # text for a table rather than for a bullet list, and the 1200x800 canvas
-    # is 3:2, which is the shape the chart exhibits are drawn for.
+    # away with, reveal.js, the theme and all). `scrollable` keeps a long table
+    # on its slide instead of letting it run off the bottom, and the 1200x800
+    # canvas is 3:2, the shape the chart exhibits are drawn for.
+    #
+    # No `smaller`: it applies a blanket scale to the slide's contents, which
+    # is a blunt instrument once the theme sets sizes per element. Sizes belong
+    # in one place, and that place is the scss.
     if (identical(fmt, "revealjs")) {
+      # Copied next to the qmd and named by basename: quarto resolves a theme
+      # that is not one of its built-ins against the DOCUMENT's directory (an
+      # absolute path lands under quarto's own themes dir, with `.scss`
+      # appended, and the render dies on a file that was never there).
+      scss <- copy_revealjs_theme(dir)
       qmd_txt <- sub(
         "\n---\n",
         paste(
-          "",
-          "format:",
-          "  revealjs:",
-          "    embed-resources: true",
-          "    scrollable: true",
-          "    smaller: true",
-          "    width: 1200",
-          "    height: 800",
-          "---",
-          "",
-          sep = "\n"
+          c(
+            "",
+            "format:",
+            "  revealjs:",
+            "    embed-resources: true",
+            "    scrollable: true",
+            "    width: 1200",
+            "    height: 800",
+            # A running head. The deck's own title on every slide is what a
+            # deck that leaves the room needs: a slide screenshotted into an
+            # email still says which study it came from.
+            paste0("    footer: \"", yaml_dq(title), "\""),
+            # Omitted rather than emitted empty: `theme: [default, ""]` is a
+            # yaml error, and no theme is a working deck.
+            if (nzchar(scss)) {
+              paste0("    theme: [default, ", scss, "]")
+            },
+            "---",
+            ""
+          ),
+          collapse = "\n"
         ),
         qmd_txt,
         fixed = TRUE

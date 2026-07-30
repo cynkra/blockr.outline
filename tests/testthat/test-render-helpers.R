@@ -702,3 +702,34 @@ test_that("a table-shaped result prints the same with or without a table block",
   expect_equal(sum(smry$content_type == "table cell") > 0L, TRUE)
   expect_length(unique(smry$slide_id[smry$content_type == "table cell"]), 2L)
 })
+
+test_that("the revealjs theme resolves, and an unusable one is dropped", {
+  # Shipped in inst/, so a plain render finds it without configuration.
+  expect_true(file.exists(revealjs_theme()))
+  expect_match(revealjs_theme(), "blockr\\.scss$")
+
+  # A deployment names its own house scss.
+  own <- withr::local_tempfile(fileext = ".scss")
+  writeLines("/*-- scss:rules --*/", own)
+  withr::local_options(blockr.outline.revealjs_theme = own)
+  expect_equal(revealjs_theme(), normalizePath(own, winslash = "/"))
+
+  # A path that is not there is dropped: a deck in the stock theme beats no
+  # deck, and `theme: [default, ""]` is a yaml error.
+  withr::local_options(blockr.outline.revealjs_theme = "/no/such/theme.scss")
+  expect_identical(revealjs_theme(), "")
+  expect_identical(copy_revealjs_theme(tempdir()), "")
+})
+
+test_that("the theme travels next to the qmd", {
+  # quarto resolves a non-builtin theme against the DOCUMENT's directory, so
+  # the file has to be copied in and named by basename.
+  dir <- withr::local_tempdir()
+  expect_equal(copy_revealjs_theme(dir), "blockr-theme.scss")
+  expect_true(file.exists(file.path(dir, "blockr-theme.scss")))
+})
+
+test_that("yaml_dq escapes quotes in a front-matter scalar", {
+  expect_equal(yaml_dq('a "quoted" title'), 'a \\"quoted\\" title')
+  expect_equal(yaml_dq("plain"), "plain")
+})

@@ -11,6 +11,13 @@ pkg_file <- function(...) {
   system.file(..., package = "blockr.outline")
 }
 
+# A string for a double-quoted yaml scalar. Board titles are user text and
+# reach the front matter in several places; an unescaped quote closes the
+# scalar early and the render dies on malformed yaml.
+yaml_dq <- function(x) {
+  gsub("\"", "\\\\\"", x)
+}
+
 # The bundled fallback beneath the app-level option: a neutral 13.333x7.5in
 # (true 16:9) deck, BUILT from officer's stock Office layouts by
 # dev/make-default-template.R -- no media, no text, Arial.
