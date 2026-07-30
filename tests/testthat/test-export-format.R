@@ -91,6 +91,34 @@ test_that("a pending block exports as a comment, never as code", {
   }
 })
 
+test_that("slides break once per reported block, never before the first", {
+  s <- sects_fixture()
+
+  # A document carries no slide breaks at all.
+  expect_no_match(export_qmd(s, slides = FALSE), "\n----\n", fixed = TRUE)
+
+  qmd <- export_qmd(s, slides = TRUE)
+
+  # One break per reported block, minus the ones a heading already breaks
+  # (the first reported block, and any block opening a chapter).
+  chapters <- section_chapters(s)
+  breaking <- s$report & !is.na(chapters)
+  expected <- max(0L, sum(s$report) - sum(breaking) - as.integer(!any(breaking)))
+
+  expect_equal(
+    lengths(regmatches(qmd, gregexpr("\n----\n", qmd, fixed = TRUE)))[[1L]],
+    expected
+  )
+
+  # A break never opens the document: the deck would start on a blank slide.
+  expect_no_match(qmd, "^---\ntitle.*\n----\n", perl = TRUE)
+
+  # An excluded block is `include: false` -- invisible, so a break in front of
+  # it would be a slide with nothing on it.
+  expect_no_match(qmd, "----\n\n```{r}\n#| label: head\n#| include: false",
+                  fixed = TRUE)
+})
+
 test_that("qmd escapes double quotes in the title", {
   qmd <- export_qmd(sects_fixture(), 'A "quoted" title')
   expect_match(qmd, "title: \"A \\\\\"quoted\\\\\" title\"")

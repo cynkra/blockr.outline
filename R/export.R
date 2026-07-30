@@ -880,7 +880,8 @@ export_spin <- function(sects, stack_level = "#", block_level = "caption") {
 }
 
 export_qmd <- function(sects, title = "Board report",
-                       stack_level = "#", block_level = "caption") {
+                       stack_level = "#", block_level = "caption",
+                       slides = FALSE) {
 
   sects <- prune_sections(sects)
 
@@ -892,6 +893,28 @@ export_qmd <- function(sects, title = "Board report",
   # heading OR a caption, never both.
   stack_hd <- if (stack_level %in% c("#", "##")) stack_level
   block_hd <- if (block_level %in% c("#", "##", "###")) block_level
+
+  # Slides: one reported block = one slide, which the document has to say
+  # explicitly. A horizontal rule is pandoc's format-independent slide break
+  # ("a horizontal rule always starts a new slide"), so the break does not
+  # depend on the block having a title -- a heading break would put every
+  # untitled exhibit on the previous slide.
+  #
+  # Two sections are exempt. The first, because a leading rule opens the deck
+  # on an empty slide. And any section carrying a chapter heading, because a
+  # heading at the slide level or above already breaks -- the rule would only
+  # add the blank slide before it.
+  first_reported <- which(sects$report)[1L]
+
+  slide_break <- function(i) {
+    if (!slides || !sects$report[i] || identical(i, first_reported)) {
+      return(character())
+    }
+    if (!is.na(chapters[i]) && !is.null(stack_hd)) {
+      return(character())
+    }
+    c("----", "")
+  }
 
   one_section <- function(i) {
 
@@ -942,7 +965,10 @@ export_qmd <- function(sects, title = "Board report",
       "```"
     )
 
-    paste(c(prose, if (length(prose)) "", chunk), collapse = "\n")
+    paste(
+      c(slide_break(i), prose, if (length(prose)) "", chunk),
+      collapse = "\n"
+    )
   }
 
   yaml <- paste(

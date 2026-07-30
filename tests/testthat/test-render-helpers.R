@@ -65,8 +65,23 @@ test_that("only formats that render are offered", {
   # Not a tautology: pdf was offered off a PATH probe for a toolchain quarto
   # does not use, so it reached users as a download that failed. Whatever is
   # in here is a promise the deployment has to keep.
-  expect_equal(report_formats(), c("html", "pptx"))
+  expect_equal(
+    report_formats(),
+    c(html = "html", slides = "revealjs", pptx = "pptx")
+  )
   expect_false("pdf" %in% report_formats())
+})
+
+test_that("a format's extension is the file it actually produces", {
+  # revealjs renders an html file. Naming the download "report.revealjs"
+  # hands the user a file the browser will not open.
+  expect_equal(report_ext("revealjs"), "html")
+  expect_equal(report_ext("html"), "html")
+  expect_equal(report_ext("pptx"), "pptx")
+
+  expect_true(slide_format("revealjs"))
+  expect_false(slide_format("html"))
+  expect_false(slide_format("pptx"))
 })
 
 test_that("template_content_width reads the body placeholder, falls back safely", {

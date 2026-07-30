@@ -659,9 +659,14 @@ outline_ext_srv <- function(annotations, block_order, title,
         spin_txt <- reactive(
           export_spin(sections(), rv_stack_level(), rv_block_level())
         )
+        # The Document view shows the qmd that WILL be rendered, slide breaks
+        # included, so it reads the format picker sitting right beside it
+        # rather than taking a format at download time. Slides are a document
+        # shape, not a render flag.
         qmd_txt <- reactive(
           export_qmd(
-            sections(), rv_title(), rv_stack_level(), rv_block_level()
+            sections(), rv_title(), rv_stack_level(), rv_block_level(),
+            slides = slide_format(coal(input$code_render_format, "html"))
           )
         )
 
@@ -1927,7 +1932,7 @@ outline_ext_srv <- function(annotations, block_order, title,
               "board-report-",
               format(Sys.time(), "%Y-%m-%d_%H-%M-%S"),
               ".",
-              input$code_render_format
+              report_ext(input$code_render_format)
             )
           },
           # Guarded HERE rather than inside render_report(): this is the one

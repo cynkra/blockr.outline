@@ -12,8 +12,25 @@
 # The render path itself stays format-generic (render_report() takes `fmt`, and
 # quarto is told the format on the command line), so restoring pdf is adding it
 # to this vector -- once a deployment can be shown to render one.
+#
+# Named, because "revealjs" is quarto's word for it and "slides" is the user's.
+# The value is what quarto is told; the name is what the picker shows.
 report_formats <- function() {
-  c("html", "pptx")
+  c(html = "html", slides = "revealjs", pptx = "pptx")
+}
+
+# The file extension a format produces, which is not always the format's own
+# name: revealjs renders an html file (and a downloaded "report.revealjs"
+# would be a file the browser refuses to open).
+report_ext <- function(fmt) {
+  switch(fmt, revealjs = "html", fmt)
+}
+
+# Formats that render as HTML slides. The qmd is built once and shown in the
+# Document view, so it has to know: slides need explicit breaks, and a
+# document must not carry them.
+slide_format <- function(fmt) {
+  identical(fmt, "revealjs")
 }
 
 quarto_usable <- function() {
@@ -422,10 +439,18 @@ execute_mode <- function() {
 # global one, so board code cannot collide with our locals while options and
 # load_all()'d namespaces (which live in the process, not the environment)
 # stay reachable.
-knit_in_process <- function(qmd, dir) {
+knit_in_process <- function(qmd, dir, fmt = "html") {
   if (!requireNamespace("knitr", quietly = TRUE)) {
     stop("In-process rendering needs the 'knitr' package.", call. = FALSE)
   }
+
+  # Tell knitr what this document is being knitted TO. quarto sets this for
+  # its own render session, so a chunk can ask knitr::is_html_output() and get
+  # an answer; a bare knit() leaves it unset, and the exhibit renderers then
+  # read "not html" and typeset an HTML report with the pptx table engine.
+  old_knit <- knitr::opts_knit$get("rmarkdown.pandoc.to")
+  knitr::opts_knit$set(rmarkdown.pandoc.to = fmt)
+  on.exit(knitr::opts_knit$set(rmarkdown.pandoc.to = old_knit), add = TRUE)
 
   # knitr resolves fig.path against the working directory, and the formatter
   # then resolves those links against the markdown. Both agree only from
@@ -593,7 +618,7 @@ render_report <- function(qmd_txt, spin_txt, fmt, file, title,
     stop(msg, call. = FALSE)
   }
 
-  out_name <- paste0("report.", fmt)
+  out_name <- paste0("report.", report_ext(fmt))
 
   in_process <- identical(execute_mode(), "in-process")
 
@@ -605,6 +630,33 @@ render_report <- function(qmd_txt, spin_txt, fmt, file, title,
       qmd_txt <- sub(
         "\n---\n",
         "\nformat:\n  html:\n    embed-resources: true\n---\n",
+        qmd_txt,
+        fixed = TRUE
+      )
+    }
+
+    # Slides. embed-resources for the same reason as html (one file to walk
+    # away with, reveal.js and all). The other three are what a board's
+    # exhibits need to fit a slide: `scrollable` keeps a long table on its
+    # slide instead of letting it run off the bottom, `smaller` sizes the body
+    # text for a table rather than for a bullet list, and the 1200x800 canvas
+    # is 3:2, which is the shape the chart exhibits are drawn for.
+    if (identical(fmt, "revealjs")) {
+      qmd_txt <- sub(
+        "\n---\n",
+        paste(
+          "",
+          "format:",
+          "  revealjs:",
+          "    embed-resources: true",
+          "    scrollable: true",
+          "    smaller: true",
+          "    width: 1200",
+          "    height: 800",
+          "---",
+          "",
+          sep = "\n"
+        ),
         qmd_txt,
         fixed = TRUE
       )
@@ -632,7 +684,7 @@ render_report <- function(qmd_txt, spin_txt, fmt, file, title,
       # Two steps instead of one, and the same document either way: knit the
       # qmd HERE so the board's code sees this session, then hand the
       # already-executed markdown to the formatter, which runs no R at all.
-      res <- render_logged(knit_in_process(qmd, dir))
+      res <- render_logged(knit_in_process(qmd, dir, fmt))
       if (!is.null(res$error)) {
         render_err(res$error)
       }
