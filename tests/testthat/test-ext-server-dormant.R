@@ -367,6 +367,51 @@ test_that("the ancestors of a reported block are listed, switched off", {
   )
 })
 
+test_that("an excluded row's code is collapsed until the badge asks for it", {
+  testServer(
+    outline_ext_srv(
+      otl_dock_ann(
+        data  = list(report = FALSE),
+        sub   = list(report = FALSE),
+        audit = list(report = FALSE)
+      ),
+      character(), "T"
+    ),
+    {
+      session$flushReact()
+
+      act <- function() {
+        skel <- skel_store()
+        setNames(skel$active, skel$ids)
+      }
+
+      # Listed, but condensed: the chunks run at render, they are not the
+      # document's content. Only the reported row is highlighted, which is
+      # where the markup cost of a long prep chain would otherwise go.
+      expect_false(act()[["data"]])
+      expect_false(act()[["sub"]])
+      expect_true(act()[["plot"]])
+      expect_setequal(names(code_store()), "plot")
+
+      session$setInputs(otl_show_code = list(id = "sub"))
+      session$flushReact()
+      expect_true(act()[["sub"]])
+      expect_setequal(names(code_store()), c("sub", "plot"))
+
+      session$setInputs(otl_show_code = list(id = "data"))
+      session$flushReact()
+      expect_setequal(names(code_store()), c("data", "sub", "plot"))
+
+      # Same id again: the badge is a toggle, so the cell closes.
+      session$setInputs(otl_show_code = list(id = "sub"))
+      session$flushReact()
+      expect_false(act()[["sub"]])
+      expect_setequal(names(code_store()), c("data", "plot"))
+    },
+    args = list(board = otl_board_args(), update = reactiveVal())
+  )
+})
+
 test_that("a block added from the outline lands in the document", {
   testServer(
     outline_ext_srv(

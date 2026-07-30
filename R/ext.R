@@ -381,6 +381,15 @@ outline_ext_srv <- function(annotations, block_order, title,
         pending_after <- reactiveVal(NULL)
         known_ids <- reactiveVal(NULL)
 
+        # Excluded rows whose code cell the user has opened. An
+        # `include: false` chunk is in the document so it RUNS, not so it
+        # is read: its code is collapsed to the badge line until asked for
+        # (on a long prep chain those cells are most of the column, and
+        # they are also the bulk of the highlighting cost). Presentation
+        # only, and deliberately not persisted -- it says what the reader
+        # is looking at right now, not what the document is.
+        rv_open_code <- reactiveVal(character())
+
         # Whether the outline panel is on screen (client-reported via the
         # IntersectionObserver in outline_js). Seeded TRUE so the first
         # projection runs before the client has reported and a broken /
@@ -411,6 +420,11 @@ outline_ext_srv <- function(annotations, block_order, title,
             ord <- intersect(rv_order(), ids)
             if (!identical(rv_order(), ord)) {
               rv_order(ord)
+            }
+
+            opn <- intersect(rv_open_code(), ids)
+            if (!identical(rv_open_code(), opn)) {
+              rv_open_code(opn)
             }
 
             stk_ids <- names(blockr.core::board_stacks(board$board))
@@ -838,6 +852,17 @@ outline_ext_srv <- function(annotations, block_order, title,
             } else {
               rep(TRUE, length(skel$ids))
             }
+
+            # An excluded row is collapsed on top of that: it carries a
+            # chunk the document runs but does not show, so its code is
+            # behind the badge twisty (rv_open_code) rather than filling
+            # the column. Reported rows are the document's content and
+            # always render.
+            skel$active <- unname(
+              skel$active &
+                (skel$report | skel$ids %in% rv_open_code())
+            )
+
             skel$gated <- gated
             # Keep `pending` IN the skeleton so a block flipping pending ->
             # code redraws the outline. That redraw is how a deferred board
@@ -1084,6 +1109,24 @@ outline_ext_srv <- function(annotations, block_order, title,
             rv_ann(ann)
           },
           ignoreInit = TRUE
+        )
+
+        # The badge twisty on an excluded row: open or close its code cell.
+        # Presentation only -- no board update, no report flag, no views
+        # delta. Clicking the ROW still opens the block's panel (and reveals
+        # the code with it, see outline_open below).
+        observeEvent(
+          input$otl_show_code,
+          {
+            blk_id <- input$otl_show_code$id
+            req(is.character(blk_id))
+
+            cur <- rv_open_code()
+
+            rv_open_code(
+              if (blk_id %in% cur) setdiff(cur, blk_id) else c(cur, blk_id)
+            )
+          }
         )
 
         observeEvent(
@@ -1585,6 +1628,14 @@ outline_ext_srv <- function(annotations, block_order, title,
             blk_id <- input$outline_open$id
             req(is.character(blk_id))
             req(blk_id %in% blockr.core::board_block_ids(board$board))
+
+            # "Show me this block": on an excluded row that also means
+            # opening its code, so the click does something visible in the
+            # outline itself -- and on a board with no views (nothing to
+            # reveal) it is the whole of the gesture.
+            if (!blk_id %in% rv_open_code()) {
+              rv_open_code(c(rv_open_code(), blk_id))
+            }
 
             views <- blockr.dock::board_views(board$board)
             view <- blockr.dock::active_view(views)

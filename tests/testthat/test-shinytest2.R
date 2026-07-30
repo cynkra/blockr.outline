@@ -180,6 +180,15 @@ test_that("excluding an ancestor keeps its row, switched off", {
     "include=FALSE"
   )
 
+  # And its code is collapsed behind that badge, which is the twisty.
+  expect_equal(count("[data-blk=\"sub\"] .blockr-otl-codewrap"), 0)
+  app$run_js(paste0(
+    "document.querySelector('[data-blk=\"sub\"] ",
+    ".blockr-otl-offchip').click();"
+  ))
+  app$wait_for_idle()
+  expect_equal(count("[data-blk=\"sub\"] .blockr-otl-codewrap"), 1)
+
   send("outline_toggle", list(id = "sub", report = TRUE))
   expect_equal(count(".blockr-otl-offchip"), 0)
 })

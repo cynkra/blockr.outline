@@ -41,7 +41,7 @@ outline_js <- function(ns) {
       "ADD = '%s', RM = '%s', CHAP = '%s', NEWCHAP = '%s', ",
       "TOSTACK = '%s', MOVECHAP = '%s', GEAR = '%s', SETTINGS = '%s', ",
       "PANEL = '%s', VISIBLE = '%s', BULK = '%s', RENTITLE = '%s', ",
-      "HIDE = '%s', INCLUDE = '%s';"
+      "HIDE = '%s', INCLUDE = '%s', SHOWCODE = '%s';"
     ),
     ns("outline_toggle"),
     ns("outline_open"),
@@ -64,7 +64,8 @@ outline_js <- function(ns) {
     ns("outline_bulk"),
     ns("outline_rename_title"),
     ns("outline_hide"),
-    ns("otl_include")
+    ns("otl_include"),
+    ns("otl_show_code")
   )
 
   tags$script(HTML(paste0(
@@ -825,6 +826,14 @@ outline_js <- function(ns) {
           Shiny.setInputValue(HIDE, {id: id}, {priority: 'event'});
           return;
         }
+        // The include=FALSE badge is the code twisty: an excluded chunk's
+        // code is in the document for reproducibility, not for reading, so
+        // its cell is collapsed until asked for. Presentation only -- it
+        // stops here rather than falling through to the row's open.
+        if (ev.target.closest('.blockr-otl-offchip')) {
+          Shiny.setInputValue(SHOWCODE, {id: id}, {priority: 'event'});
+          return;
+        }
         if (ev.target.closest('.blockr-otl-sw')) {
           Shiny.setInputValue(TOGGLE, {
             id: id, report: !row.classList.contains('on')
@@ -1039,6 +1048,26 @@ outline_tags <- function(sects, ns, editing = NULL) {
     )
   }
 
+  # The excluded-block badge, doubling as the twisty for its code cell.
+  # Two different exclusions: a block the report still depends on runs
+  # invisibly (include=FALSE); one nothing reported needs is pruned from
+  # the document and never evaluated.
+  offchip_ui <- function(i, open) {
+    span(
+      class = if (open) "blockr-otl-offchip open" else "blockr-otl-offchip",
+      title = if (open) "Hide the code" else "Show the code",
+      span(
+        class = "blockr-otl-offcaret",
+        if (open) "\u25be" else "\u25b8"
+      ),
+      if (isTRUE(sects$exported[i])) {
+        "include=FALSE \u00b7 runs, not shown"
+      } else {
+        "not in report \u00b7 not evaluated"
+      }
+    )
+  }
+
   sect_ui <- function(i) {
 
     if (identical(editing, sects$ids[i])) {
@@ -1065,14 +1094,7 @@ outline_tags <- function(sects, ns, editing = NULL) {
           div(
             class = "blockr-otl-dormline",
             if (!sects$report[i]) {
-              span(
-                class = "blockr-otl-offchip",
-                if (isTRUE(sects$exported[i])) {
-                  "include=FALSE \u00b7 runs, not shown"
-                } else {
-                  "not in report \u00b7 not evaluated"
-                }
-              )
+              offchip_ui(i, open = FALSE)
             },
             span(
               class = "blockr-otl-dormdesc",
@@ -1117,17 +1139,7 @@ outline_tags <- function(sects, ns, editing = NULL) {
       class = "blockr-otl-sect",
       title = "Double-click to edit the description",
       if (!sects$report[i]) {
-        span(
-          class = "blockr-otl-offchip",
-          # Two different exclusions: a block the report still depends on
-          # runs invisibly (include=FALSE); one nothing reported needs is
-          # pruned from the document and never evaluated.
-          if (isTRUE(sects$exported[i])) {
-            "include=FALSE \u00b7 runs, not shown"
-          } else {
-            "not in report \u00b7 not evaluated"
-          }
-        )
+        offchip_ui(i, open = TRUE)
       },
       prose,
       code_tag
