@@ -510,7 +510,18 @@ knit_in_process <- function(qmd, dir, fmt = "html") {
   # error = FALSE so a failing chunk STOPS, matching quarto. knit() defaults
   # to TRUE, which would paste the error into the document and hand the user
   # a downloaded report with a traceback inside it and no other signal.
-  knitr::opts_chunk$set(fig.path = "figure/", error = FALSE)
+  #
+  # echo follows quarto's own per-format default: shown in a document, hidden
+  # in a presentation. It has to be stated because in this mode quarto never
+  # executes anything -- it formats markdown knitr has already produced -- so
+  # the format's execution defaults never apply, and knit()'s own `echo = TRUE`
+  # stands. That put the R source on every slide of an in-process deck while a
+  # quarto-CLI deck of the same document had none.
+  knitr::opts_chunk$set(
+    fig.path = "figure/",
+    error = FALSE,
+    echo = !slide_format(fmt)
+  )
 
   md <- knitr::knit(
     input = basename(qmd),
