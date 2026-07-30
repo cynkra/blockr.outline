@@ -111,7 +111,7 @@ test_that("the outline lists the report blocks; the rest are searchable", {
   # The pool count sits in the control, before anything is typed.
   expect_match(
     app$get_js("document.querySelector('.blockr-otl-searchcount').textContent"),
-    "not in report"
+    "outside the document"
   )
 
   # Both chapter headings are present (Outputs keeps its listed member).
@@ -154,6 +154,34 @@ test_that("the report toggle lists and unlists without a board update", {
   # Restore the fixture state for any later test / re-run.
   send("outline_toggle", list(id = "audit", report = FALSE))
   expect_equal(count(".blockr-otl-chip"), 3)
+})
+
+test_that("excluding an ancestor keeps its row, switched off", {
+  skip_if_no_app()
+  set_view("outline")
+
+  row_class <- function(id) {
+    app$get_js(sprintf(
+      "document.querySelector('[data-blk=\"%s\"]').className", id
+    ))
+  }
+
+  # `sub` feeds `plot`, which reports. Excluding it hides its output, not
+  # its row: the document still runs its code, as an `include: false`
+  # chunk, and the outline is one row per chunk.
+  send("outline_toggle", list(id = "sub", report = FALSE))
+  expect_equal(count(".blockr-otl-chip"), 3)
+  expect_no_match(row_class("sub"), "\\bon\\b")
+  expect_match(
+    app$get_js(paste0(
+      "document.querySelector('[data-blk=\"sub\"] ",
+      ".blockr-otl-offchip').textContent"
+    )),
+    "include=FALSE"
+  )
+
+  send("outline_toggle", list(id = "sub", report = TRUE))
+  expect_equal(count(".blockr-otl-offchip"), 0)
 })
 
 test_that("otl_include lists a block from the pool", {

@@ -315,9 +315,11 @@ outline_settings_band <- function(ns) {
         div(
           class = "blockr-settings__hint",
           paste(
-            "By default the outline lists only the report's blocks;",
-            "the rest are added through the picker under the list.",
-            "Show-all restores the full board overview."
+            "By default the outline lists the document: the report's",
+            "blocks plus the upstream blocks they need, the latter with",
+            "their switch off. Branches outside the report are added",
+            "through the picker under the list. Show-all restores the",
+            "full board overview."
           )
         )
       )
@@ -443,6 +445,21 @@ outline_ext_srv <- function(annotations, block_order, title,
               if (!is.na(at)) {
                 rv_order(append(cur, added, after = at))
               }
+
+              # Report the new blocks. Added FROM the outline means added
+              # to the document, and the flag is what puts them there: a
+              # fresh leaf has no reported descendant, so it is outside
+              # the export closure and the listing (see `listed` below)
+              # would drop it -- the add link would redraw nothing.
+              ann <- rv_ann()
+
+              for (id in added) {
+                entry <- coal(ann[[id]], list())
+                entry$report <- TRUE
+                ann[[id]] <- entry
+              }
+
+              rv_ann(ann)
 
               # Inherit the source's stack: a block added from inside a
               # chapter belongs to that chapter, so it does not split the
@@ -778,13 +795,16 @@ outline_ext_srv <- function(annotations, block_order, title,
 
             show_all <- isTRUE(input$otl_show_all)
 
-            # The outline LISTS only the document: blocks with the report
-            # flag. Everything else -- ancestors running invisibly and
-            # branches outside the report alike -- lives in the include
-            # picker below the list, not as rows. On a large board that
-            # is 90% of the blocks. Show-all restores the full board
-            # overview.
-            listed <- if (show_all) full$ids else full$ids[full$report]
+            # The outline LISTS the document, one row per chunk the qmd
+            # gets: the reported blocks plus the ancestors they need. That
+            # is the export closure (`exported` in outline_sections), and
+            # the mapping is exact -- a reported block is a chunk with
+            # output, an ancestor is an `#| include: false` chunk, so it
+            # shows as a row with the toggle OFF. Only blocks the document
+            # does not contain at all (branches no reported block depends
+            # on) stay out of the list and live in the include picker
+            # below it. Show-all restores the full board overview.
+            listed <- if (show_all) full$ids else full$ids[full$exported]
 
             skel <- display_sections(
               full, listed,

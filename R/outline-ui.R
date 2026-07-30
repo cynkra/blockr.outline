@@ -265,9 +265,9 @@ outline_js <- function(ns) {
               '<div class=\"blockr-block-browser-card-titles\">' +
                 '<span class=\"blockr-block-browser-card-name\">' +
                   mark(b.name, q) + '</span>' +
-                (b.runs && !b.listed ?
-                  '<span class=\"blockr-block-browser-card-package\">runs' +
-                  '</span>' : '') +
+                (b.runs ?
+                  '<span class=\"blockr-block-browser-card-package\">' +
+                  'code only</span>' : '') +
                 '<span class=\"blockr-otl-optact\">' +
                   (b.listed ? 'Go to' : 'Add') + '</span>' +
               '</div>' +
@@ -310,14 +310,14 @@ outline_js <- function(ns) {
         var count = root.querySelector('.blockr-otl-searchcount');
         if (count) {
           var pool = catalog.filter(function(b) { return !b.listed; }).length;
-          count.textContent = pool ? pool + ' not in report' : '';
+          count.textContent = pool ? pool + ' outside the document' : '';
         }
         root.classList.toggle('has-value', !!q);
 
         menu.classList.toggle('is-empty', !all.length);
         menu.innerHTML =
           '<div class=\"blockr-block-browser-categories\">' +
-            sectionHtml('In the report', inn, q, 0) +
+            sectionHtml('In the document', inn, q, 0) +
             sectionHtml('Add to the report', out, q, inn.length) +
           '</div>' +
           '<div class=\"blockr-block-browser-empty\">' +

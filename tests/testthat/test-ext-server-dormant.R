@@ -229,9 +229,9 @@ test_that("outline_code_map narrows to the requested ids", {
   expect_identical(names(outline_code_map(sects, c("b", "zzz"))), "b")
 })
 
-# ---- report-only listing + the search catalogue -----------------------
+# ---- closure listing + the search catalogue ---------------------------
 
-test_that("the skeleton lists only reported blocks; the rest are searchable", {
+test_that("the skeleton lists the document; the rest are searchable", {
   testServer(
     outline_ext_srv(
       otl_dock_ann(
@@ -314,6 +314,88 @@ test_that("show-all restores the full board overview", {
       expect_true(all(vapply(catalog_store(), `[[`, logical(1L), "listed")))
     },
     args = list(board = otl_board_args(), update = reactiveVal())
+  )
+})
+
+# The listing is the qmd: a reported block is a chunk with output, its
+# ancestors are `include: false` chunks, and a branch the report does not
+# depend on is not in the document at all.
+test_that("the ancestors of a reported block are listed, switched off", {
+  testServer(
+    outline_ext_srv(
+      otl_dock_ann(
+        data  = list(report = FALSE),
+        sub   = list(report = FALSE),
+        audit = list(report = FALSE)
+      ),
+      character(), "T"
+    ),
+    {
+      session$flushReact()
+
+      # `plot` alone reports; `data` and `sub` ride along because it needs
+      # them. `audit` is a branch of its own, so it stays in the pool.
+      skel <- skel_store()
+      expect_setequal(skel$ids, c("data", "sub", "plot"))
+
+      expect_identical(
+        unname(skel$report[match(c("data", "sub", "plot"), skel$ids)]),
+        c(FALSE, FALSE, TRUE)
+      )
+
+      # Ancestors are rows, so the catalogue calls them a "go to" and marks
+      # them code-only; only the branch outside the document is an "add".
+      cat <- catalog_store()
+      flag <- function(id, fld) {
+        Filter(function(e) identical(e$id, id), cat)[[1L]][[fld]]
+      }
+
+      expect_true(flag("sub", "listed"))
+      expect_true(flag("sub", "runs"))
+      expect_false(flag("plot", "runs"))
+      expect_false(flag("audit", "listed"))
+
+      # The exporters see the same closure the outline lists.
+      full <- sections_store()
+      ids <- c("data", "sub", "plot", "audit")
+      expect_identical(
+        unname(full$exported[match(ids, full$ids)]),
+        c(TRUE, TRUE, TRUE, FALSE)
+      )
+    },
+    args = list(board = otl_board_args(), update = reactiveVal())
+  )
+})
+
+test_that("a block added from the outline lands in the document", {
+  testServer(
+    outline_ext_srv(
+      otl_dock_ann(plot = list(report = FALSE), audit = list(report = FALSE)),
+      character(), "T"
+    ),
+    {
+      # Rewind to the board before the append, then play the two steps the
+      # dock's append action drives: the add link fires, the block commits.
+      board$board <- otl_dock_board()
+      session$flushReact()
+      expect_false("xtra" %in% skel_store()$ids)
+
+      session$setInputs(outline_add = list(id = "sub"))
+      board$board <- otl_dock_board_added()
+      session$flushReact()
+
+      # A fresh leaf has no reported descendant, so nothing but the report
+      # flag can list it -- and the add link has to leave a visible row.
+      expect_true(ann_report(rv_ann(), "xtra"))
+
+      skel <- skel_store()
+      expect_true("xtra" %in% skel$ids)
+      expect_true(skel$report[[match("xtra", skel$ids)]])
+    },
+    args = list(
+      board = otl_board_args(otl_dock_board_added()),
+      update = reactiveVal()
+    )
   )
 })
 

@@ -383,8 +383,9 @@ outline_geometry <- function(ids, lnks, stack_ids, report, universe = ids) {
   # is reported or some reported block depends on it. Everything else is
   # dropped from the DOCUMENT entirely (not include=FALSE, whose code still
   # runs at render) -- on a many-view board the independent branches would
-  # otherwise all evaluate for a report that shows none of them. The
-  # outline view keeps showing every block; only the exporters prune.
+  # otherwise all evaluate for a report that shows none of them. This is
+  # also what the outline LISTS: one row per chunk, the reported ones with
+  # output and the rest as `include: false`.
   reported <- ids[report]
 
   exported <- report | lgl_ply(
@@ -609,8 +610,9 @@ desc_oneline <- function(x) {
 # and each group in document order. The search box is a single control over
 # the whole board -- a listed block is a "go to", an unlisted one an "add"
 # -- so it needs the document and the pool in one payload. `runs` marks a
-# block the report already depends on: including it only makes its output
-# visible, it was going to be evaluated either way.
+# block the document runs without showing: an ancestor of a reported block,
+# listed as an `#| include: false` row. Switching it on only makes its
+# output visible, it was going to be evaluated either way.
 outline_catalog <- function(sects, listed) {
 
   is_listed <- sects$ids %in% listed
@@ -634,8 +636,8 @@ outline_catalog <- function(sects, listed) {
   )
 }
 
-# Narrow a sections projection to the ids the outline LISTS (the report
-# blocks, unless show-all). Like prune_sections(), but for display: the
+# Narrow a sections projection to the ids the outline LISTS (the export
+# closure, unless show-all). Like prune_sections(), but for display: the
 # drag-geometry fields are recomputed on the visible subsequence rather
 # than dropped, with reachability over the FULL document (`universe`) so a
 # dependency running through a hidden block still pins the order. `lnks`

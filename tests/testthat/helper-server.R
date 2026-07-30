@@ -27,6 +27,29 @@ otl_dock_board <- function() {
   )
 }
 
+# The dock fixture plus `xtra`, a second leaf off `sub`: the board as it
+# looks AFTER an append committed from the outline's add link. A test plays
+# the add through by generating the bundle from THIS board (so every block
+# server exists) and setting `board$board` to otl_dock_board() first.
+otl_dock_board_added <- function() {
+  blockr.dock::new_dock_board(
+    blocks = c(
+      data  = blockr.core::new_dataset_block("iris"),
+      sub   = blockr.core::new_subset_block(),
+      plot  = blockr.core::new_scatter_block("Sepal.Length", "Sepal.Width"),
+      audit = blockr.core::new_head_block(),
+      xtra  = blockr.core::new_head_block()
+    ),
+    links = blockr.core::links(
+      from = c("data", "sub",  "sub",   "sub"),
+      to   = c("sub",  "plot", "audit", "xtra")
+    ),
+    stacks = blockr.core::stacks(
+      prep = blockr.dock::new_dock_stack(c("data", "sub"), name = "Prep")
+    )
+  )
+}
+
 # The `board` argument a plugin server receives, in read mode (block servers
 # constructed, expressions live).
 otl_board_args <- function(board = otl_dock_board()) {
