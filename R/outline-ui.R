@@ -101,6 +101,42 @@ outline_js <- function(ns) {
         applyCode();
       });
 
+      // Row-level push: swap the rows that changed, leave the rest of the
+      // document alone. Clicking a row activates one block -- one row goes
+      // from condensed to code -- and re-rendering the whole outline for
+      // that read as a blank-then-repaint flash, on top of throwing away
+      // scroll and hover state. The row IS a self-contained grid element
+      // (div.blockr-otl-grow), so replacing it in place is enough.
+      //
+      // Every interaction in this file is delegated from `document`, so a
+      // swapped row keeps working with no rebinding. Rows carrying a
+      // Shiny-bound widget (the markdown editor) never travel this way --
+      // an open editor puts the outline in the full-render path, see
+      // outline_layout_key.
+      Shiny.addCustomMessageHandler('blockr-outline-rows', function(msg) {
+        var items = msg.items || [];
+        if (!items.length) return;
+        // Matched on the dataset rather than an attribute selector: a
+        // block id is free-form and may carry characters that would need
+        // escaping inside one.
+        var byId = {};
+        document.querySelectorAll('.blockr-otl-grow').forEach(function(el) {
+          byId[el.dataset.blk] = el;
+        });
+        // No local did-it-change check: the browser re-serializes
+        // outerHTML its own way (attribute order, indentation), so it would
+        // never match the server markup and would only ever cost a
+        // comparison. The server already sends nothing but changed rows.
+        items.forEach(function(it) {
+          var el = byId[it.id];
+          if (el) el.outerHTML = it.html;
+        });
+        // The row markup carries the code cell it was built with, so the
+        // cache has to follow it -- otherwise a later applyCode() would
+        // repaint the cell from a stale entry.
+        applyCode();
+      });
+
       // Fire the real download. The visible Download button is an action
       // button: on a deferred board the server first has to construct the
       // reported blocks and wait for their code, so the browser-initiated
@@ -984,7 +1020,16 @@ outline_chevron <- function() {
   ))
 }
 
-outline_tags <- function(sects, ns, editing = NULL) {
+# The grid, built once and handed back in two shapes: `el` for the whole
+# body, `rows` keyed by block id for the incremental push. A block row is a
+# single self-contained element (div.blockr-otl-grow), which is what makes
+# the push possible -- swapping one row in place beats re-rendering the
+# document to show that one row changed. Chapter and intro cells are NOT
+# rows: each is a pair of bare grid siblings with no wrapper to swap, so
+# they ride with the full render (see outline_layout_key).
+outline_grid <- function(sects, ns, editing = NULL) {
+
+  row_html <- new.env(parent = emptyenv())
 
   # Older callers (and the qmd/script exporters' sections) carry no
   # activation info: everything active, nothing gated -- the pre-dormancy
@@ -1354,7 +1399,7 @@ outline_tags <- function(sects, ns, editing = NULL) {
         )
       )
 
-      div(
+      row <- div(
         class = paste(
           "blockr-otl-grow",
           if (sects$report[i]) "on",
@@ -1371,12 +1416,72 @@ outline_tags <- function(sects, ns, editing = NULL) {
         ),
         div(class = "blockr-otl-gsect", sect_ui(i), add_link)
       )
+
+      row_html[[sects$ids[i]]] <- row
+
+      row
     })
 
     tagList(chapter, intro, rows)
   })
 
-  div(class = "blockr-otl", grid_rows)
+  list(
+    el = grid_rows,
+    rows = mget(sects$ids, envir = row_html, ifnotfound = list(NULL))
+  )
+}
+
+outline_tags <- function(sects, ns, editing = NULL) {
+  div(class = "blockr-otl", outline_grid(sects, ns, editing)$el)
+}
+
+# The same rows as HTML strings, for the incremental push. Same code path
+# as the full render, so the two can never drift.
+outline_row_map <- function(sects, ns, editing = NULL) {
+  rows <- outline_grid(sects, ns, editing)$rows
+  lapply(Filter(Negate(is.null), rows), as.character)
+}
+
+# What a row swap CANNOT carry, and therefore what forces a full render:
+# the number and order of the rows, the chapter cells between them, and the
+# two modes that change every row at once anyway. Everything else -- a row
+# going active, a report flag, a rename, edited prose, new code -- is
+# per-row and travels as a push.
+#
+# The chapter action label is an aggregate (`exclude all` shows only when
+# every block of the run is on), so it enters the key as that aggregate
+# rather than as the whole report vector: toggling one block of a chapter
+# then leaves the layout alone, which is the common gesture.
+outline_layout_key <- function(sects, editing = NULL) {
+
+  stk <- ifelse(is.na(sects$stack_ids), "", sects$stack_ids)
+  runs <- rle(stk)
+  starts <- cumsum(c(1L, head(runs$lengths, -1L)))
+
+  list(
+    ids = sects$ids,
+    stack_ids = sects$stack_ids,
+    stack_names = sects$stack_names,
+    stack_colors = sects$stack_colors,
+    stack_descriptions = sects$stack_descriptions,
+    chap_targets = sects$chap_targets,
+    # Only a real chapter has an action label to keep honest. An ungrouped
+    # run draws no chapter cell, so folding its report flags in here would
+    # force a full render on the commonest gesture there is -- flipping a
+    # switch on an unstacked board.
+    chap_all_on = vapply(
+      seq_along(runs$values),
+      function(r) {
+        if (!nzchar(runs$values[r])) {
+          return(NA)
+        }
+        all(sects$report[seq(starts[r], length.out = runs$lengths[r])])
+      },
+      logical(1L)
+    ),
+    editing = editing,
+    body_mode = coal(sects$body_mode, "code")
+  )
 }
 
 # The report title as the top-level "chapter": document title on the left

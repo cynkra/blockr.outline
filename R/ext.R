@@ -1100,25 +1100,116 @@ outline_ext_srv <- function(annotations, block_order, title,
         # outline_out so it is not torn down on every body re-render.
         output$otl_title <- renderUI(outline_title_row(rv_title()))
 
+        # Row-level incremental render. A skeleton change used to redraw the
+        # whole document through renderUI, which reads as a blank-then-
+        # repaint flash and throws away scroll and hover state -- and the
+        # commonest skeleton change by far is a row click, which activates
+        # ONE block. So: compose the sections here, and only hand renderUI a
+        # new value when the change is one a row swap cannot express (see
+        # outline_layout_key). Everything else travels as a push.
+        #
+        # Code is isolated, exactly as the renderUI below used to isolate it:
+        # a code-only change must not come through here, the code push
+        # already handles it -- but a row that IS pushed has to carry the
+        # current code, because the swap replaces the cell it lives in.
+        # The current sections, held in a PLAIN variable rather than a
+        # reactiveVal. renderUI has to paint the latest state whenever it
+        # runs -- and it runs for reasons of its own, notably the code_view
+        # switcher coming back to Outline. A reactiveVal written only on
+        # layout changes would hand it a snapshot from before every row that
+        # has been pushed since, silently undoing them. So: content in a
+        # plain variable, and a separate token as the only reactive reason
+        # to re-render.
+        render_sects <- NULL
+        render_token <- reactiveVal(0L)
+        rows_pushed <- reactiveVal(NULL)
+        layout_last <- NULL
+
+        bump_render <- function() {
+          render_token(isolate(render_token()) + 1L)
+        }
+
+        observe(
+          {
+            skel <- skel_store()
+            req(!is.null(skel))
+
+            edit <- editing()
+
+            sects <- skel
+            sects$body_mode <- coal(input$otl_body, "code")
+            sects$code_html <- isolate(code_store())
+
+            render_sects <<- list(sects = sects, editing = edit)
+
+            # Output mode stays wholly on the full-render path: the cells
+            # hold evaluated exhibits, not the code markup composed here, so
+            # a row built from it would be wrong to push. Exhibits are also
+            # heavy and change rarely, which is what the mode is for.
+            if (identical(sects$body_mode, "output")) {
+              layout_last <<- NULL
+              rows_pushed(NULL)
+              bump_render()
+              return()
+            }
+
+            key <- outline_layout_key(sects, edit)
+            rows <- outline_row_map(sects, session$ns, edit)
+
+            prev <- isolate(rows_pushed())
+            rows_pushed(rows)
+
+            if (!identical(key, layout_last)) {
+              layout_last <<- key
+              # renderUI paints from exactly these sections, so `rows` above
+              # is an honest record of what ends up on screen and the next
+              # diff has something true to compare against.
+              bump_render()
+              return()
+            }
+
+            # First pass after a full render carries no baseline yet.
+            req(!is.null(prev))
+
+            changed <- Filter(
+              function(n) !identical(rows[[n]], prev[[n]]),
+              names(rows)
+            )
+
+            if (!length(changed)) {
+              return()
+            }
+
+            session$sendCustomMessage(
+              "blockr-outline-rows",
+              list(
+                items = lapply(
+                  changed,
+                  function(n) list(id = n, html = rows[[n]])
+                )
+              )
+            )
+          }
+        )
+
         output$outline_out <- renderUI(
           {
             view <- coal(input$code_view, "outline")
 
             if (identical(view, "outline")) {
 
-              # Skeleton reactively, code isolated: a code-only change must
-              # not re-render here (the push handles it), but when the
-              # skeleton does redraw it has to paint the current code.
-              sects <- skel_store()
-              req(!is.null(sects))
+              # Reactive on the token only; the content itself is read
+              # plainly, so this always paints what is current rather than
+              # what was current when the layout last moved.
+              render_token()
 
-              body_mode <- coal(input$otl_body, "code")
-              sects$body_mode <- body_mode
+              rs <- render_sects
+              req(!is.null(rs))
 
-              if (identical(body_mode, "output")) {
+              sects <- rs$sects
+
+              if (identical(coal(sects$body_mode, "code"), "output")) {
                 sects$code_html <- output_map()
-              } else {
-                sects$code_html <- isolate(code_store())
               }
 
               if (!length(sects$ids)) {
@@ -1130,7 +1221,10 @@ outline_ext_srv <- function(annotations, block_order, title,
                 )
               }
 
-              return(outline_tags(sects, session$ns, editing()))
+              # rs$editing, not editing(): the sections were composed with
+              # it, and reading the reactive here would make a render fire
+              # on an edit that the observer above has already accounted for.
+              return(outline_tags(sects, session$ns, rs$editing))
             }
 
             txt <- if (identical(view, "qmd")) qmd_txt() else spin_txt()
