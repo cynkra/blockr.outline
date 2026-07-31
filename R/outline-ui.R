@@ -868,7 +868,7 @@ outline_js <- function(ns) {
 # Depends on the chunk header too, so a report-flag flip regenerates the
 # markup (that flip also redraws the skeleton, which is what shows the
 # prose and the include=FALSE chip).
-sect_code_html <- function(sects, i) {
+sect_code_html <- function(sects, i, cache = NULL) {
 
   # Not reported yet: hold the row with a muted placeholder rather than
   # deparsing the stand-in expression, which would flash `x <- NULL`.
@@ -878,6 +878,29 @@ sect_code_html <- function(sects, i) {
         div(class = "blockr-otl-pending", "Evaluating\u2026")
       )
     )
+  }
+
+  # Everything below is a pure function of these six fields, and producing
+  # it costs two downlit passes -- by far the most expensive thing the
+  # outline does per row. The map is recomputed whenever the board object
+  # is touched, which includes gestures that change no code at all (a dock
+  # tab flip commits a views delta), so without a memo every such gesture
+  # re-highlights the whole document to produce byte-identical markup.
+  # `cache` is an environment owned by the caller (one per extension
+  # server, like geometry_cache); NULL highlights fresh.
+  #
+  # One slot per block id, replaced when the key moves: the cache is then
+  # bounded by the board's block count rather than growing with every edit.
+  key <- list(
+    id = sects$ids[i], code = sects$code[i], report = sects$report[i],
+    report_call = sects$report_calls[i], renderer = sects$renderers[i]
+  )
+
+  if (!is.null(cache)) {
+    hit <- cache[[sects$ids[i]]]
+    if (!is.null(hit) && identical(hit$key, key)) {
+      return(hit$html)
+    }
   }
 
   hl_or_pre <- function(txt) {
@@ -902,7 +925,7 @@ sect_code_html <- function(sects, i) {
   # highlighted separately so it can carry its own class and render
   # dimmed: the transform is the substance, the exhibit call its footer.
   # Code view is thus the chunk source; Output view its evaluated result.
-  paste0(
+  html <- paste0(
     hl_or_pre(chunk),
     if (sects$report[i]) {
       paste0(
@@ -912,15 +935,23 @@ sect_code_html <- function(sects, i) {
       )
     }
   )
+
+  if (!is.null(cache)) {
+    cache[[sects$ids[i]]] <- list(key = key, html = html)
+  }
+
+  html
 }
 
 # `ids` narrows the map to the blocks that render a code cell (the active
 # ones): dormant rows have no cell to fill, so highlighting their chunks
-# would be pure waste on a large board.
-outline_code_map <- function(sects, ids = sects$ids) {
+# would be pure waste on a large board. `cache` memoises the highlighted
+# markup per block (see sect_code_html) so a redraw that changed no code
+# pays nothing.
+outline_code_map <- function(sects, ids = sects$ids, cache = NULL) {
   keep <- match(intersect(ids, sects$ids), sects$ids)
   setNames(
-    lapply(keep, function(i) sect_code_html(sects, i)),
+    lapply(keep, function(i) sect_code_html(sects, i, cache = cache)),
     sects$ids[keep]
   )
 }

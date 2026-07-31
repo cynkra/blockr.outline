@@ -584,26 +584,90 @@ outline_ext_srv <- function(annotations, block_order, title,
         # and pay the full sweep, which is when it is actually owed.
         geometry_cache <- new.env(parent = emptyenv())
 
-        sections_calc <- reactive(
+        # The projection's two inputs, each behind an identical-skip store.
+        # `sections_store` below already stops an unchanged projection from
+        # redrawing anything -- but by then the projection has been RUN, and
+        # at 44 blocks that is 30-120ms. These two stop it being run at all.
+        #
+        # Both inputs re-emit far more often than they change:
+        #   * board_exprs re-reads every block server's expr reactive, and a
+        #     block parked behind a dock tab stops reporting one, so merely
+        #     fronting a different tab invalidates it -- the expr_cache then
+        #     refills the gap with the identical expression.
+        #   * board$board is rebuilt by every board update, including the
+        #     views delta a tab click commits, which says nothing about the
+        #     document.
+        # A plain reactive() propagates both regardless of whether the value
+        # moved. These do not.
+        #
+        # Both observers carry the panel-visibility gate that used to sit
+        # only on sections_calc. They are now the sole eager readers of
+        # board_exprs / board$board, so without it a closed outline would
+        # go back to re-reading every block's expression on every flush --
+        # the exact cost the gate was added to remove.
+        exprs_store <- reactiveVal(NULL)
+
+        observe(
           {
-            # Gate FIRST, before board_exprs is even read: the projection
-            # is the outline's one expensive step (O(n^2) drag geometry),
-            # and it is the sole eager reader of board_exprs. Skipping it
-            # while the panel is closed idles the entire pipeline -- no
-            # expr reads, no projection -- so a present-but-unopened outline
-            # costs nothing. The next time the panel is shown, panel_visible
-            # flips and the projection runs.
             req(panel_visible())
 
-            req(length(board_exprs()) > 0L)
+            ex <- board_exprs()
+            if (!identical(ex, isolate(exprs_store()))) {
+              exprs_store(ex)
+            }
+          }
+        )
+
+        # Keyed on what outline_sections actually reads off the board:
+        # blocks (narrowing, names, icons, export_code), links and stacks.
+        # Views are deliberately NOT in the key -- they are the noise this
+        # store exists to filter. KEEP THIS IN STEP with outline_sections:
+        # a field it starts reading and this signature omits would leave the
+        # outline stale.
+        board_shape <- reactiveVal(NULL)
+        shape_sig <- NULL
+
+        observe(
+          {
+            req(panel_visible())
+
+            brd <- board$board
+
+            sig <- list(
+              blocks = blockr.core::board_blocks(brd),
+              links = blockr.core::board_links(brd),
+              stacks = blockr.core::board_stacks(brd)
+            )
+
+            if (!identical(sig, shape_sig)) {
+              shape_sig <<- sig
+              board_shape(brd)
+            }
+          }
+        )
+
+        sections_calc <- reactive(
+          {
+            # Gate FIRST: the projection is the outline's one expensive
+            # step (O(n^2) drag geometry). The same gate rides on the two
+            # store observers above, which are what actually read the board
+            # -- between them, a present-but-unopened outline costs nothing.
+            # The next time the panel is shown, panel_visible flips, the
+            # stores fill and the projection runs.
+            req(panel_visible())
+
+            exprs <- exprs_store()
+            brd <- board_shape()
+
+            req(!is.null(brd), length(exprs) > 0L)
 
             # During startup (deferred construction) the block servers and
             # the committed board can disagree for a flush; retry on the
             # next one instead of surfacing a transient error.
             tryCatch(
               outline_sections(
-                board_exprs(),
-                board$board,
+                exprs,
+                brd,
                 rv_ann(),
                 rv_order(),
                 rv_stack_ann(),
@@ -759,7 +823,7 @@ outline_ext_srv <- function(annotations, block_order, title,
         # its last-reported code from expr_cache. NULL means "no gating"
         # (not a dock board, or views unreadable) and degrades to the old
         # show-everything behaviour.
-        view_active_ids <- reactive(
+        view_active_calc <- reactive(
           {
             brd <- board$board
 
@@ -793,6 +857,51 @@ outline_ext_srv <- function(annotations, block_order, title,
           }
         )
 
+        # Identical-skip in front of the two board reads the content
+        # observer below makes. Both are keyed on `board$board`, so ANY
+        # board update invalidates them -- and most board updates say
+        # nothing about the document: clicking a dock tab commits a views
+        # delta (front tab), which changes neither the active membership
+        # nor the links, yet re-ran the whole content pass (display
+        # geometry, catalogue, and the full code map) to produce byte-
+        # identical output. A plain reactive() cannot stop that; it
+        # re-emits whenever its dependency invalidates, regardless of
+        # whether its value moved. Wrapping each in a reactiveVal that is
+        # only written on a real change gives the observer a dependency
+        # that stays put across those gestures.
+        #
+        # The ids are wrapped in a list because NULL is a MEANINGFUL value
+        # here -- "no view gating" -- and a reactiveVal cannot distinguish
+        # a NULL payload from an unset one.
+        view_active_store <- reactiveVal(list(ids = NULL))
+
+        observe(
+          {
+            new <- list(ids = view_active_calc())
+            if (!identical(new, isolate(view_active_store()))) {
+              view_active_store(new)
+            }
+          }
+        )
+
+        view_active_ids <- reactive(view_active_store()$ids)
+
+        links_store <- reactiveVal(NULL)
+
+        observe(
+          {
+            lnks <- blockr.core::board_links(board$board)
+            if (!identical(lnks, isolate(links_store()))) {
+              links_store(lnks)
+            }
+          }
+        )
+
+        # Memoises the highlighted code markup per block, so a redraw that
+        # changed no code costs nothing (see sect_code_html). Session-owned
+        # like the two geometry caches.
+        code_html_cache <- new.env(parent = emptyenv())
+
         # Split the projection into the structural skeleton and the
         # per-block code markup, each with its own identical-skip store.
         # Editing a block value (a row count, say) changes only the code,
@@ -812,6 +921,12 @@ outline_ext_srv <- function(annotations, block_order, title,
           {
             full <- sections()
 
+            # NULL means the links store has not been written yet (an empty
+            # board still has a zero-row links table, never NULL), so this
+            # only skips the flush before its observer above has run.
+            lnks <- links_store()
+            req(!is.null(lnks))
+
             show_all <- isTRUE(input$otl_show_all)
 
             # The outline LISTS the document, one row per chunk the qmd
@@ -827,7 +942,7 @@ outline_ext_srv <- function(annotations, block_order, title,
 
             skel <- display_sections(
               full, listed,
-              lnks = blockr.core::board_links(board$board),
+              lnks = lnks,
               cache = display_geometry_cache
             )
             skel$code <- NULL
@@ -893,7 +1008,9 @@ outline_ext_srv <- function(annotations, block_order, title,
             # change). Activation redraws the skeleton, and that same
             # flush recomputes this map with the new block included, so
             # renderUI always finds its cell.
-            codes <- outline_code_map(full, skel$ids[skel$active])
+            codes <- outline_code_map(
+              full, skel$ids[skel$active], cache = code_html_cache
+            )
 
             if (!identical(codes, isolate(code_store()))) {
               code_store(codes)
