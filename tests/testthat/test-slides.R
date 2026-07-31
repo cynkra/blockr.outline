@@ -295,7 +295,7 @@ test_that("picking, ordering and removing rewrite the one state field", {
       session$setInputs(sld_add = "audit")
       expect_identical(rv_slides(), c("audit", "plot"))
 
-      # ...and the picker's resting value is not a pick.
+      # ...and an empty pick is ignored rather than adding a nameless row.
       session$setInputs(sld_add = "")
       expect_identical(rv_slides(), c("audit", "plot"))
 

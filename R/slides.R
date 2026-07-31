@@ -93,6 +93,7 @@ slides_ext_ui <- function(id, board, ...) {
 
   div(
     class = "blockr-sld-panel",
+    id = ns("sld_root"),
     slides_dep(),
     div(
       class = "blockr-sld-toolbar",
@@ -153,20 +154,28 @@ slides_ext_ui <- function(id, board, ...) {
       )
     ),
     slides_settings_band(ns),
-    # The picker. A plain select rather than the outline's search-and-add
-    # menu: that control exists because the outline's list is the DOCUMENT
-    # (a block can be listed without being in the report, and the menu says
-    # which is which). Here the list is the deck and nothing else, so
-    # picking is a one-way gesture and a select is the whole of it.
+    # The picker: the outline's search-and-add box, which is itself the
+    # block browser's. Same classes, hence the same magnifier, focus ring,
+    # rows and icon tiles as every other "find a block" control in the app,
+    # from the stylesheet blockr.dock already puts on the page.
+    #
+    # NOT .blockr-block-browser: that class is the block browser's Shiny
+    # input binding and its search JS, which would adopt this control as a
+    # browser instance and filter it by data attributes these cards do not
+    # carry. The card classes are inert styling; the --bb-* tokens they
+    # read are mapped in blockr-slides.css.
     div(
-      class = "blockr-sld-picker",
-      selectInput(
-        ns("sld_add"),
-        label = NULL,
-        choices = character(),
-        selectize = FALSE,
-        width = "100%"
-      )
+      class = "blockr-sld-search",
+      tags$input(
+        type = "search",
+        class = "blockr-block-browser-search blockr-sld-searchinput",
+        placeholder = "Search or add a block…",
+        `aria-label` = "Search blocks",
+        autocomplete = "off",
+        spellcheck = "false"
+      ),
+      span(class = "blockr-sld-searchcount"),
+      div(class = "blockr-sld-searchmenu")
     ),
     uiOutput(ns("sld_list")),
     slides_js(ns)
@@ -215,12 +224,17 @@ slides_dep <- function() {
 slides_js <- function(ns) {
 
   consts <- sprintf(
-    "var ACT = '%s', MOVE = '%s', GEAR = '%s', SETTINGS = '%s', DL = '%s';",
+    paste(
+      "var ACT = '%s', MOVE = '%s', GEAR = '%s', SETTINGS = '%s',",
+      "DL = '%s', ADD = '%s', ROOT = '%s';"
+    ),
     ns("sld_act"),
     ns("sld_move"),
     ns("sld_gear"),
     ns("sld_settings"),
-    ns("sld_dl")
+    ns("sld_dl"),
+    ns("sld_add"),
+    ns("sld_root")
   )
 
   tags$script(HTML(paste0(
@@ -299,6 +313,233 @@ slides_js <- function(ns) {
         dragged = null;
       });
 
+      // ---- search: the picker, as the block browser's box ------------
+      // The catalogue (every board block, the picked ones first) is pushed
+      // by the server; the menu is rendered HERE so the input never
+      // re-renders and never loses focus mid-query. A picked block is a
+      // \"go to\" -- its row is in the list below -- and an unpicked one an
+      // \"add\", which writes the same input the old select fed. The menu
+      // stays open after an add, so building a deck is type, Enter, type,
+      // Enter.
+      //
+      // The rows ARE the block browser's rows: same classes, same
+      // stylesheet, so picking a block looks the same everywhere in the
+      // app and this file owns no row styling.
+      var catalog = [];
+      var hot = 0;
+
+      function panel() {
+        return document.getElementById(ROOT);
+      }
+      function searchRoot() {
+        var p = panel();
+        return p && p.querySelector('.blockr-sld-search');
+      }
+      function searchInput() {
+        var p = panel();
+        return p && p.querySelector('.blockr-sld-searchinput');
+      }
+      function searchQuery() {
+        var inp = searchInput();
+        return (inp && inp.value ? inp.value : '').trim().toLowerCase();
+      }
+      function esc(s) {
+        return String(s == null ? '' : s).replace(/[&<>]/g, function(c) {
+          return {'&': '&amp;', '<': '&lt;', '>': '&gt;'}[c];
+        });
+      }
+      // Mark the matched substring, on escaped text.
+      function mark(text, q) {
+        var t = String(text == null ? '' : text);
+        if (!q) return esc(t);
+        var i = t.toLowerCase().indexOf(q);
+        if (i < 0) return esc(t);
+        return esc(t.slice(0, i)) + '<mark>' + esc(t.slice(i, i + q.length)) +
+          '</mark>' + esc(t.slice(i + q.length));
+      }
+      // Match on everything the entry shows plus the id, which is what
+      // disambiguates two blocks carrying the same name.
+      function searchHits(q) {
+        return catalog.filter(function(b) {
+          if (!q) return true;
+          return (b.name + ' ' + b.desc + ' ' + b.id)
+            .toLowerCase().indexOf(q) >= 0;
+        });
+      }
+      function cardHtml(b, q, idx) {
+        return '<div class=\"blockr-block-browser-card\" data-blk=\"' +
+          esc(b.id) + '\" data-idx=\"' + idx + '\">' +
+          '<div class=\"blockr-block-browser-card-header\">' +
+            '<span class=\"blockr-block-browser-card-icon\">' +
+              (b.icon || '') + '</span>' +
+            '<div class=\"blockr-block-browser-card-body\">' +
+              '<div class=\"blockr-block-browser-card-titles\">' +
+                '<span class=\"blockr-block-browser-card-name\">' +
+                  mark(b.name, q) + '</span>' +
+                (b.kind ?
+                  '<span class=\"blockr-block-browser-card-package\">' +
+                  esc(b.kind) + '</span>' : '') +
+                '<span class=\"blockr-sld-optact\">' +
+                  (b.picked ? 'In the deck' : 'Add') + '</span>' +
+              '</div>' +
+              '<p class=\"blockr-sld-optdesc\">' +
+                (b.desc ? mark(b.desc, q) : esc(b.id)) + '</p>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+      }
+      function sectionHtml(title, items, q, start) {
+        if (!items.length) return '';
+        var html = '<div class=\"blockr-block-browser-category\"><h3>' +
+          title + '</h3><div class=\"blockr-block-browser-cards\">';
+        items.forEach(function(b, k) { html += cardHtml(b, q, start + k); });
+        return html + '</div></div>';
+      }
+      // Keyboard selection, the browser's own marker class. Scrolls only
+      // when the arrows moved it, so a re-render never jumps the panel.
+      function selectHot(scroll) {
+        var root = searchRoot();
+        if (!root) return;
+        root.querySelectorAll('.blockr-block-browser-card').forEach(
+          function(c, i) {
+            var on = i === hot;
+            c.classList.toggle('card-selected', on);
+            if (on && scroll) c.scrollIntoView({block: 'nearest'});
+          });
+      }
+      function renderMenu() {
+        var root = searchRoot();
+        var menu = root && root.querySelector('.blockr-sld-searchmenu');
+        if (!menu) return;
+
+        var q = searchQuery();
+        var all = searchHits(q);
+        var out = all.filter(function(b) { return !b.picked; });
+        var inn = all.filter(function(b) { return b.picked; });
+        if (hot >= all.length) hot = Math.max(0, all.length - 1);
+
+        var count = root.querySelector('.blockr-sld-searchcount');
+        if (count) {
+          var pool = catalog.filter(function(b) { return !b.picked; }).length;
+          count.textContent = pool ? pool + ' not in the deck' : '';
+        }
+        root.classList.toggle('has-value', !!q);
+
+        menu.classList.toggle('is-empty', !all.length);
+        menu.innerHTML =
+          '<div class=\"blockr-block-browser-categories\">' +
+            sectionHtml('Add a slide', out, q, 0) +
+            sectionHtml('Already in the deck', inn, q, out.length) +
+          '</div>' +
+          '<div class=\"blockr-block-browser-empty\">' +
+            'No blocks match your search.</div>';
+        selectHot(false);
+      }
+      function searchOpen() {
+        var root = searchRoot();
+        if (!root) return;
+        root.classList.add('open');
+        renderMenu();
+      }
+      function searchClose() {
+        var root = searchRoot();
+        if (root) root.classList.remove('open');
+      }
+      // Reveal a picked block's row: scroll it into view and flash it, so
+      // a hit on a long deck lands somewhere visible.
+      function gotoRow(id) {
+        var p = panel();
+        var row = p && p.querySelector(
+          '.blockr-sld-row[data-blk=\"' + id + '\"]'
+        );
+        if (!row) return;
+        row.scrollIntoView({block: 'center', behavior: 'smooth'});
+        row.classList.remove('blockr-sld-flash');
+        void row.offsetWidth;
+        row.classList.add('blockr-sld-flash');
+      }
+      function searchChoose(idx) {
+        var q = searchQuery();
+        var all = searchHits(q);
+        var out = all.filter(function(b) { return !b.picked; });
+        var inn = all.filter(function(b) { return b.picked; });
+        var b = out.concat(inn)[idx];
+        if (!b) return;
+        if (b.picked) {
+          searchClose();
+          var inp = searchInput();
+          if (inp) inp.blur();
+          gotoRow(b.id);
+          return;
+        }
+        // Add: the server appends the slide and pushes a new catalogue,
+        // which re-renders the menu with the entry moved to the second
+        // group.
+        Shiny.setInputValue(ADD, b.id, {priority: 'event'});
+      }
+
+      Shiny.addCustomMessageHandler('blockr-slides-catalog', function(msg) {
+        catalog = msg.items || [];
+        renderMenu();
+      });
+
+      document.addEventListener('input', function(ev) {
+        if (ev.target && ev.target.classList &&
+            ev.target.classList.contains('blockr-sld-searchinput')) {
+          // Top hit selected on every keystroke, so Enter always does
+          // something (the block browser's behaviour).
+          hot = 0;
+          searchOpen();
+        }
+      });
+      document.addEventListener('focusin', function(ev) {
+        if (ev.target && ev.target.classList &&
+            ev.target.classList.contains('blockr-sld-searchinput')) {
+          searchOpen();
+        }
+      });
+      // mousedown, not click: click fires after blur, and blurring the
+      // input would have to close the menu first.
+      document.addEventListener('mousedown', function(ev) {
+        var card = ev.target.closest &&
+          ev.target.closest('.blockr-sld-searchmenu .blockr-block-browser-card');
+        if (!card) return;
+        ev.preventDefault();
+        searchChoose(parseInt(card.dataset.idx, 10));
+      });
+      // CAPTURE phase on purpose: choosing an entry re-renders the menu and
+      // detaches the clicked node, so a bubble-phase listener would see a
+      // target that is no longer inside the box and close it on every add.
+      document.addEventListener('mousedown', function(ev) {
+        var root = searchRoot();
+        if (root && !root.contains(ev.target)) searchClose();
+      }, true);
+      document.addEventListener('keydown', function(ev) {
+        if (!(ev.target && ev.target.classList &&
+              ev.target.classList.contains('blockr-sld-searchinput'))) {
+          return;
+        }
+        var n = searchHits(searchQuery()).length;
+        if (ev.key === 'ArrowDown') {
+          // Wrapping, like the block browser.
+          hot = n ? (hot + 1) % n : 0;
+          selectHot(true); ev.preventDefault();
+        } else if (ev.key === 'ArrowUp') {
+          hot = n ? (hot + n - 1) % n : 0;
+          selectHot(true); ev.preventDefault();
+        } else if (ev.key === 'Enter') {
+          searchChoose(hot); ev.preventDefault();
+        } else if (ev.key === 'Escape') {
+          // No container to close, so the box clears first and closes
+          // second.
+          if (ev.target.value) {
+            ev.target.value = ''; hot = 0; searchOpen();
+          } else {
+            searchClose(); ev.target.blur();
+          }
+        }
+      });
+
       Shiny.addCustomMessageHandler('blockr-slides-download', function(msg) {
         var el = document.getElementById(msg.id);
         if (el) el.click();
@@ -342,7 +583,8 @@ slides_ext_srv <- function(slides, title, format = "pptx", template = "") {
                 list(
                   name = blockr.core::block_name(blks[[i]]),
                   kind = block_exhibit_kind(blks[[i]]),
-                  icon = block_icon_html(blks[[i]])
+                  icon = block_icon_html(blks[[i]]),
+                  desc = block_descr_text(blks[[i]])
                 )
               }
             )
@@ -365,26 +607,34 @@ slides_ext_srv <- function(slides, title, format = "pptx", template = "") {
 
         # ---- picking and ordering -----------------------------------
 
-        # The picker lists what is NOT already a slide, so it empties as the
-        # deck fills. The leading "" is the resting label: a select has to
-        # show something, and picking is an event rather than a selection --
-        # the control returns to it after every pick.
+        # The search menu is filled client-side from this payload: every
+        # board block, the ones NOT yet in the deck first (the menu's whole
+        # job is what to add next), each carrying what its card shows.
+        # Pushed whole rather than diffed -- one small array that only moves
+        # when the board or the deck does.
         observe(
           {
             meta <- block_meta()
             picked <- rv_slides()
-            avail <- setdiff(names(meta), picked)
+            ids <- c(setdiff(names(meta), picked), picked)
 
-            labs <- chr_ply(avail, function(i) coal(meta[[i]]$name, i))
-
-            updateSelectInput(
-              session,
-              "sld_add",
-              choices = c(
-                setNames("", paste0("Add a slide…")),
-                setNames(avail, labs)
-              ),
-              selected = ""
+            session$sendCustomMessage(
+              "blockr-slides-catalog",
+              list(
+                items = lapply(
+                  ids,
+                  function(i) {
+                    list(
+                      id = i,
+                      name = coal(na_blank(meta[[i]]$name), i),
+                      icon = na_blank(meta[[i]]$icon),
+                      kind = coal(meta[[i]]$kind, ""),
+                      desc = coal(meta[[i]]$desc, ""),
+                      picked = i %in% picked
+                    )
+                  }
+                )
+              )
             )
           }
         )
@@ -459,7 +709,7 @@ slides_ext_srv <- function(slides, title, format = "pptx", template = "") {
             return(
               div(
                 class = "blockr-sld-empty",
-                "No slides yet. Pick a block above and it becomes one."
+                "No slides yet. Search above and add a block to make it one."
               )
             )
           }
@@ -813,23 +1063,39 @@ slides_row <- function(id, k, meta) {
     )
   }
 
+  # The block browser's card, compact form: icon tile, name, trailing pill.
+  # Same classes as the picker's menu rows and the dock's own sidebar, so a
+  # slide reads as the block it is. What the deck adds is the number (and
+  # the drag, and the actions).
   div(
-    class = "blockr-sld-row",
+    class = "blockr-sld-row blockr-block-browser-card",
     `data-blk` = id,
     draggable = "true",
-    span(class = "blockr-sld-num", k),
-    if (nzchar(coal(meta$icon, ""))) {
-      span(class = "blockr-sld-icon", HTML(meta$icon))
-    },
-    span(class = "blockr-sld-name", coal(na_blank(meta$name), id)),
-    if (nzchar(coal(meta$kind, ""))) {
-      span(class = "blockr-sld-kind", meta$kind)
-    },
     div(
-      class = "blockr-sld-acts",
-      act("up", "Move up", "<polyline points='18 15 12 9 6 15'/>"),
-      act("down", "Move down", "<polyline points='6 9 12 15 18 9'/>"),
-      act("rm", "Remove slide", "<path d='M18 6 6 18M6 6l12 12'/>")
+      class = "blockr-block-browser-card-header",
+      span(class = "blockr-sld-num", k),
+      if (nzchar(coal(meta$icon, ""))) {
+        span(class = "blockr-block-browser-card-icon", HTML(meta$icon))
+      },
+      div(
+        class = "blockr-block-browser-card-body",
+        div(
+          class = "blockr-block-browser-card-titles",
+          span(
+            class = "blockr-block-browser-card-name",
+            coal(na_blank(meta$name), id)
+          ),
+          if (nzchar(coal(meta$kind, ""))) {
+            span(class = "blockr-block-browser-card-package", meta$kind)
+          }
+        )
+      ),
+      div(
+        class = "blockr-sld-acts",
+        act("up", "Move up", "<polyline points='18 15 12 9 6 15'/>"),
+        act("down", "Move down", "<polyline points='6 9 12 15 18 9'/>"),
+        act("rm", "Remove slide", "<path d='M18 6 6 18M6 6l12 12'/>")
+      )
     )
   )
 }

@@ -648,6 +648,38 @@ block_icon_html <- function(blk) {
   val
 }
 
+# The registry's one-line description of what a block DOES ("Choose a
+# dataset from a package"), which is what the block browser puts under a
+# card's name. The outline shows the user's own annotation there instead --
+# it has one -- but the deck annotates nothing, so the registry line is what
+# tells two similarly named blocks apart in its picker.
+#
+# Memoised per class for the same reason as the icon: it is registry
+# metadata resolved from the class, stable within a process.
+descr_cache <- new.env(parent = emptyenv())
+
+block_descr_text <- function(blk) {
+
+  key <- paste(class(blk), collapse = "|")
+  hit <- descr_cache[[key]]
+
+  if (!is.null(hit)) {
+    return(hit)
+  }
+
+  val <- tryCatch(
+    {
+      meta <- utils::getFromNamespace("blks_metadata", "blockr.dock")(blk)
+      na_blank(meta$description)
+    },
+    error = function(e) ""
+  )
+
+  descr_cache[[key]] <- val
+
+  val
+}
+
 na_blank <- function(x) {
   if (length(x) != 1L || is.na(x)) "" else as.character(x)
 }
