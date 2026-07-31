@@ -153,6 +153,56 @@ preferred_ordering <- function(ids, board, preference = character()) {
   })
 }
 
+# Narrow a board onto the block ids that reported an expression this flush.
+#
+# Rebuilds a PLAIN core board rather than mutating the one we were handed. A
+# block whose expression is momentarily NULL (a ggplot block req()s while its
+# upstream data settles) has to be dropped, but every container validates the
+# dropped id against something it owns: core rejects links naming it, and a
+# dock_board additionally rejects view memberships naming it. Both aborts
+# landed in the caller's tryCatch, became req(FALSE), and froze the outline on
+# its last good projection with nothing left to re-invalidate it -- so editing
+# a block updated the block but never the document.
+#
+# A projection needs blocks, links and stacks and nothing else, so rebuilding
+# those three narrowed decouples it from container validation entirely. Stack
+# objects are carried over untouched, keeping their dock attributes (name,
+# color) intact.
+narrow_board <- function(board, known) {
+
+  if (setequal(known, blockr.core::board_block_ids(board))) {
+    return(board)
+  }
+
+  lnks <- blockr.core::board_links(board)
+  stks <- blockr.core::board_stacks(board)
+
+  narrowed <- lapply(
+    setNames(nm = names(stks)),
+    function(s) {
+      stk <- stks[[s]]
+      blockr.core::stack_blocks(stk) <- intersect(
+        blockr.core::stack_blocks(stk),
+        known
+      )
+      stk
+    }
+  )
+
+  blockr.core::new_board(
+    blocks = blockr.core::board_blocks(board)[known],
+    links = lnks[lnks$from %in% known & lnks$to %in% known],
+    # An UNSTACKED board narrows to no stacks, and new_board() rejects a
+    # NULL there (as_stacks() has no NULL method), which aborted the whole
+    # projection -- the very freeze this narrowing exists to prevent.
+    stacks = if (length(narrowed)) {
+      do.call(blockr.core::stacks, narrowed)
+    } else {
+      blockr.core::stacks()
+    }
+  )
+}
+
 outline_sections <- function(expressions, board, annotations,
                              preference = character(),
                              stack_annotations = list(),
@@ -170,50 +220,7 @@ outline_sections <- function(expressions, board, annotations,
     stop("no block expressions available")
   }
 
-  if (!setequal(known, blockr.core::board_block_ids(board))) {
-
-    # Narrow onto a PLAIN core board rather than mutating the one we were
-    # handed. A block whose expression is momentarily NULL (a ggplot block
-    # req()s while its upstream data settles) has to be dropped, but every
-    # container validates the dropped id against something it owns: core
-    # rejects links naming it, and a dock_board additionally rejects view
-    # memberships naming it. Both aborts landed in the caller's tryCatch,
-    # became req(FALSE), and froze the outline on its last good projection
-    # with nothing left to re-invalidate it -- so editing a block updated
-    # the block but never the document.
-    #
-    # The projection only needs blocks, links and stacks, so rebuilding
-    # those three narrowed decouples it from container validation
-    # entirely. Stack objects are carried over untouched, keeping their
-    # dock attributes (name, color) intact.
-    lnks <- blockr.core::board_links(board)
-    stks <- blockr.core::board_stacks(board)
-
-    narrowed <- lapply(
-      setNames(nm = names(stks)),
-      function(s) {
-        stk <- stks[[s]]
-        blockr.core::stack_blocks(stk) <- intersect(
-          blockr.core::stack_blocks(stk),
-          known
-        )
-        stk
-      }
-    )
-
-    board <- blockr.core::new_board(
-      blocks = blockr.core::board_blocks(board)[known],
-      links = lnks[lnks$from %in% known & lnks$to %in% known],
-      # An UNSTACKED board narrows to no stacks, and new_board() rejects a
-      # NULL there (as_stacks() has no NULL method), which aborted the whole
-      # projection -- the very freeze this narrowing exists to prevent.
-      stacks = if (length(narrowed)) {
-        do.call(blockr.core::stacks, narrowed)
-      } else {
-        blockr.core::stacks()
-      }
-    )
-  }
+  board <- narrow_board(board, known)
 
   expressions <- expressions[known]
 
@@ -324,11 +331,13 @@ outline_sections <- function(expressions, board, annotations,
 # the drag legality would allow orders the DAG forbids. The edge map is
 # therefore built over the universe; the per-position sweeps stay over
 # `ids`, the rows actually shown.
-outline_geometry <- function(ids, lnks, stack_ids, report, universe = ids) {
+# "Is there a path from a to b" over the board's link table, as a closure so
+# the successor map is built once per projection rather than per query.
+dag_reaches <- function(lnks, universe) {
 
   kids <- split(lnks$to, factor(lnks$from, levels = universe))
 
-  reaches <- function(a, b) {
+  function(a, b) {
     seen <- character()
     todo <- a
     while (length(todo)) {
@@ -342,6 +351,31 @@ outline_geometry <- function(ids, lnks, stack_ids, report, universe = ids) {
     }
     FALSE
   }
+}
+
+# The document's evaluation closure: a block belongs to the export iff it is
+# reported or some reported block depends on it. Everything else is dropped
+# from the DOCUMENT entirely (not include=FALSE, whose code still runs at
+# render) -- on a many-view board the independent branches would otherwise all
+# evaluate for a report that shows none of them.
+#
+# The one piece of graph geometry a projection cannot do without: pick a table
+# and the deck still has to run the blocks upstream of it. The outline's drag
+# affordances are the expensive part and are computed alongside (see
+# outline_geometry); the slide builder takes only this.
+export_closure <- function(ids, report, reaches) {
+
+  reported <- ids[report]
+
+  report | lgl_ply(
+    ids,
+    function(a) any(lgl_ply(reported, function(b) reaches(a, b)))
+  )
+}
+
+outline_geometry <- function(ids, lnks, stack_ids, report, universe = ids) {
+
+  reaches <- dag_reaches(lnks, universe)
 
   # A block is reorderable iff it has slack in the DAG: it may pass its
   # displayed predecessor (which must then not be an ancestor) or its
@@ -352,19 +386,10 @@ outline_geometry <- function(ids, lnks, stack_ids, report, universe = ids) {
       (i < length(ids) && !reaches(ids[i], ids[i + 1L]))
   })
 
-  # The document's evaluation closure: a block belongs to the export iff it
-  # is reported or some reported block depends on it. Everything else is
-  # dropped from the DOCUMENT entirely (not include=FALSE, whose code still
-  # runs at render) -- on a many-view board the independent branches would
-  # otherwise all evaluate for a report that shows none of them. This is
-  # also what the outline LISTS: one row per chunk, the reported ones with
-  # output and the rest as `include: false`.
-  reported <- ids[report]
-
-  exported <- report | lgl_ply(
-    ids,
-    function(a) any(lgl_ply(reported, function(b) reaches(a, b)))
-  )
+  # The evaluation closure (see export_closure). This is also what the
+  # outline LISTS: one row per chunk, the reported ones with output and the
+  # rest as `include: false`.
+  exported <- export_closure(ids, report, reaches)
 
   # Legal landing range for a drag, as gap indices over the list without
   # the dragged block: it must land after its last ancestor and before its

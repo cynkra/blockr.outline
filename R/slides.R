@@ -1,0 +1,845 @@
+#' Slide builder extension
+#'
+#' A dock extension that turns a board into a deck: pick the blocks whose
+#' output should become slides, order them, download a PowerPoint file or an
+#' HTML deck. One block, one slide.
+#'
+#' The lightweight counterpart to [new_outline_extension()]. The outline
+#' builds a whole Quarto document -- prose, chapters, the generated code, an
+#' inverted reading order -- and can render it as a deck among other things.
+#' This does only the deck, and the difference shows in what it asks of the
+#' user: a picker and a list, no writing surface and nothing to read.
+#'
+#' Two consequences worth knowing about, both of which follow from having no
+#' document:
+#'
+#' * **Slides are freely orderable.** The deck emits every block's code up
+#'   front, hidden, and each slide carries only its exhibit -- so slide order
+#'   and evaluation order are independent. A deck may open on its conclusion.
+#' * **Nothing is evaluated until you download.** The picker and the list
+#'   read block names off the board; block expressions are read once, when
+#'   the download is clicked. A slide builder sitting in a closed dock panel
+#'   costs nothing.
+#'
+#' Blocks upstream of a picked block are still evaluated -- picking a table
+#' means running what feeds it -- but they are not shown and take no slide.
+#' Branches nothing picked depends on are never evaluated at all.
+#'
+#' @param slides Character vector of block ids, in slide order. Both the
+#'   picking and the ordering: a block is a slide iff it is named here.
+#' @param title Deck title. Names the file, titles the html deck and appears
+#'   as the running footer on every html slide.
+#' @param format Download format: `"pptx"` (PowerPoint) or `"revealjs"`
+#'   (a self-contained HTML deck).
+#' @param template Path to a pandoc reference document (`.pptx`) styling the
+#'   PowerPoint render. `""` falls back to the app-level default,
+#'   `getOption("blockr.outline.template")`, and then to the bundled
+#'   widescreen deck. See [new_outline_extension()] for why the option is
+#'   the right place for a house deck.
+#' @param ... Forwarded to [blockr.dock::new_dock_extension()]
+#'
+#' @return A dock extension object, to be passed in a board's `extensions`
+#'   list (see [blockr.dock::new_dock_board()]).
+#'
+#' @examples
+#' if (interactive()) {
+#'   library(blockr.core)
+#'   library(blockr.dock)
+#'
+#'   board <- new_dock_board(
+#'     blocks = c(
+#'       data = new_dataset_block("iris"),
+#'       audit = new_head_block(n = 3L)
+#'     ),
+#'     links = links(from = "data", to = "audit"),
+#'     extensions = list(
+#'       new_slides_extension(slides = "audit", title = "Iris pilot")
+#'     )
+#'   )
+#'
+#'   serve(board)
+#' }
+#'
+#' @export
+new_slides_extension <- function(slides = character(),
+                                 title = "Deck",
+                                 format = "pptx",
+                                 template = "",
+                                 ...) {
+
+  blockr.dock::new_dock_extension(
+    slides_ext_srv(slides, title, format, template),
+    slides_ext_ui,
+    name = "Slides",
+    description = paste(
+      "Deck builder: pick the blocks whose output becomes a slide, order",
+      "them, download as PowerPoint or HTML."
+    ),
+    class = "slides_extension",
+    ...
+  )
+}
+
+# The formats a deck offers. Deliberately two, and named for what the user
+# asked for rather than for what quarto calls it: "revealjs" is the format
+# string, "HTML" is the thing you get.
+deck_formats <- function() {
+  c("PowerPoint" = "pptx", "HTML" = "revealjs")
+}
+
+slides_ext_ui <- function(id, board, ...) {
+
+  ns <- NS(id)
+
+  div(
+    class = "blockr-sld-panel",
+    slides_dep(),
+    div(
+      class = "blockr-sld-toolbar",
+      textInput(
+        ns("sld_title"),
+        label = NULL,
+        placeholder = "Deck title",
+        width = "100%"
+      ),
+      div(
+        class = "blockr-sld-toolbar-right",
+        # The outline's split button, same classes: a neutral format picker
+        # fused to the green action, labelled for the file you walk away
+        # with rather than for the render that produces it.
+        div(
+          class = "blockr-sld-rendergroup",
+          selectInput(
+            ns("sld_format"),
+            label = NULL,
+            choices = deck_formats(),
+            selected = "pptx",
+            selectize = FALSE,
+            width = "116px"
+          ),
+          # Two-stage, exactly like the outline's: on a deferred board the
+          # picked blocks may not be constructed yet, so the click goes to
+          # the server first (demand the closure, wait for its code) and
+          # the hidden link below is clicked from JS once it is ready.
+          actionButton(
+            ns("sld_go"),
+            "Download",
+            icon = icon("download"),
+            class = "blockr-sld-renderbtn"
+          ),
+          downloadLink(ns("sld_dl"), label = NULL, style = "display: none;")
+        ),
+        tags$button(
+          id = ns("sld_gear"),
+          type = "button",
+          class = "blockr-gear-btn blockr-sld-gearbtn",
+          title = "Deck settings",
+          HTML(paste0(
+            "<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' ",
+            "fill='currentColor' viewBox='0 0 16 16'><path d='M9.405 1.05c-",
+            ".413-1.4-2.397-1.4-2.81 0l-.1.34a1.464 1.464 0 0 1-2.105.872l-",
+            ".31-.17c-1.283-.698-2.686.705-1.987 1.987l.169.311c.446.82.023 ",
+            "1.841-.872 2.105l-.34.1c-1.4.413-1.4 2.397 0 2.81l.34.1a1.464 ",
+            "1.464 0 0 1 .872 2.105l-.17.31c-.698 1.283.705 2.686 1.987 ",
+            "1.987l.311-.169a1.464 1.464 0 0 1 2.105.872l.1.34c.413 1.4 ",
+            "2.397 1.4 2.81 0l.1-.34a1.464 1.464 0 0 1 2.105-.872l.31.17c",
+            "1.283.698 2.686-.705 1.987-1.987l-.169-.311a1.464 1.464 0 0 1 ",
+            ".872-2.105l.34-.1c1.4-.413 1.4-2.397 0-2.81l-.34-.1a1.464 ",
+            "1.464 0 0 1-.872-2.105l.17-.31c.698-1.283-.705-2.686-1.987-",
+            "1.987l-.311.169a1.464 1.464 0 0 1-2.105-.872zM8 10.93a2.929 ",
+            "2.929 0 1 1 0-5.86 2.929 2.929 0 0 1 0 5.858z'/></svg>"
+          ))
+        )
+      )
+    ),
+    slides_settings_band(ns),
+    # The picker. A plain select rather than the outline's search-and-add
+    # menu: that control exists because the outline's list is the DOCUMENT
+    # (a block can be listed without being in the report, and the menu says
+    # which is which). Here the list is the deck and nothing else, so
+    # picking is a one-way gesture and a select is the whole of it.
+    div(
+      class = "blockr-sld-picker",
+      selectInput(
+        ns("sld_add"),
+        label = NULL,
+        choices = character(),
+        selectize = FALSE,
+        width = "100%"
+      )
+    ),
+    uiOutput(ns("sld_list")),
+    slides_js(ns)
+  )
+}
+
+slides_settings_band <- function(ns) {
+  div(
+    class = "blockr-settings blockr-settings--beak",
+    id = ns("sld_settings"),
+    div(class = "blockr-settings__title", "Template"),
+    div(
+      class = "blockr-settings__grid",
+      div(
+        class = "blockr-settings__field blockr-settings__field--full",
+        tags$label("Reference deck"),
+        io_call(
+          blockr.io::path_input_ui,
+          ns("sld_template"),
+          placeholder = "path to .pptx"
+        ),
+        div(
+          class = "blockr-settings__hint",
+          paste(
+            "A PowerPoint file whose masters, layouts, fonts and slide size",
+            "the download is built on."
+          )
+        )
+      )
+    )
+  )
+}
+
+slides_dep <- function() {
+  htmlDependency(
+    "blockr-slides",
+    pkg_version(),
+    src = pkg_file("assets", "css"),
+    stylesheet = "blockr-slides.css"
+  )
+}
+
+# Delegated client logic, the same shape as outline_js and a small fraction
+# of it: the list has no legality to enforce (every order is a valid deck),
+# so a drag is just "put this one there".
+slides_js <- function(ns) {
+
+  consts <- sprintf(
+    "var ACT = '%s', MOVE = '%s', GEAR = '%s', SETTINGS = '%s', DL = '%s';",
+    ns("sld_act"),
+    ns("sld_move"),
+    ns("sld_gear"),
+    ns("sld_settings"),
+    ns("sld_dl")
+  )
+
+  tags$script(HTML(paste0(
+    "$(function() {",
+    consts,
+    "
+      // Delegated from document so the list can be re-rendered freely --
+      // rows are markup, never Shiny inputs, so there is nothing to rebind.
+      document.addEventListener('click', function(e) {
+
+        var gear = e.target.closest ? e.target.closest('#' + GEAR) : null;
+        if (gear) {
+          var band = document.getElementById(SETTINGS);
+          if (band) {
+            gear.classList.toggle(
+              'blockr-gear-active',
+              band.classList.toggle('blockr-settings--open')
+            );
+          }
+          return;
+        }
+
+        var btn = e.target.closest ? e.target.closest('.blockr-sld-act') : null;
+        if (!btn) return;
+        var row = btn.closest('.blockr-sld-row');
+        if (!row) return;
+        Shiny.setInputValue(
+          ACT,
+          {id: row.dataset.blk, act: btn.dataset.act},
+          {priority: 'event'}
+        );
+      });
+
+      var dragged = null;
+
+      document.addEventListener('dragstart', function(e) {
+        var row = e.target.closest ? e.target.closest('.blockr-sld-row') : null;
+        if (!row) return;
+        dragged = row.dataset.blk;
+        row.classList.add('is-dragging');
+        if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+      });
+
+      document.addEventListener('dragend', function() {
+        dragged = null;
+        document.querySelectorAll('.blockr-sld-row').forEach(function(r) {
+          r.classList.remove('is-dragging', 'is-over');
+        });
+      });
+
+      document.addEventListener('dragover', function(e) {
+        if (dragged === null) return;
+        var row = e.target.closest ? e.target.closest('.blockr-sld-row') : null;
+        if (!row) return;
+        e.preventDefault();
+        document.querySelectorAll('.blockr-sld-row').forEach(function(r) {
+          r.classList.remove('is-over');
+        });
+        row.classList.add('is-over');
+      });
+
+      document.addEventListener('drop', function(e) {
+        if (dragged === null) return;
+        var row = e.target.closest ? e.target.closest('.blockr-sld-row') : null;
+        if (!row) return;
+        e.preventDefault();
+        // Drop on the lower half of a row means after it, which is the only
+        // way to reach the last position.
+        var box = row.getBoundingClientRect();
+        var after = (e.clientY - box.top) > box.height / 2;
+        Shiny.setInputValue(
+          MOVE,
+          {id: dragged, target: row.dataset.blk, after: after},
+          {priority: 'event'}
+        );
+        dragged = null;
+      });
+
+      Shiny.addCustomMessageHandler('blockr-slides-download', function(msg) {
+        var el = document.getElementById(msg.id);
+        if (el) el.click();
+      });
+    });"
+  )))
+}
+
+slides_ext_srv <- function(slides, title, format = "pptx", template = "") {
+
+  function(id, board, update, session, parent, actions = NULL,
+           visibility = NULL, ...) {
+    moduleServer(
+      id,
+      function(input, output, session) {
+
+        rv_slides <- reactiveVal(as.character(unlist(slides)))
+        rv_title <- reactiveVal(
+          if (is.character(title) && length(title)) title[[1L]] else "Deck"
+        )
+        rv_format <- reactiveVal(
+          if (coal(format, "pptx") %in% deck_formats()) format else "pptx"
+        )
+        rv_template <- reactiveVal(coal(template, ""))
+
+        # ---- the board, as names ------------------------------------
+        #
+        # Everything the panel DRAWS comes from here, and nothing here is an
+        # expression. A block's name and its exhibit kind are properties of
+        # the block object, readable off the board whether or not the block
+        # has ever been constructed -- which is what lets a slide builder on
+        # a deferred board cost nothing until the download.
+
+        block_meta <- reactive(
+          {
+            blks <- blockr.core::board_blocks(board$board)
+
+            lapply(
+              setNames(nm = names(blks)),
+              function(i) {
+                list(
+                  name = blockr.core::block_name(blks[[i]]),
+                  kind = block_exhibit_kind(blks[[i]]),
+                  icon = block_icon_html(blks[[i]])
+                )
+              }
+            )
+          }
+        )
+
+        # Drop picks for blocks that have left the board: the id-keyed state
+        # has to follow the board's block lifecycle, same as the outline's
+        # annotations.
+        observeEvent(
+          board$board,
+          {
+            ids <- blockr.core::board_block_ids(board$board)
+            keep <- intersect(rv_slides(), ids)
+            if (!identical(rv_slides(), keep)) {
+              rv_slides(keep)
+            }
+          }
+        )
+
+        # ---- picking and ordering -----------------------------------
+
+        # The picker lists what is NOT already a slide, so it empties as the
+        # deck fills. The leading "" is the resting label: a select has to
+        # show something, and picking is an event rather than a selection --
+        # the control returns to it after every pick.
+        observe(
+          {
+            meta <- block_meta()
+            picked <- rv_slides()
+            avail <- setdiff(names(meta), picked)
+
+            labs <- chr_ply(avail, function(i) coal(meta[[i]]$name, i))
+
+            updateSelectInput(
+              session,
+              "sld_add",
+              choices = c(
+                setNames("", paste0("Add a slide…")),
+                setNames(avail, labs)
+              ),
+              selected = ""
+            )
+          }
+        )
+
+        observeEvent(
+          input$sld_add,
+          {
+            id <- input$sld_add
+            req(is.character(id), length(id) == 1L, nzchar(id))
+
+            if (!id %in% rv_slides()) {
+              rv_slides(c(rv_slides(), id))
+            }
+          }
+        )
+
+        observeEvent(
+          input$sld_act,
+          {
+            blk <- input$sld_act$id
+            act <- input$sld_act$act
+            req(is.character(blk), is.character(act))
+
+            cur <- rv_slides()
+            at <- match(blk, cur)
+            req(!is.na(at))
+
+            rv_slides(
+              switch(
+                act,
+                rm = cur[-at],
+                up = if (at > 1L) append(cur[-at], blk, after = at - 2L) else cur,
+                down = if (at < length(cur)) {
+                  append(cur[-at], blk, after = at)
+                } else {
+                  cur
+                },
+                cur
+              )
+            )
+          }
+        )
+
+        observeEvent(
+          input$sld_move,
+          {
+            blk <- input$sld_move$id
+            target <- input$sld_move$target
+            req(is.character(blk), is.character(target), !identical(blk, target))
+
+            cur <- rv_slides()
+            req(blk %in% cur, target %in% cur)
+
+            rest <- setdiff(cur, blk)
+            at <- match(target, rest)
+            req(!is.na(at))
+
+            rv_slides(
+              append(rest, blk, after = if (isTRUE(input$sld_move$after)) at else at - 1L)
+            )
+          }
+        )
+
+        # ---- the list -----------------------------------------------
+
+        output$sld_list <- renderUI({
+
+          picked <- rv_slides()
+          meta <- block_meta()
+
+          if (!length(picked)) {
+            return(
+              div(
+                class = "blockr-sld-empty",
+                "No slides yet. Pick a block above and it becomes one."
+              )
+            )
+          }
+
+          div(
+            class = "blockr-sld-list",
+            lapply(
+              seq_along(picked),
+              function(k) slides_row(picked[[k]], k, meta[[picked[[k]]]])
+            )
+          )
+        })
+
+        # ---- settings ------------------------------------------------
+
+        observeEvent(input$sld_title, {
+          if (!identical(input$sld_title, rv_title())) {
+            rv_title(input$sld_title)
+          }
+        }, ignoreInit = TRUE)
+
+        updateTextInput(session, "sld_title", value = isolate(rv_title()))
+
+        observeEvent(input$sld_format, {
+          if (!identical(input$sld_format, rv_format())) {
+            rv_format(input$sld_format)
+          }
+        }, ignoreInit = TRUE)
+
+        updateSelectInput(session, "sld_format", selected = isolate(rv_format()))
+
+        tmpl_path <- io_call(
+          blockr.io::path_input_server,
+          "sld_template", mode = "file", extensions = "pptx"
+        )
+
+        # ignoreInit for the reason spelled out in the outline's copy:
+        # path_input_server() reports "" until the DOM echoes a path back,
+        # and a plain observe() would run first and wipe a constructor-
+        # supplied or restored template before the seed below lands.
+        observeEvent(tmpl_path(), {
+          p <- coal(tmpl_path(), "")
+          if (!identical(p, isolate(rv_template()))) {
+            rv_template(p)
+          }
+        }, ignoreInit = TRUE, ignoreNULL = FALSE)
+
+        if (nzchar(coal(template, ""))) {
+          session$onFlushed(
+            function() {
+              session$sendCustomMessage(
+                "blockr-path-set-value",
+                list(id = session$ns("sld_template-path_text"),
+                     value = template)
+              )
+            },
+            once = TRUE
+          )
+        }
+
+        # ---- the projection, on demand -------------------------------
+        #
+        # A lazy reactive that nothing reads while the panel is idle. The
+        # download observer reads it on click; the wait observer below reads
+        # it only once a demand is in flight (req() on `awaiting` first, so
+        # no dependency is taken while it is NULL). That is the whole of the
+        # outline's visibility gate, obtained by not needing one: the deck
+        # never draws anything derived from an expression.
+
+        # Last known expression per block id.
+        #
+        # A block's expr reactive reports NULL whenever it cannot produce one
+        # right now, and "right now" is shorter than it sounds: a block whose
+        # dock panel is not the visible tab stops reporting altogether.
+        #
+        # It is load-bearing for the DOWNLOAD specifically, which is the only
+        # thing here that reads expressions at all. The wait observer
+        # withdraws its demand the moment the closure reports (see
+        # restore_demanded -- the dock overloads `required` as its card-build
+        # ledger, so a TRUE left behind blanks a panel later), and only THEN
+        # clicks the link. The block goes quiet again in between, so by the
+        # time the download handler builds its own projection the expression
+        # that was just waited for is gone -- and the deck renders without
+        # the slide it was waiting for, silently, because a pending block is
+        # skipped rather than raised. The cache is what carries the
+        # expression across that gap.
+        expr_cache <- new.env(parent = emptyenv())
+
+        board_exprs <- reactive(
+          {
+            ex <- lapply(
+              blockr.core::lst_xtr(board$blocks, "server", "expr"),
+              function(e) {
+                tryCatch(blockr.core::reval(e), error = function(err) NULL)
+              }
+            )
+
+            for (id in names(ex)) {
+              if (!is.null(ex[[id]])) {
+                assign(id, ex[[id]], envir = expr_cache)
+              }
+            }
+
+            # Keyed on the live board, so a removed block is gone for good
+            # rather than resurrected from the cache.
+            live <- blockr.core::board_block_ids(board$board)
+
+            out <- lapply(
+              setNames(nm = live),
+              function(id) {
+                if (!is.null(ex[[id]])) {
+                  ex[[id]]
+                } else if (exists(id, envir = expr_cache, inherits = FALSE)) {
+                  get(id, envir = expr_cache)
+                }
+              }
+            )
+
+            rm(list = setdiff(ls(expr_cache), live), envir = expr_cache)
+
+            # A block that has never reported an expression is PENDING, not
+            # absent: it holds a placeholder, so the download can see it is
+            # missing and demand it rather than quietly rendering a deck
+            # without that slide.
+            pending <- names(out)[vapply(out, is.null, logical(1L))]
+
+            for (id in pending) {
+              # NOT quote(NULL): NULL is self-evaluating, so quote(NULL) IS
+              # NULL and assigning it deletes the element instead of filling
+              # it.
+              out[[id]] <- quote(invisible(NULL))
+            }
+
+            structure(out, pending = pending)
+          }
+        )
+
+        sections <- reactive(slide_sections(board_exprs(), board$board, rv_slides()))
+
+        qmd_txt <- reactive(export_deck_qmd(sections(), rv_title()))
+
+        # ---- the two-stage download ----------------------------------
+
+        awaiting <- reactiveVal(FALSE)
+        wait_note <- reactiveVal(NULL)
+        demanded <- reactiveVal(list())
+
+        demand_blocks <- function(pending) {
+
+          slots <- if (!is.null(visibility)) visibility$required
+
+          if (is.null(slots)) {
+            return(FALSE)
+          }
+
+          snap <- demanded()
+
+          for (blk_id in pending) {
+            slot <- slots[[blk_id]]
+            if (is.function(slot)) {
+              if (!blk_id %in% names(snap)) {
+                snap[[blk_id]] <- isolate(slot())
+              }
+              slot(TRUE)
+            }
+          }
+
+          demanded(snap)
+
+          TRUE
+        }
+
+        # The dock overloads `required` as its card-build ledger, so a TRUE
+        # left behind on a block whose card was never built would make the
+        # first visit to its view skip the build -- a blank panel. Put the
+        # prior value back once the demand is served.
+        restore_demanded <- function() {
+
+          snap <- demanded()
+
+          for (blk_id in names(snap)) {
+            slot <- visibility$required[[blk_id]]
+            if (is.function(slot)) {
+              slot(snap[[blk_id]])
+            }
+          }
+
+          demanded(list())
+        }
+
+        drop_wait_note <- function() {
+          note <- wait_note()
+          if (!is.null(note)) {
+            removeNotification(note)
+            wait_note(NULL)
+          }
+        }
+
+        pending_exported <- function(sects) {
+          sects$ids[sects$exported & sects$pending]
+        }
+
+        fire_download <- function() {
+          session$sendCustomMessage(
+            "blockr-slides-download",
+            list(id = session$ns("sld_dl"))
+          )
+        }
+
+        observeEvent(
+          input$sld_go,
+          {
+            if (!length(rv_slides())) {
+              showNotification(
+                "Pick at least one block before downloading a deck.",
+                type = "warning"
+              )
+              return()
+            }
+
+            sects <- tryCatch(sections(), error = function(e) NULL)
+
+            if (is.null(sects)) {
+              showNotification(
+                "The board is not ready yet; try again in a moment.",
+                type = "warning"
+              )
+              return()
+            }
+
+            pending <- pending_exported(sects)
+
+            if (!length(pending)) {
+              fire_download()
+              return()
+            }
+
+            if (!demand_blocks(pending)) {
+              showNotification(
+                paste(
+                  "Some slide blocks are not initialized yet. Open their",
+                  "views to initialize them, then download again."
+                ),
+                type = "warning",
+                duration = 10
+              )
+              return()
+            }
+
+            awaiting(TRUE)
+            drop_wait_note()
+            wait_note(
+              showNotification(
+                sprintf(
+                  paste(
+                    "Evaluating %d block%s… the download starts when",
+                    "the deck is ready."
+                  ),
+                  length(pending),
+                  if (length(pending) == 1L) "" else "s"
+                ),
+                duration = NULL,
+                closeButton = FALSE
+              )
+            )
+          }
+        )
+
+        observe(
+          {
+            req(awaiting())
+
+            if (length(pending_exported(sections()))) {
+              return()
+            }
+
+            awaiting(FALSE)
+            restore_demanded()
+            drop_wait_note()
+            fire_download()
+          }
+        )
+
+        output$sld_dl <- downloadHandler(
+          filename = function() {
+            paste0(
+              deck_filename(rv_title()),
+              "-",
+              format(Sys.time(), "%Y-%m-%d_%H-%M-%S"),
+              ".",
+              report_ext(rv_format())
+            )
+          },
+          content = function(file) {
+            with_render_guard(
+              render_report(
+                qmd_txt(),
+                # The rmarkdown fallback (no quarto on the machine) renders a
+                # document rather than a deck, and in document order: the
+                # spin script cannot express a free slide order. A degraded
+                # deck beats no download, and quarto is present everywhere
+                # this actually ships.
+                export_spin(sections()),
+                rv_format(),
+                file,
+                rv_title(),
+                template = effective_template(rv_template()),
+                sects = sections()
+              )
+            )
+          }
+        )
+
+        # A downloadHandler behind a display:none link is a hidden output,
+        # and Shiny suspends those -- which here means the href is never
+        # populated and the JS click navigates to the bare page URL.
+        outputOptions(output, "sld_dl", suspendWhenHidden = FALSE)
+
+        list(
+          state = list(
+            slides = rv_slides,
+            title = rv_title,
+            format = rv_format,
+            template = rv_template
+          )
+        )
+      }
+    )
+  }
+}
+
+# One row of the deck list. Pure markup, no Shiny inputs: the buttons report
+# through one delegated handler (see slides_js), so the list can be
+# re-rendered without anything to rebind.
+slides_row <- function(id, k, meta) {
+
+  meta <- coal(meta, list())
+
+  act <- function(a, label, path) {
+    tags$button(
+      type = "button",
+      class = "blockr-sld-act",
+      `data-act` = a,
+      title = label,
+      `aria-label` = label,
+      HTML(paste0(
+        "<svg width='13' height='13' viewBox='0 0 24 24' fill='none' ",
+        "stroke='currentColor' stroke-width='2.2' stroke-linecap='round' ",
+        "stroke-linejoin='round'>", path, "</svg>"
+      ))
+    )
+  }
+
+  div(
+    class = "blockr-sld-row",
+    `data-blk` = id,
+    draggable = "true",
+    span(class = "blockr-sld-num", k),
+    if (nzchar(coal(meta$icon, ""))) {
+      span(class = "blockr-sld-icon", HTML(meta$icon))
+    },
+    span(class = "blockr-sld-name", coal(na_blank(meta$name), id)),
+    if (nzchar(coal(meta$kind, ""))) {
+      span(class = "blockr-sld-kind", meta$kind)
+    },
+    div(
+      class = "blockr-sld-acts",
+      act("up", "Move up", "<polyline points='18 15 12 9 6 15'/>"),
+      act("down", "Move down", "<polyline points='6 9 12 15 18 9'/>"),
+      act("rm", "Remove slide", "<path d='M18 6 6 18M6 6l12 12'/>")
+    )
+  )
+}
+
+# The title, as a filename stem. A deck called "Q3 review / EU" must not
+# produce a path separator, and a title of nothing at all must still produce
+# a name.
+deck_filename <- function(title) {
+
+  out <- gsub("^-+|-+$", "", gsub("-+", "-", gsub("[^A-Za-z0-9]+", "-", title)))
+
+  if (!nzchar(out)) "deck" else tolower(out)
+}

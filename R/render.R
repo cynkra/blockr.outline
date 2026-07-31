@@ -952,18 +952,50 @@ render_pptx_officer <- function(sects, file, title, template = NULL) {
   }
   master <- layouts$master[match(layout, layouts$layout)]
 
+  # Pass 2 walks the SLIDE order, which the pass above could not: evaluation
+  # has to follow the DAG, the deck does not. For an outline projection the
+  # two are the same sequence (slide_seq falls back to document order); a
+  # slide-builder projection carries the order the user dragged the list to.
   n_slides <- 0L
-  for (i in seq_along(sects$ids)) {
+  for (i in slide_seq(sects)) {
     if (!isTRUE(sects$report[i]) || isTRUE(sects$pending[i])) next
 
     # The exhibit object: the SAME expression the qmd prints -- a table-shaped
     # result resolves through static_exhibit() (whatever block produced it), a
     # plot / raw flextable stays as itself.
+    # Say which slide went missing and why.
+    #
+    # A block whose exhibit cannot be built is skipped rather than failing
+    # the whole deck -- one broken exhibit should not cost the other nine
+    # slides. But skipping SILENTLY means a deck comes back short with
+    # nothing anywhere to say so, which on a deployment nobody can open a
+    # shell on is indistinguishable from never having picked the block.
+    #
+    # Both halves need saying, and the quiet one is the one that bites: a
+    # block that THROWS is at least a visible failure elsewhere in the app,
+    # while a block that returns NULL looks entirely healthy. blockr.core's
+    # plot blocks draw to the graphics device with base graphics and return
+    # nothing, so they have no exhibit to place and vanish from a deck
+    # without a single error anywhere.
+    why <- NULL
+
     exhibit <- tryCatch(
       eval(parse(text = sect_output(sects, i)), envir = env),
-      error = function(e) NULL
+      error = function(e) {
+        why <<- conditionMessage(e)
+        NULL
+      }
     )
-    if (is.null(exhibit)) next
+
+    if (is.null(exhibit)) {
+      cat(
+        "[deck] no slide for '", lab(sects$ids[i], id_labels(sects)), "': ",
+        coal(why, "the block produced no exhibit (a plot drawn to the device rather than returned?)"),
+        "\n",
+        sep = "", file = stderr()
+      )
+      next
+    }
 
     doc <- officer::add_slide(doc, layout = layout, master = master)
     nm <- sects$names[i]
