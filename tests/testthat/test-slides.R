@@ -186,8 +186,12 @@ test_that("the officer writer lays the slides out in pick order", {
   f <- withr::local_tempfile(fileext = ".pptx")
   render_pptx_officer(s, f, "Deck", template = NULL)
 
+  # Both tables are the whole of iris, so each pages over several slides and
+  # its title reads "Alpha (3 of 8)". The order question is about where each
+  # table STARTS, so the markers come off and the runs collapse.
   titles <- officer::pptx_summary(officer::read_pptx(f))
-  titles <- titles$text[titles$text %in% c("Alpha", "Beta")]
+  titles <- sub(" \\([0-9]+ of [0-9]+\\)$", "", titles$text)
+  titles <- rle(titles[titles %in% c("Alpha", "Beta")])$values
 
   expect_identical(titles, c("Beta", "Alpha"))
 })
@@ -401,7 +405,7 @@ test_that("a removed block loses its slide", {
 
 test_that("state round-trips what the constructor was given", {
   testServer(
-    slides_ext_srv(c("audit", "plot"), "Iris topline", format = "revealjs"),
+    slides_ext_srv(c("audit", "plot"), "Iris topline", format = "html"),
     {
       session$flushReact()
 
@@ -409,8 +413,22 @@ test_that("state round-trips what the constructor was given", {
 
       expect_identical(state$slides(), c("audit", "plot"))
       expect_identical(state$title(), "Iris topline")
-      expect_identical(state$format(), "revealjs")
+      expect_identical(state$format(), "html")
       expect_identical(state$template(), "")
+    },
+    args = list(board = blind_board_args(), update = reactiveVal())
+  )
+})
+
+test_that("a board saved against the quarto deck restores as the HTML one", {
+  # LEGACY: "revealjs" was the format string while the HTML deck was a quarto
+  # render. It names the same download, so it restores rather than falling
+  # back to PowerPoint.
+  testServer(
+    slides_ext_srv("audit", "Deck", format = "revealjs"),
+    {
+      session$flushReact()
+      expect_identical(session$getReturned()$state$format(), "html")
     },
     args = list(board = blind_board_args(), update = reactiveVal())
   )

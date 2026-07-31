@@ -1,6 +1,6 @@
 Package: blockr.outline
 Title: Board Outline, Code and Report Extension for 'blockr'
-Version: 0.0.97
+Version: 0.0.98
 Authors@R:
     c(person(given = "Christoph",
              family = "Sax",
@@ -41,7 +41,7 @@ Suggests:
     officer,
     flextable,
     base64enc,
-    blockr.viz,
+    blockr.viz (>= 0.2.49),
     blockr.dag,
     shinytest2,
     chromote,

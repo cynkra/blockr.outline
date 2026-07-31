@@ -22,6 +22,17 @@
 #   * Drag a row, or use the up / down arrows. Every order is legal here,
 #     because no slide can reference another slide's variable.
 #   * Download as PowerPoint, then as HTML. Same slides, same order.
+#   * Then the Big view, which is the interesting one. Add "Air quality,
+#     daily" (153 rows) to the deck and download it, then press the table
+#     block's OWN PowerPoint button on the same table. The block writer
+#     (blockr.viz::write_exhibit_pptx) comes back with eight slides, each
+#     repeating the header and titled "(3 of 8)"; the deck comes back with
+#     one slide the table runs off the bottom of. Two routines, and only
+#     one of them paginates.
+#   * "Ozone, month by day" (32 columns) is the control: both routes size
+#     the columns to the template's content width, so that slide comes out
+#     the SAME either way. The gap is height, not width -- which is why
+#     write_exhibit_pptx()'s row pagination is the piece worth sharing.
 #   * Watch the console. Nothing is evaluated until the download is
 #     clicked; the picker and the list read block NAMES off the board.
 #
@@ -78,8 +89,16 @@ board <- new_dock_board(
       by = list("Species"),
       block_name = "Ratio by species"
     ),
+    # `download = TRUE` on the big tables, so the block's own PowerPoint
+    # button sits a click away from the deck's. Same table, two routes:
+    # blockr.viz::write_exhibit_pptx() steps the font down, then pages the
+    # rows over as many slides as it needs (each repeating the header,
+    # titled "(3 of 8)"), while the deck's render_pptx_officer() places one
+    # flextable per slide and lets a long table run off the bottom. That
+    # difference is what these blocks are here to show.
     tbl_detail = blockr.viz::new_table_block(
-      block_name = "Flower measurements"
+      block_name = "Flower measurements",
+      download = TRUE
     ),
     tbl_summary = blockr.viz::new_table_block(
       block_name = "Mean ratio by species"
@@ -96,14 +115,44 @@ board <- new_dock_board(
       x = "Species",
       y = "avg_ratio",
       block_name = "Mean ratio, charted"
+    ),
+    # Two big tables, one in each direction. TALL: 153 daily readings, which
+    # the block writer pages over eight slides and the deck puts on one.
+    # WIDE: the same readings pivoted to one column per day, 32 of them --
+    # squeezed to the slide by BOTH routes, since the deck sets the same
+    # blockr.viz.ft_fit_width the block writer does (render.R:888). It is
+    # here as the control: it shows the gap is height, not width.
+    # `title =` as well as `block_name =`: the block name labels the slide the
+    # DECK builds, while the block writer titles its own pages from the
+    # table's title -- and without one there is nothing for it to mark
+    # "(3 of 8)" on.
+    aq = new_dataset_block("airquality", block_name = "Air quality data"),
+    tbl_long = blockr.viz::new_table_block(
+      block_name = "Air quality, daily",
+      title = "Air quality, daily",
+      download = TRUE
+    ),
+    wide = blockr.dplyr::new_pivot_wider_block(
+      id_cols = list("Month"),
+      names_from = list("Day"),
+      values_from = list("Ozone"),
+      names_prefix = "d",
+      block_name = "Ozone by day"
+    ),
+    tbl_wide = blockr.viz::new_table_block(
+      block_name = "Ozone, month by day",
+      title = "Ozone, month by day",
+      download = TRUE
     )
   ),
   links = links(
-    from = c("data", "mut1", "mut1", "summ", "summ"),
-    to   = c("mut1", "tbl_detail", "summ", "tbl_summary", "chart")
+    from = c("data", "mut1", "mut1", "summ", "summ", "aq", "aq", "wide"),
+    to   = c("mut1", "tbl_detail", "summ", "tbl_summary", "chart",
+             "tbl_long", "wide", "tbl_wide")
   ),
   views = list(
-    Main = c("tbl_detail", "tbl_summary", "slides", "outline", "dag")
+    Main = c("tbl_detail", "tbl_summary", "slides", "outline", "dag"),
+    Big = c("tbl_long", "tbl_wide", "slides")
   ),
   active = "Main",
   extensions = list(

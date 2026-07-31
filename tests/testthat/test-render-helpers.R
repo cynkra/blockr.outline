@@ -255,6 +255,60 @@ test_that("render_pptx_officer builds a deck, one slide per reported table", {
   expect_gte(nrow(officer::pptx_summary(doc)), 1L)
 })
 
+test_that("a table longer than a slide is paged, not run off the bottom", {
+  skip_if_not_installed("officer")
+  skip_if_not_installed("flextable")
+  skip_if_not_installed("blockr.viz")
+  skip_if_not(
+    is.function(
+      tryCatch(utils::getFromNamespace("pptx_add_exhibit", "blockr.viz"),
+               error = function(e) NULL)
+    ),
+    "blockr.viz has no pptx_add_exhibit()"
+  )
+
+  board <- blockr.core::new_board(
+    blocks = c(
+      data = blockr.core::new_dataset_block("iris"),
+      tbl = blockr.viz::new_table_block()
+    ),
+    links = blockr.core::links(from = "data", to = "tbl")
+  )
+  # All 150 rows: far more than one slide holds at any legible size.
+  exprs <- structure(list(
+    data = quote(datasets::iris),
+    tbl = quote(blockr.viz::as_annotated_df(data))
+  ), pending = character())
+
+  s <- outline_sections(exprs, board,
+    annotations = list(data = list(report = FALSE),
+                       tbl = list(report = TRUE)),
+    stack_annotations = list())
+
+  f <- withr::local_tempfile(fileext = ".pptx")
+  render_pptx_officer(s, f, "Deck", template = NULL)
+
+  # The deck used to answer 1 here, with 149 rows hanging off the slide. The
+  # exact count is the paginator's business (it depends on the measured row
+  # heights); what this pins is that the deck asks it at all.
+  expect_gt(length(officer::read_pptx(f)), 3L)
+})
+
+test_that("a plot slide is placed whole, not handed to the paginator", {
+  skip_if_not_installed("officer")
+  skip_if_not_installed("ggplot2")
+
+  p <- ggplot2::ggplot(datasets::iris, ggplot2::aes(Sepal.Length)) +
+    ggplot2::geom_histogram(bins = 5)
+
+  expect_false(deck_pageable(p))
+  expect_null(deck_add_table(officer::read_pptx(), p, "P", NULL, NULL, NULL))
+  # ...and a flextable nobody annotated cannot be re-cut either.
+  expect_false(deck_pageable(flextable::flextable(head(datasets::iris))))
+  # A frame is the paginator's own input, so that one goes to it.
+  expect_true(deck_pageable(datasets::iris))
+})
+
 test_that("a reference deck contributes styling, not slides", {
   skip_if_not_installed("officer")
   skip_if_not_installed("flextable")
@@ -282,9 +336,12 @@ test_that("a reference deck contributes styling, not slides", {
     ),
     links = blockr.core::links(from = "data", to = "tbl")
   )
+  # Five rows, so the exhibit is one page and the slide count is purely about
+  # stripping -- a full-length table would page over several slides and say
+  # nothing about the template's examples either way.
   exprs <- structure(list(
     data = quote(datasets::iris),
-    tbl = quote(dplyr::filter(blockr.viz::as_annotated_df(data), TRUE))
+    tbl = quote(utils::head(blockr.viz::as_annotated_df(data), 5L))
   ), pending = character())
   s <- outline_sections(exprs, board,
     annotations = list(data = list(report = FALSE), tbl = list(report = TRUE)),
@@ -293,8 +350,8 @@ test_that("a reference deck contributes styling, not slides", {
   f <- withr::local_tempfile(fileext = ".pptx")
   render_pptx_officer(s, f, "Deck", template = ref)
 
-  # One reported exhibit -> one slide. The template's two examples are gone;
-  # without stripping, the deck would open on "Example 1".
+  # One reported exhibit, one page -> one slide. The template's two examples
+  # are gone; without stripping, the deck would open on "Example 1".
   out <- officer::read_pptx(f)
   expect_length(out, 1L)
   expect_false(any(grepl("^Example ", officer::pptx_summary(out)$text)))

@@ -1,0 +1,246 @@
+/* The HTML deck.
+
+   Written into the downloaded file rather than linked, because the file is
+   something you send: one document, no lib/ folder, nothing to unpack.
+
+   The deck is a column of full-viewport sections with CSS scroll-snap, so
+   paging is the browser's own -- keys, wheel, trackpad, touch, and the
+   scrollbar all work without being reimplemented. What the script adds is
+   the conveniences a reader expects on top of that (arrow keys landing on
+   whole slides, F for fullscreen, a counter).
+
+   Each slide is a FIXED 1280x720 canvas scaled to fit its section. That is
+   the same trick reveal.js uses, and it is what lets everything inside be
+   sized in plain px: the exhibit tables arrive with the app's own px-based
+   CSS, and a slide that scaled its text by viewport units would render them
+   at a different size than the standalone download does. 1280x720 is 16:9,
+   the shape of the PowerPoint the same deck exports. */
+
+:root {
+  --bd-text: #111827;
+  --bd-muted: #6b7280;
+  --bd-subtle: #9ca3af;
+  --bd-line: #e5e7eb;
+  --bd-accent: #0072b2;
+  --bd-bg: #eef0f3;
+  /* The house face, and the app's. The exhibit tables set no font-family of
+     their own (they inherit), so declaring the stack here is what puts one
+     typeface in the titles AND every table cell. Inter first because that is
+     also what blockr.viz.ft_font names for the pptx exhibits. */
+  --bd-font: Inter, "Inter var", system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--bd-bg);
+}
+
+body {
+  font-family: var(--bd-font);
+  color: var(--bd-text);
+  /* Lining figures of equal width, everywhere. A column of counts that does
+     not align on the digit is the one thing that makes a clinical table look
+     unfinished. */
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+
+.bd-stage {
+  height: 100vh;
+  overflow-y: auto;
+  scroll-snap-type: y mandatory;
+  scroll-behavior: smooth;
+}
+
+.bd-slide {
+  height: 100vh;
+  box-sizing: border-box;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+/* The canvas is the slide's real estate, at its logical size; the script
+   scales it to whatever the window offers. width/height stay 1280x720 in the
+   layout so everything inside can be laid out in px and think in slide
+   coordinates. */
+.bd-canvas {
+  position: relative;
+  width: 1280px;
+  height: 720px;
+  flex: 0 0 auto;
+  background: #fff;
+  border-radius: 6px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06),
+    0 12px 32px rgba(15, 23, 42, 0.10);
+  transform-origin: center center;
+  transform: scale(var(--bd-scale, 1));
+  overflow: hidden;
+}
+
+.bd-frame {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  /* The bottom padding clears the running footer, which is positioned over
+     the canvas rather than in the flow -- without it the last row of a
+     scrolling table sits on top of the slide number. */
+  padding: 44px 56px 62px;
+  box-sizing: border-box;
+}
+
+/* Slide titles are labels, not headlines: the exhibit is the content. Same
+   sizes the revealjs theme set, in px at the logical canvas size. */
+.bd-title {
+  flex: 0 0 auto;
+  margin: 0 0 18px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid var(--bd-accent);
+  font-size: 30px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--bd-text);
+}
+
+/* The exhibit. Scrolls rather than clipping: the PowerPoint pages a table
+   too tall for its slide, and a web page that silently dropped the rest
+   would be the one place in this deck where numbers go missing. */
+.bd-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.bd-body > img {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  margin: 0 auto;
+}
+
+/* The running footer, on every slide but the first. */
+.bd-foot {
+  position: absolute;
+  left: 56px;
+  right: 56px;
+  bottom: 18px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--bd-subtle);
+  pointer-events: none;
+}
+
+/* ---- the title slide ------------------------------------------------ */
+
+.bd-slide--title .bd-frame {
+  justify-content: center;
+  padding-bottom: 44px;
+}
+
+.bd-deck-title {
+  margin: 0;
+  font-size: 54px;
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+}
+
+.bd-deck-sub {
+  margin: 18px 0 0;
+  font-size: 19px;
+  color: var(--bd-muted);
+}
+
+.bd-rule {
+  width: 84px;
+  height: 4px;
+  margin-top: 26px;
+  background: var(--bd-accent);
+}
+
+/* ---- chrome --------------------------------------------------------- */
+
+/* Bottom-right, quiet until the pointer is near it: a deck being read should
+   show its content, and a deck being presented should show nothing else. */
+.bd-nav {
+  position: fixed;
+  right: 14px;
+  bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--bd-muted);
+  opacity: 0.25;
+  transition: opacity 0.15s ease;
+  z-index: 10;
+}
+
+.bd-nav:hover, .bd-nav:focus-within { opacity: 1; }
+
+.bd-nav button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--bd-line);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--bd-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.bd-nav button:hover { background: #f9fafb; color: var(--bd-text); }
+.bd-nav button:focus-visible {
+  outline: 2px solid var(--bd-accent);
+  outline-offset: 1px;
+}
+
+.bd-count { font-variant-numeric: tabular-nums; padding: 0 2px; }
+
+/* ---- print ---------------------------------------------------------- */
+
+/* Ctrl-P gives one slide per landscape page at the deck's own proportions,
+   which is the PDF export that reveal.js needs a separate tool for. The page
+   box is the pptx slide size (13.333in x 7.5in), so the printed deck and the
+   PowerPoint are the same shape. */
+@page {
+  size: 13.333in 7.5in;
+  margin: 0;
+}
+
+@media print {
+  html, body { height: auto; background: #fff; }
+  .bd-stage { height: auto; overflow: visible; scroll-snap-type: none; }
+  .bd-slide {
+    height: 7.5in;
+    padding: 0;
+    break-after: page;
+    page-break-after: always;
+  }
+  .bd-slide:last-child { break-after: auto; page-break-after: auto; }
+  .bd-canvas {
+    width: 13.333in;
+    height: 7.5in;
+    border-radius: 0;
+    box-shadow: none;
+    /* The print box IS the canvas, so the screen's fit-to-window scaling has
+       to come back off or every page would print shrunk. */
+    transform: none;
+  }
+  /* Nothing scrolls on paper: a table too tall for its page is clipped by
+     the page box either way, and `visible` at least prints what fits. */
+  .bd-body { overflow: visible; }
+  .bd-nav { display: none; }
+}

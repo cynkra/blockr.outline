@@ -29,8 +29,11 @@
 #'   picking and the ordering: a block is a slide iff it is named here.
 #' @param title Deck title. Names the file, titles the html deck and appears
 #'   as the running footer on every html slide.
-#' @param format Download format: `"pptx"` (PowerPoint) or `"revealjs"`
-#'   (a self-contained HTML deck).
+#' @param format Download format: `"pptx"` (PowerPoint) or `"html"`
+#'   (a self-contained HTML deck). Both are written in this process, so
+#'   neither needs the quarto CLI on the machine. `"revealjs"`, the format
+#'   string of the quarto render the HTML deck replaced, still restores as
+#'   `"html"`.
 #' @param template Path to a pandoc reference document (`.pptx`) styling the
 #'   PowerPoint render. `""` falls back to the app-level default,
 #'   `getOption("blockr.outline.template")`, and then to the bundled
@@ -80,11 +83,19 @@ new_slides_extension <- function(slides = character(),
   )
 }
 
-# The formats a deck offers. Deliberately two, and named for what the user
-# asked for rather than for what quarto calls it: "revealjs" is the format
-# string, "HTML" is the thing you get.
+# The formats a deck offers. Deliberately two, and both written in-process:
+# officer for the PowerPoint, this package's own writer for the HTML (see
+# R/deck-html.R for why that is not quarto + revealjs). Neither needs a CLI
+# on the machine.
 deck_formats <- function() {
-  c("PowerPoint" = "pptx", "HTML" = "revealjs")
+  c("PowerPoint" = "pptx", "HTML" = "html")
+}
+
+# LEGACY: the HTML deck was a quarto revealjs render before it was written
+# here, and a board saved in between carries quarto's word for it.
+deck_format <- function(fmt) {
+  fmt <- coal(fmt, "pptx")
+  if (identical(fmt, "revealjs")) "html" else fmt
 }
 
 slides_ext_ui <- function(id, board, ...) {
@@ -561,7 +572,11 @@ slides_ext_srv <- function(slides, title, format = "pptx", template = "") {
           if (is.character(title) && length(title)) title[[1L]] else "Deck"
         )
         rv_format <- reactiveVal(
-          if (coal(format, "pptx") %in% deck_formats()) format else "pptx"
+          if (deck_format(format) %in% deck_formats()) {
+            deck_format(format)
+          } else {
+            "pptx"
+          }
         )
         rv_template <- reactiveVal(coal(template, ""))
 
@@ -1004,6 +1019,18 @@ slides_ext_srv <- function(slides, title, format = "pptx", template = "") {
             )
           },
           content = function(file) {
+            # Both formats are written here, in this process. The HTML deck
+            # is this package's own writer (R/deck-html.R); the PowerPoint is
+            # officer. render_report()'s quarto path is the outline's, for
+            # documents, and a deck never takes it.
+            if (identical(rv_format(), "html")) {
+              return(
+                with_render_guard(
+                  render_deck_html(sections(), file, rv_title())
+                )
+              )
+            }
+
             with_render_guard(
               render_report(
                 qmd_txt(),

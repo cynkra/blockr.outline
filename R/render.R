@@ -848,6 +848,33 @@ strip_slides <- function(doc) {
 # environment (reproducing the report's computation), then each reported
 # block's result is turned into an exhibit through the same output
 # expression the qmd uses (sect_output -> static_table() for table blocks).
+# Evaluate every exported block's code once, in order, in a fresh env: a
+# block id becomes a bound variable, and the reported ones are the exhibits.
+#
+# Shared by the deck's two writers, which agree about what a slide's exhibit
+# IS and differ only in what they draw it into. A pending block within the
+# closure has no code to run; a reported block downstream of it fails to
+# resolve it, which surfaces as a render error rather than a silent blank --
+# correct, since no deck can show an exhibit whose inputs never evaluated.
+deck_eval_env <- function(sects, render_err) {
+
+  env <- eval_env(sects)
+
+  for (i in seq_along(sects$ids)) {
+    if (isTRUE(sects$pending[i])) next
+    code <- sect_export_code(sects, i)
+    tryCatch(
+      eval(parse(text = code), envir = env),
+      error = function(e) {
+        seed_failed(env, sects$ids[i], conditionMessage(e), id_labels(sects))
+        render_err(e)
+      }
+    )
+  }
+
+  env
+}
+
 render_pptx_officer <- function(sects, file, title, template = NULL) {
 
   if (!requireNamespace("officer", quietly = TRUE)) {
@@ -898,18 +925,7 @@ render_pptx_officer <- function(sects, file, title, template = NULL) {
   # to resolve it, which surfaces as a render error rather than a silent
   # blank -- correct, since the deck cannot show an exhibit whose inputs
   # never evaluated.
-  env <- eval_env(sects)
-  for (i in seq_along(sects$ids)) {
-    if (isTRUE(sects$pending[i])) next
-    code <- sect_export_code(sects, i)
-    tryCatch(
-      eval(parse(text = code), envir = env),
-      error = function(e) {
-        seed_failed(env, sects$ids[i], conditionMessage(e), id_labels(sects))
-        render_err(e)
-      }
-    )
-  }
+  env <- deck_eval_env(sects, render_err)
 
   # Which deck this render is styling against, said out loud.
   #
@@ -997,9 +1013,31 @@ render_pptx_officer <- function(sects, file, title, template = NULL) {
       next
     }
 
-    doc <- officer::add_slide(doc, layout = layout, master = master)
     nm <- sects$names[i]
-    if (is.character(nm) && length(nm) == 1L && nzchar(nm)) {
+    nm <- if (is.character(nm) && length(nm) == 1L && nzchar(nm)) nm
+
+    # A table gets as many slides as it needs. blockr.viz owns that
+    # arithmetic -- measured column widths, the font step-down, where to
+    # break the rows, the repeated header band, the "(2 of 8)" page titles --
+    # and owns it for the block's own PowerPoint download too, so a table
+    # exported from a block and the same table on a deck slide come out
+    # identical. Before this the deck placed one flextable per slide and a
+    # long table simply ran off the bottom.
+    #
+    # It needs the frame, not the rendering; static_table() stashes it on the
+    # flextable, so an exhibit that arrives already rendered still pages.
+    # Everything else -- plots, widgets, an unknown object -- keeps the
+    # single-slide placement below.
+    n_paged <- deck_add_table(doc, exhibit, nm, layout, master, template)
+
+    if (!is.null(n_paged)) {
+      doc <- n_paged$doc
+      n_slides <- n_slides + n_paged$n
+      next
+    }
+
+    doc <- officer::add_slide(doc, layout = layout, master = master)
+    if (!is.null(nm)) {
       doc <- tryCatch(
         officer::ph_with(doc, nm,
                          location = officer::ph_location_type(type = "title")),
@@ -1510,6 +1548,66 @@ gg_exhibit_img <- function(p, dpi = 96) {
   )
 
   out
+}
+
+# One block's table, paged over as many slides as it needs by blockr.viz's
+# own paginator -- the one the table block's PowerPoint button uses, so the
+# two exports agree slide for slide.
+#
+# Returns NULL for anything it will not page, which is the caller's signal to
+# fall back to the single-slide placement: a plot, a widget, a hand-built
+# flextable carrying no source frame, a blockr.viz too old to export the
+# entry point, or a paginator that threw. A deck that loses its pagination is
+# a worse deck; a deck that loses a slide is a broken one.
+deck_add_table <- function(doc, exhibit, title, layout, master, template) {
+
+  if (!deck_pageable(exhibit)) {
+    return(NULL)
+  }
+
+  add <- tryCatch(
+    utils::getFromNamespace("pptx_add_exhibit", "blockr.viz"),
+    error = function(e) NULL
+  )
+
+  if (!is.function(add)) {
+    return(NULL)
+  }
+
+  before <- length(doc)
+
+  out <- tryCatch(
+    add(doc, exhibit, title = title, template = template,
+        layout = layout, master = master),
+    error = function(e) {
+      cat("[deck] could not page '", coal(title, "table"), "': ",
+          conditionMessage(e), "\n", sep = "", file = stderr())
+      NULL
+    }
+  )
+
+  if (is.null(out)) {
+    return(NULL)
+  }
+
+  list(doc = out, n = max(1L, length(out) - before))
+}
+
+# Is this exhibit a table the paginator can rebuild page by page? A rendered
+# flextable qualifies only when static_table() left the frame on it; a plot,
+# a gt table or a widget never does.
+deck_pageable <- function(x) {
+
+  if (inherits(x, "flextable")) {
+    return(!is.null(attr(x, "exhibit_data")))
+  }
+
+  if (inherits(x, c("gg", "ggplot", "patchwork", "trellis", "gt_tbl",
+                    "gt_group", "htmlwidget"))) {
+    return(FALSE)
+  }
+
+  is.data.frame(x)
 }
 
 # Place one exhibit on the current slide at its intended coordinates.

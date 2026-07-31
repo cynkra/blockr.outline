@@ -19,8 +19,11 @@ picking and the ordering: a block is a slide iff it is named here.}
 \item{title}{Deck title. Names the file, titles the html deck and appears
 as the running footer on every html slide.}
 
-\item{format}{Download format: \code{"pptx"} (PowerPoint) or \code{"revealjs"}
-(a self-contained HTML deck).}
+\item{format}{Download format: \code{"pptx"} (PowerPoint) or \code{"html"}
+(a self-contained HTML deck). Both are written in this process, so
+neither needs the quarto CLI on the machine. \code{"revealjs"}, the format
+string of the quarto render the HTML deck replaced, still restores as
+\code{"html"}.}
 
 \item{template}{Path to a pandoc reference document (\code{.pptx}) styling the
 PowerPoint render. \code{""} falls back to the app-level default,
