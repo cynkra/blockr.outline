@@ -387,6 +387,62 @@ test_that("an empty deck says so rather than drawing an empty list", {
   )
 })
 
+test_that("a board update that draws nothing new does not repaint the list", {
+  # renderUI replaces the list wholesale, which the user sees as a flash, so
+  # the store in front of it has to hold still through the board updates
+  # that say nothing about the list. The one that hurt: a block committing
+  # its state as it constructs -- a new block OBJECT, same name and kind.
+  rows <- 0L
+  orig <- slides_row
+
+  local_mocked_bindings(
+    slides_row = function(...) {
+      rows <<- rows + 1L
+      orig(...)
+    }
+  )
+
+  testServer(
+    slides_ext_srv(c("plot", "audit"), "Deck"),
+    {
+      session$flushReact()
+
+      # Two rows built = one pass through renderUI. Counting the row builder
+      # is the only probe that distinguishes a repaint from no repaint: the
+      # html either way is byte-identical, which is the whole complaint.
+      expect_identical(rows, 2L)
+
+      before <- board$board
+      brd <- before
+      blks <- blockr.core::board_blocks(brd)
+      blks[["sub"]] <- blockr.core::new_subset_block("Species == 'setosa'")
+      blockr.core::board_blocks(brd) <- blks
+
+      board$board <- brd
+      session$flushReact()
+
+      # The board really did change -- otherwise the rest is vacuous.
+      expect_false(identical(board$board, before))
+      expect_identical(rows, 2L)
+
+      # The skip is narrow: a rename is drawn, so it does repaint.
+      brd <- board$board
+      blks <- blockr.core::board_blocks(brd)
+      blockr.core::block_name(blks[["plot"]]) <- "Sepal scatter"
+      blockr.core::board_blocks(brd) <- blks
+
+      board$board <- brd
+      session$flushReact()
+
+      expect_identical(rows, 4L)
+      expect_match(
+        as.character(output$sld_list$html), "Sepal scatter", fixed = TRUE
+      )
+    },
+    args = list(board = blind_board_args(), update = reactiveVal())
+  )
+})
+
 test_that("a removed block loses its slide", {
   testServer(
     slides_ext_srv(c("plot", "audit"), "Deck"),

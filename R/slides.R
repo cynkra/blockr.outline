@@ -627,30 +627,42 @@ slides_ext_srv <- function(slides, title, format = "pptx", template = "") {
         # job is what to add next), each carrying what its card shows.
         # Pushed whole rather than diffed -- one small array that only moves
         # when the board or the deck does.
+        # Identical-skip: `board$board` is reassigned by EVERY board update,
+        # including the state a block commits as it constructs and the views
+        # delta a dock tab click sends, and a plain reactive re-emits
+        # regardless of whether anything it reads moved. The handler on the
+        # other end rebuilds the whole menu, so an unskipped push repaints an
+        # open dropdown for nothing. Same store the outline puts in front of
+        # its projection (`board_shape`, R/ext.R).
+        catalog_sig <- NULL
+
         observe(
           {
             meta <- block_meta()
             picked <- rv_slides()
             ids <- c(setdiff(names(meta), picked), picked)
 
-            session$sendCustomMessage(
-              "blockr-slides-catalog",
-              list(
-                items = lapply(
-                  ids,
-                  function(i) {
-                    list(
-                      id = i,
-                      name = coal(na_blank(meta[[i]]$name), i),
-                      icon = na_blank(meta[[i]]$icon),
-                      kind = coal(meta[[i]]$kind, ""),
-                      desc = coal(meta[[i]]$desc, ""),
-                      picked = i %in% picked
-                    )
-                  }
+            items <- lapply(
+              ids,
+              function(i) {
+                list(
+                  id = i,
+                  name = coal(na_blank(meta[[i]]$name), i),
+                  icon = na_blank(meta[[i]]$icon),
+                  kind = coal(meta[[i]]$kind, ""),
+                  desc = coal(meta[[i]]$desc, ""),
+                  picked = i %in% picked
                 )
-              )
+              }
             )
+
+            if (!identical(items, catalog_sig)) {
+              catalog_sig <<- items
+              session$sendCustomMessage(
+                "blockr-slides-catalog",
+                list(items = items)
+              )
+            }
           }
         )
 
@@ -714,11 +726,32 @@ slides_ext_srv <- function(slides, title, format = "pptx", template = "") {
         )
 
         # ---- the list -----------------------------------------------
+        #
+        # renderUI replaces the list WHOLESALE, so it must fire only when the
+        # list actually changes -- anything else is a visible white flash.
+        # Its inputs re-emit far more often than they change: `block_meta()`
+        # reads `board$board`, which is reassigned by every board update,
+        # and a block committing its state as it constructs is one. So the
+        # deck repainted whenever a block it slides loaded, having read back
+        # the same names, kinds and icons.
+        #
+        # The store in front is the same mechanism as the outline's
+        # `board_shape` (R/ext.R): the observer pays the read on every flush,
+        # and a reactiveVal handed a value identical to the one it holds does
+        # not notify -- so the render only re-runs when the drawing changes.
+        list_state <- reactiveVal(NULL)
+
+        observe(
+          list_state(list(picked = rv_slides(), meta = block_meta()))
+        )
 
         output$sld_list <- renderUI({
 
-          picked <- rv_slides()
-          meta <- block_meta()
+          state <- list_state()
+          req(!is.null(state))
+
+          picked <- state$picked
+          meta <- state$meta
 
           if (!length(picked)) {
             return(
