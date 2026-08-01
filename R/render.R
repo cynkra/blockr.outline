@@ -303,6 +303,35 @@ template_content_width <- function(template) {
   if (length(out) == 1L && is.finite(out) && out > 0) out else fallback
 }
 
+# Point size of a title on this template's slides, from the master's own title
+# style. `NA` when it cannot be read -- the caller then leaves the placeholder
+# to inherit, which is what it did before this was asked.
+#
+# One number covers every title the master styles, the cover included: the BMS
+# master says 24pt, which is right over a table and half the size a title page
+# wants. Reading it is what lets the title slide be sized RELATIVE to the
+# template instead of overruling a template that already sizes its own.
+template_title_size <- function(template) {
+
+  xml <- template_part(template, "ppt/slideMasters/slideMaster1.xml")
+
+  if (is.null(xml)) {
+    return(NA_real_)
+  }
+
+  out <- tryCatch(
+    {
+      style <- regmatches(xml, regexpr("<p:titleStyle>.*?</p:titleStyle>", xml))
+      sz <- regmatches(style, regexpr("sz=\"[0-9]+\"", style))
+      # OOXML states point sizes in hundredths.
+      if (length(sz)) as.numeric(gsub("\\D", "", sz)) / 100 else NA_real_
+    },
+    error = function(e) NA_real_
+  )
+
+  if (length(out) == 1L && is.finite(out) && out > 0) out else NA_real_
+}
+
 # The deck's own body typeface: the theme's MINOR latin font (PowerPoint's
 # "body font"; the major one is for titles). NULL when the template carries no
 # readable font scheme.
@@ -975,7 +1004,7 @@ render_pptx_officer <- function(sects, file, title, template = NULL,
   # into it rather than drawing anything.
   n_title <- 0L
   if (isTRUE(title_slide)) {
-    doc <- deck_add_title_slide(doc, title, layouts, layout, master)
+    doc <- deck_add_title_slide(doc, title, layouts, layout, master, template)
     n_title <- 1L
   }
 
@@ -1583,7 +1612,8 @@ gg_exhibit_img <- function(p, dpi = 96) {
 # entirely (a translated master), and a title slide is never worth failing a
 # download over. The fallbacks walk down: the title layout, then the content
 # one, then the plain title placeholder, then a slide with nothing on it.
-deck_add_title_slide <- function(doc, title, layouts, layout, master) {
+deck_add_title_slide <- function(doc, title, layouts, layout, master,
+                                 template = NULL) {
 
   title <- if (is.character(title) && length(title) && nzchar(title[[1L]])) {
     title[[1L]]
@@ -1601,6 +1631,11 @@ deck_add_title_slide <- function(doc, title, layouts, layout, master) {
     }
   )
 
+  # A cover title is not a slide heading. The master styles ALL its titles at
+  # one size (24pt on the BMS deck, which is right over a table), and a title
+  # page set at that size reads as a slide that lost its content. So the size
+  # is raised for this one slide -- and only raised: a template whose own
+  # titles are already larger keeps them.
   # `ctrTitle` is the centred title of a title layout; `title` is what every
   # other layout calls the same thing. Whichever the slide has takes the text,
   # and a slide with neither still exists rather than erroring.
@@ -1617,7 +1652,83 @@ deck_add_title_slide <- function(doc, title, layouts, layout, master) {
     if (isTRUE(placed)) break
   }
 
-  doc
+  deck_set_title_size(doc, deck_title_size(doc, use, title, template))
+}
+
+# How big the cover title is set, in points.
+#
+# A cover title is not a slide heading, and a master states ONE size for all
+# of its titles -- 24pt on the BMS deck, which is right over a table and half
+# of what a title page wants. So the size is raised for this one slide, and
+# only raised: a template whose own titles are already larger keeps them.
+#
+# Then stepped back down until it fits the placeholder. A deck called "Adverse
+# events by system organ class and preferred term" at 40pt is four lines in a
+# box that holds two, and PowerPoint does not shrink text it was handed rather
+# than typed. Estimated, not measured: half the point size per character is
+# the usual rule of thumb for a proportional face, and being a size or two
+# conservative on a long title costs nothing a reader will notice.
+deck_title_size <- function(doc, layout, title, template = NULL,
+                            floor = 24) {
+
+  own <- template_title_size(template)
+  want <- max(
+    getOption("blockr.outline.deck_title_size", 40),
+    if (is.finite(own)) own else 0
+  )
+
+  box <- tryCatch(
+    {
+      ph <- officer::layout_properties(doc, layout = layout)
+      ph <- ph[ph$type %in% c("ctrTitle", "title"), ]
+      if (!nrow(ph)) NULL else c(ph$cx[[1L]], ph$cy[[1L]]) * 72
+    },
+    error = function(e) NULL
+  )
+
+  if (is.null(box) || any(!is.finite(box)) || any(box <= 0)) {
+    return(want)
+  }
+
+  n <- max(1L, nchar(title))
+
+  for (size in seq(want, floor, by = -2)) {
+    lines <- max(1, ceiling(n * 0.5 * size / box[[1L]]))
+    if (lines * size * 1.2 <= box[[2L]]) {
+      return(size)
+    }
+  }
+
+  floor
+}
+
+# Set the point size of the text just placed on the current slide.
+#
+# By patching the run's own `<a:rPr>` rather than handing officer a formatted
+# paragraph. `fp_text()` would carry its defaults -- Arial, black, 10pt --
+# onto the run and take the title out of the template's face and colour to
+# change one number, and `fp_text_lite()`, which exists to set one property
+# and inherit the rest, writes nothing at all through officer's pptx path
+# (0.7.3). The empty `<a:rPr/>` that `ph_with()` leaves is exactly the hook:
+# one attribute on it, everything else still inherited from the layout.
+#
+# Guarded end to end. It reaches into the document's slide object, which is
+# not officer's public surface, and a title at the master's own size is a
+# perfectly good slide -- not something to fail a download over.
+deck_set_title_size <- function(doc, size) {
+
+  tryCatch(
+    {
+      sld <- doc$slide$get_slide(doc$cursor)$get()
+      # The title slide holds one shape carrying one run, so every run
+      # property on it belongs to the title.
+      for (rpr in xml2::xml_find_all(sld, ".//a:rPr")) {
+        xml2::xml_set_attr(rpr, "sz", format(round(size * 100)))
+      }
+      doc
+    },
+    error = function(e) doc
+  )
 }
 
 # One block's table, paged over as many slides as it needs by blockr.viz's

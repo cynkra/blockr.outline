@@ -345,6 +345,27 @@ test_that("the pptx deck opens on the template's title slide", {
   # sits low and centred, and a line dropped into it reads as orphaned.
   expect_false("subTitle" %in% first$type)
 
+  # Set at a cover size, and set by patching the run's own properties: a
+  # master states one title size for every slide it has (24pt on the BMS
+  # deck), and a cover at a slide heading's size reads as a slide that lost
+  # its content. Everything else on the run stays inherited.
+  xml <- paste(
+    readLines(utils::unzip(f, "ppt/slides/slide1.xml",
+                           exdir = withr::local_tempdir()), warn = FALSE),
+    collapse = ""
+  )
+  run <- regmatches(xml, regexpr("<a:rPr[^>]*/>", xml))
+  expect_match(run, "sz=\"[0-9]+\"")
+  expect_gte(as.numeric(gsub("\\D", "", run)) / 100, 36)
+
+  # A long title steps back down rather than overflowing the placeholder:
+  # PowerPoint does not shrink text it was handed rather than typed.
+  d <- officer::read_pptx()
+  long <- paste(rep("Adverse events by system organ class", 4), collapse = " ")
+  expect_gte(deck_title_size(d, "Title Slide", "Iris topline"), 36)
+  expect_lt(deck_title_size(d, "Title Slide", long),
+            deck_title_size(d, "Title Slide", "Iris topline"))
+
   # ... and a caller that does not want one still gets a deck.
   g <- withr::local_tempfile(fileext = ".pptx")
   render_pptx_officer(s, g, "Iris topline", template = NULL,
