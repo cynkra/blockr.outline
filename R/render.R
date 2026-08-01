@@ -1779,6 +1779,14 @@ deck_add_table <- function(doc, exhibit, title, layout, master, template) {
 # a gt table or a widget never does.
 deck_pageable <- function(x) {
 
+  # An exhibit that brings its own pptx renderer answers for itself. That is
+  # how the summarize table reaches a slide: its marks cannot be text runs in
+  # a DrawingML cell, so blockr.viz paints it and appends the pages here,
+  # through the same pptx_add_exhibit() seam a flextable uses.
+  if (inherits(x, "blockr_exhibit")) {
+    return(TRUE)
+  }
+
   if (inherits(x, "flextable")) {
     return(!is.null(attr(x, "exhibit_data")))
   }

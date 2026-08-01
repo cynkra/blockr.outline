@@ -107,6 +107,20 @@ deck_html_exhibit <- function(exhibit) {
 
   if (requireNamespace("blockr.viz", quietly = TRUE)) {
 
+    # Same rule as the pptx side (deck_pageable): an exhibit that carries its
+    # own renderers renders itself, and html_exhibit() is the one to ask for
+    # this target. The summarize table's glyphs live only in that markup.
+    if (inherits(exhibit, "blockr_exhibit")) {
+      out <- tryCatch(
+        blockr.viz::html_exhibit(exhibit, title = "", max_height = NULL,
+                                 default_expanded = TRUE),
+        error = function(e) NULL
+      )
+      if (!is.null(out)) {
+        return(out)
+      }
+    }
+
     data <- if (inherits(exhibit, "flextable")) {
       attr(exhibit, "exhibit_data")
     } else if (is.data.frame(exhibit)) {
