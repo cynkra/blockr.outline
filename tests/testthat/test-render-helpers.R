@@ -170,8 +170,10 @@ test_that("a deck sets its exhibits in the template's own font", {
     stack_annotations = list()
   )
 
-  slide_xml <- function(f) {
-    paste(readLines(utils::unzip(f, "ppt/slides/slide1.xml",
+  # Slide 2: slide 1 is the deck's title slide, which carries no exhibit and
+  # so says nothing about the font the tables are set in.
+  slide_xml <- function(f, i = 2L) {
+    paste(readLines(utils::unzip(f, sprintf("ppt/slides/slide%d.xml", i),
                                  exdir = withr::local_tempdir()),
                     warn = FALSE),
           collapse = "")
@@ -309,6 +311,47 @@ test_that("a plot slide is placed whole, not handed to the paginator", {
   expect_true(deck_pageable(datasets::iris))
 })
 
+test_that("the pptx deck opens on the template's title slide", {
+  skip_if_not_installed("officer")
+  skip_if_not_installed("flextable")
+  skip_if_not_installed("blockr.viz")
+
+  board <- blockr.core::new_board(
+    blocks = c(
+      data = blockr.core::new_dataset_block("iris"),
+      tbl = blockr.viz::new_table_block()
+    ),
+    links = blockr.core::links(from = "data", to = "tbl")
+  )
+  exprs <- structure(list(
+    data = quote(datasets::iris),
+    tbl = quote(utils::head(blockr.viz::as_annotated_df(data), 5L))
+  ), pending = character())
+  s <- outline_sections(exprs, board,
+    annotations = list(data = list(report = FALSE), tbl = list(report = TRUE)),
+    stack_annotations = list())
+
+  f <- withr::local_tempfile(fileext = ".pptx")
+  render_pptx_officer(s, f, "Iris topline", template = NULL)
+
+  # The centred title placeholder of the "Title Slide" layout, not the
+  # heading of a content slide: that layout is where a house template says
+  # what a title page looks like.
+  first <- officer::slide_summary(officer::read_pptx(f), 1L)
+  expect_equal(first$text[first$type == "ctrTitle"], "Iris topline")
+  expect_equal(first$text[first$type == "subTitle"], deck_title_date())
+
+  # ... and a caller that does not want one still gets a deck.
+  g <- withr::local_tempfile(fileext = ".pptx")
+  render_pptx_officer(s, g, "Iris topline", template = NULL,
+                      title_slide = FALSE)
+  expect_length(officer::read_pptx(g), 1L)
+
+  # Spelled out, and in English whatever the machine's locale says.
+  expect_equal(deck_title_date(as.Date("2026-08-01")), "1 August 2026")
+  expect_equal(deck_title_date(as.Date("2026-12-24")), "24 December 2026")
+})
+
 test_that("a reference deck contributes styling, not slides", {
   skip_if_not_installed("officer")
   skip_if_not_installed("flextable")
@@ -350,10 +393,11 @@ test_that("a reference deck contributes styling, not slides", {
   f <- withr::local_tempfile(fileext = ".pptx")
   render_pptx_officer(s, f, "Deck", template = ref)
 
-  # One reported exhibit, one page -> one slide. The template's two examples
-  # are gone; without stripping, the deck would open on "Example 1".
+  # The deck's title slide and one reported exhibit of one page. The
+  # template's two examples are gone; without stripping, the deck would open
+  # on "Example 1".
   out <- officer::read_pptx(f)
-  expect_length(out, 1L)
+  expect_length(out, 2L)
   expect_false(any(grepl("^Example ", officer::pptx_summary(out)$text)))
 })
 

@@ -875,7 +875,8 @@ deck_eval_env <- function(sects, render_err) {
   env
 }
 
-render_pptx_officer <- function(sects, file, title, template = NULL) {
+render_pptx_officer <- function(sects, file, title, template = NULL,
+                                title_slide = TRUE) {
 
   if (!requireNamespace("officer", quietly = TRUE)) {
     stop("Rendering a pptx deck needs the 'officer' package.", call. = FALSE)
@@ -968,6 +969,16 @@ render_pptx_officer <- function(sects, file, title, template = NULL) {
   }
   master <- layouts$master[match(layout, layouts$layout)]
 
+  # The deck opens on its title, the way the html deck does. The template's
+  # own "Title Slide" layout is what says how that looks -- the centred title
+  # placeholder, the rule under it, the house colours -- so this places text
+  # into it rather than drawing anything.
+  n_title <- 0L
+  if (isTRUE(title_slide)) {
+    doc <- deck_add_title_slide(doc, title, layouts, layout, master)
+    n_title <- 1L
+  }
+
   # Pass 2 walks the SLIDE order, which the pass above could not: evaluation
   # has to follow the DAG, the deck does not. For an outline projection the
   # two are the same sequence (slide_seq falls back to document order); a
@@ -1048,9 +1059,9 @@ render_pptx_officer <- function(sects, file, title, template = NULL) {
     n_slides <- n_slides + 1L
   }
 
-  if (n_slides == 0L) {
+  if (n_slides == 0L && n_title == 0L) {
     # An empty deck is still a valid file, but warn: it usually means no
-    # block is in the report.
+    # block is in the report. With a title slide there is already one.
     doc <- officer::add_slide(doc, layout = layout, master = master)
     doc <- tryCatch(
       officer::ph_with(doc, title,
@@ -1548,6 +1559,72 @@ gg_exhibit_img <- function(p, dpi = 96) {
   )
 
   out
+}
+
+# The deck's opening slide: its title, and the date under it.
+#
+# Placed into the template's "Title Slide" layout, whose placeholders are
+# `ctrTitle` and `subTitle` rather than the `title` / `body` pair every other
+# slide uses -- that layout is where a house template says what a title page
+# looks like, and using it is the difference between a deck that opens like
+# the rest of the deck and one that opens on a content slide with a heading.
+#
+# Every placement is guarded: a template may carry the layout without the
+# subtitle, or name its layouts something else entirely (a translated master),
+# and a title slide is never worth failing a download over. The fallbacks walk
+# down: the title layout, then the content one, then the plain title
+# placeholder, then a slide with the title text and nothing else.
+deck_add_title_slide <- function(doc, title, layouts, layout, master) {
+
+  title <- if (is.character(title) && length(title) && nzchar(title[[1L]])) {
+    title[[1L]]
+  } else {
+    "Deck"
+  }
+
+  use <- if ("Title Slide" %in% layouts$layout) "Title Slide" else layout
+  use_master <- layouts$master[match(use, layouts$layout)]
+
+  doc <- tryCatch(
+    officer::add_slide(doc, layout = use, master = coal(use_master, master)),
+    error = function(e) {
+      officer::add_slide(doc, layout = layout, master = master)
+    }
+  )
+
+  # `ctrTitle` is the centred title of a title layout; `title` is what every
+  # other layout calls the same thing. Whichever the slide has takes the text,
+  # and a slide with neither still exists rather than erroring.
+  for (type in c("ctrTitle", "title")) {
+    placed <- tryCatch(
+      {
+        doc <- officer::ph_with(
+          doc, title, location = officer::ph_location_type(type = type)
+        )
+        TRUE
+      },
+      error = function(e) FALSE
+    )
+    if (isTRUE(placed)) break
+  }
+
+  tryCatch(
+    officer::ph_with(
+      doc, deck_title_date(),
+      location = officer::ph_location_type(type = "subTitle")
+    ),
+    error = function(e) doc
+  )
+}
+
+# The date the deck was built, spelled out: "1 August 2026". Written from the
+# parts rather than through %B so a container running under a non-English
+# locale does not hand a client deck a month name in another language.
+deck_title_date <- function(on = Sys.Date()) {
+  months <- c("January", "February", "March", "April", "May", "June", "July",
+              "August", "September", "October", "November", "December")
+  lt <- as.POSIXlt(on)
+  sprintf("%d %s %d", lt$mday, months[[lt$mon + 1L]], lt$year + 1900L)
 }
 
 # One block's table, paged over as many slides as it needs by blockr.viz's

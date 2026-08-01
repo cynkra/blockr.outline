@@ -159,7 +159,7 @@ deck_html_doc <- function(slides, title) {
   )
 
   rendered <- htmltools::renderTags(
-    tags$div(class = "bd-stage", deck_html_title_slide(deck_title, n), body)
+    tags$div(class = "bd-stage", deck_html_title_slide(deck_title), body)
   )
 
   c(
@@ -182,7 +182,10 @@ deck_html_doc <- function(slides, title) {
   )
 }
 
-deck_html_title_slide <- function(title, n) {
+# The date rather than a slide count: the count is something the deck's own
+# navigation says on every slide, and this is the html half of the pptx title
+# slide, which carries the same line under the same title.
+deck_html_title_slide <- function(title) {
   div(
     class = "bd-slide bd-slide--title",
     div(
@@ -191,10 +194,7 @@ deck_html_title_slide <- function(title, n) {
         class = "bd-frame",
         h1(class = "bd-deck-title", title),
         div(class = "bd-rule"),
-        p(
-          class = "bd-deck-sub",
-          sprintf("%d slide%s", n, if (n == 1L) "" else "s")
-        )
+        p(class = "bd-deck-sub", deck_title_date())
       )
     )
   )
