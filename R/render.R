@@ -1538,8 +1538,9 @@ exhibit_html <- function(exhibit) {
     return(
       tryCatch(
         flextable::htmltools_value(exhibit),
-        error = function(e) tags$pre(paste(utils::capture.output(exhibit),
-                                            collapse = "\n"))
+        error = function(e) {
+          tags$pre(paste(utils::capture.output(exhibit), collapse = "\n"))
+        }
       )
     )
   }

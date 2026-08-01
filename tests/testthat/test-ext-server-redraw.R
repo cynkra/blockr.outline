@@ -215,10 +215,22 @@ test_that("the layout key ignores per-row changes and catches structural ones", 
 
   # Per-row: a row swap carries these, so they must not force a render.
   for (mut in list(
-    function(s) {s$active <- c(TRUE, TRUE); s},
-    function(s) {s$names <- c("A2", "B"); s},
-    function(s) {s$descriptions <- c("new", ""); s},
-    function(s) {s$code_html <- list(a = "<pre>x</pre>", b = "<pre>b</pre>"); s}
+    function(s) {
+      s$active <- c(TRUE, TRUE)
+      s
+    },
+    function(s) {
+      s$names <- c("A2", "B")
+      s
+    },
+    function(s) {
+      s$descriptions <- c("new", "")
+      s
+    },
+    function(s) {
+      s$code_html <- list(a = "<pre>x</pre>", b = "<pre>b</pre>")
+      s
+    }
   )) {
     expect_identical(outline_layout_key(mut(base)), key)
   }

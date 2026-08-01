@@ -42,6 +42,7 @@ Suggests:
     base64enc,
     blockr.viz (>= 0.2.49),
     blockr.dag,
+    ggplot2,
     shinytest2,
     chromote,
     xml2,
