@@ -964,6 +964,19 @@ render_pptx_officer <- function(sects, file, title, template = NULL,
   # and "the house template was applied" produce the same outcome apart from
   # the fonts. That is not something to diagnose by squinting at a slide,
   # especially on a deployment nobody can open a shell on.
+  # No template named: the BUNDLED widescreen deck, not officer's stock one.
+  #
+  # officer's own is 10x7.5in (4:3) while every exhibit sizes itself to ~12in
+  # of widescreen content -- so an unconfigured deck laid widescreen figures
+  # onto a 4:3 slide and ran them off the right edge. The extension already
+  # resolved this through effective_template(); a caller reaching this
+  # function directly (a script, a test, another package) got the stock deck
+  # and a different-looking export, which is the sort of difference nobody
+  # traces back to a default.
+  if (is.null(template) || !nzchar(coal(template, ""))) {
+    template <- coal(default_template(), "")
+  }
+
   usable <- !is.null(template) && nzchar(template) && file.exists(template)
 
   cat(
