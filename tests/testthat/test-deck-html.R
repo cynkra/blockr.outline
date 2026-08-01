@@ -72,8 +72,10 @@ test_that("the deck opens on a title slide and keeps the picked order", {
   txt <- paste(readLines(f, warn = FALSE), collapse = "\n")
 
   expect_match(txt, "bd-slide--title", fixed = TRUE)
-  # The same line the pptx title slide carries under the same title.
-  expect_match(txt, deck_title_date(), fixed = TRUE)
+  # The title and the rule, the way the pptx title slide is the title and
+  # nothing under it.
+  expect_match(txt, "bd-deck-title", fixed = TRUE)
+  expect_false(grepl("bd-deck-sub", txt, fixed = TRUE))
   # Two exhibits plus the title slide.
   expect_length(gregexpr("class=\"bd-canvas\"", txt)[[1L]], 3L)
   # Picked head-first, and the file says so.

@@ -336,20 +336,20 @@ test_that("the pptx deck opens on the template's title slide", {
 
   # The centred title placeholder of the "Title Slide" layout, not the
   # heading of a content slide: that layout is where a house template says
-  # what a title page looks like.
+  # what a title page looks like. Pandoc writes a document's title into the
+  # same placeholder, so a deck opens the way blockr.md's decks do.
   first <- officer::slide_summary(officer::read_pptx(f), 1L)
   expect_equal(first$text[first$type == "ctrTitle"], "Iris topline")
-  expect_equal(first$text[first$type == "subTitle"], deck_title_date())
+
+  # The title and nothing else: the subtitle box of a stock title layout
+  # sits low and centred, and a line dropped into it reads as orphaned.
+  expect_false("subTitle" %in% first$type)
 
   # ... and a caller that does not want one still gets a deck.
   g <- withr::local_tempfile(fileext = ".pptx")
   render_pptx_officer(s, g, "Iris topline", template = NULL,
                       title_slide = FALSE)
   expect_length(officer::read_pptx(g), 1L)
-
-  # Spelled out, and in English whatever the machine's locale says.
-  expect_equal(deck_title_date(as.Date("2026-08-01")), "1 August 2026")
-  expect_equal(deck_title_date(as.Date("2026-12-24")), "24 December 2026")
 })
 
 test_that("a reference deck contributes styling, not slides", {

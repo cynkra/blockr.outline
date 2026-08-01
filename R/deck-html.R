@@ -182,9 +182,11 @@ deck_html_doc <- function(slides, title) {
   )
 }
 
-# The date rather than a slide count: the count is something the deck's own
-# navigation says on every slide, and this is the html half of the pptx title
-# slide, which carries the same line under the same title.
+# The title and the rule under it, and nothing else -- the html half of the
+# pptx title slide, which places the title into the template's "Title Slide"
+# layout and leaves its subtitle box empty. A line under the title (this one
+# carried the slide count) is something the deck says on every slide anyway,
+# in the footer.
 deck_html_title_slide <- function(title) {
   div(
     class = "bd-slide bd-slide--title",
@@ -193,8 +195,7 @@ deck_html_title_slide <- function(title) {
       div(
         class = "bd-frame",
         h1(class = "bd-deck-title", title),
-        div(class = "bd-rule"),
-        p(class = "bd-deck-sub", deck_title_date())
+        div(class = "bd-rule")
       )
     )
   )

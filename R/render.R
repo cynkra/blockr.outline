@@ -1561,19 +1561,28 @@ gg_exhibit_img <- function(p, dpi = 96) {
   out
 }
 
-# The deck's opening slide: its title, and the date under it.
+# The deck's opening slide: its title, and nothing else.
 #
-# Placed into the template's "Title Slide" layout, whose placeholders are
-# `ctrTitle` and `subTitle` rather than the `title` / `body` pair every other
-# slide uses -- that layout is where a house template says what a title page
-# looks like, and using it is the difference between a deck that opens like
-# the rest of the deck and one that opens on a content slide with a heading.
+# Placed into the template's "Title Slide" layout, whose placeholder is
+# `ctrTitle` rather than the `title` every other slide uses -- that layout is
+# where a house template says what a title page looks like, and using it is
+# the difference between a deck that opens like the rest of the deck and one
+# that opens on a content slide with a heading. This is exactly what pandoc
+# writes from a document's `title` (blockr.md's decks), placeholder for
+# placeholder.
 #
-# Every placement is guarded: a template may carry the layout without the
-# subtitle, or name its layouts something else entirely (a translated master),
-# and a title slide is never worth failing a download over. The fallbacks walk
-# down: the title layout, then the content one, then the plain title
-# placeholder, then a slide with the title text and nothing else.
+# NOTHING GOES IN THE SUBTITLE. A date under the title read as orphaned on
+# the BMS master: its title box sits a third of the way down and left, its
+# subtitle box more than half way down and CENTRED, so a short line under a
+# long title lands in the middle of the slide with nothing around it. The
+# layout is stock Office geometry with house chrome on the master, not a
+# designed title page, and a deck built by an app has nothing to say there
+# that the title has not said.
+#
+# Every placement is guarded: a template may name its layouts something else
+# entirely (a translated master), and a title slide is never worth failing a
+# download over. The fallbacks walk down: the title layout, then the content
+# one, then the plain title placeholder, then a slide with nothing on it.
 deck_add_title_slide <- function(doc, title, layouts, layout, master) {
 
   title <- if (is.character(title) && length(title) && nzchar(title[[1L]])) {
@@ -1608,23 +1617,7 @@ deck_add_title_slide <- function(doc, title, layouts, layout, master) {
     if (isTRUE(placed)) break
   }
 
-  tryCatch(
-    officer::ph_with(
-      doc, deck_title_date(),
-      location = officer::ph_location_type(type = "subTitle")
-    ),
-    error = function(e) doc
-  )
-}
-
-# The date the deck was built, spelled out: "1 August 2026". Written from the
-# parts rather than through %B so a container running under a non-English
-# locale does not hand a client deck a month name in another language.
-deck_title_date <- function(on = Sys.Date()) {
-  months <- c("January", "February", "March", "April", "May", "June", "July",
-              "August", "September", "October", "November", "December")
-  lt <- as.POSIXlt(on)
-  sprintf("%d %s %d", lt$mday, months[[lt$mon + 1L]], lt$year + 1900L)
+  doc
 }
 
 # One block's table, paged over as many slides as it needs by blockr.viz's
