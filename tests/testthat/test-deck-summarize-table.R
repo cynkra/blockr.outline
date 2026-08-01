@@ -117,3 +117,21 @@ test_that("a chart is placed by the same method its own download calls", {
   expect_true(any(grepl("^ppt/media/", files)))
   expect_identical(length(officer::read_pptx(f)), 1L)
 })
+
+test_that("an unconfigured deck is widescreen, not officer's 4:3 stock", {
+  skip_if_not_installed("officer")
+
+  s <- slide_sections(summarize_exprs(), summarize_board(), slides = "sm")
+
+  f <- withr::local_tempfile(fileext = ".pptx")
+  # No template named anywhere: the bundled widescreen deck, because every
+  # exhibit sizes itself to ~12in of content and officer's own stock deck is
+  # 10x7.5in. A 4:3 fallback ran widescreen figures off the right edge.
+  withr::with_options(list(blockr.outline.template = NULL), {
+    render_pptx_officer(s, f, "Deck", template = NULL, title_slide = FALSE)
+  })
+
+  size <- officer::slide_size(officer::read_pptx(f))
+  expect_equal(size$width, 13.333, tolerance = 1e-3)
+  expect_equal(size$height, 7.5, tolerance = 1e-3)
+})

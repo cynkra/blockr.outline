@@ -31,6 +31,10 @@ SLIDE_W <- 13.333333
 SLIDE_H <- 7.5
 MARGIN <- 0.4
 FONT <- "Arial"
+# Slide-title point size. Production house decks sit at 20-24pt; the stock
+# Office 44 is a cover-slide size printed on every content slide. The cover
+# still gets its own (deck_title_size(), 40pt by default).
+TITLE_PT <- 20
 
 emu <- function(inches) as.character(round(inches * EMU))
 
@@ -107,12 +111,40 @@ pin <- function(xml, ph, left, top, width, height) {
 
 body_w <- SLIDE_W - 2 * MARGIN
 
-master <- pin(master, "type=\"title\"", MARGIN, 0.4, body_w, 1.25)
-master <- pin(master, "type=\"body\"", MARGIN, 1.7, body_w, 5.0)
+# The title band, deliberately SMALL. The stock Office title is 44pt, centred
+# and vertically centred in a 1.25in box: on a deck of exhibits that is a
+# banner the reader does not need, and it costs the picture under it an inch
+# of slide. A production deck puts its title top-left, near the top edge, and
+# spends the rest on the exhibit -- see the titleStyle rewrite below, which
+# does the other half (left-aligned, 20pt, anchored to the top of the box).
+master <- pin(master, "type=\"title\"", MARGIN, 0.3, body_w, 0.6)
+master <- pin(master, "type=\"body\"", MARGIN, 1.05, body_w, 5.65)
 master <- pin(master, "type=\"dt\"", MARGIN, 6.951, 2.333, 0.399)
 master <- pin(master, "type=\"ftr\"", 5.0, 6.951, 3.333, 0.399)
 master <- pin(master, "type=\"sldNum\"", SLIDE_W - MARGIN - 2.333, 6.951,
               2.333, 0.399)
+
+# The title's own typography, which the placeholder geometry alone does not
+# fix: a 44pt centred line still fills the box it was given. `pptx_title_bottom()`
+# reads this `sz` (in hundredths of a point) to decide where an exhibit starts,
+# so shrinking it here is what buys the picture its height back.
+master <- sub(
+  "(<p:titleStyle><a:lvl1pPr )algn=\"[a-z]+\"",
+  paste0("\\1algn=\"l\""),
+  master
+)
+master <- sub(
+  "(<p:titleStyle>.*?<a:defRPr )sz=\"[0-9]+\"",
+  paste0("\\1sz=\"", TITLE_PT * 100, "\""),
+  master
+)
+# Anchored to the TOP of its box rather than the middle, so a one-line title
+# sits where the box starts instead of floating in it.
+master <- sub(
+  "(<p:ph type=\"title\"/>.*?<a:bodyPr[^>]*?)anchor=\"[a-z]+\"",
+  "\\1anchor=\"t\"",
+  master
+)
 
 write_xml(master, "ppt", "slideMasters", "slideMaster1.xml")
 
