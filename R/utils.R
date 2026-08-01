@@ -36,74 +36,28 @@ default_template <- function() {
   pkg_file("templates", "widescreen-default.pptx")
 }
 
-# The reference document a render actually styles against: the outline's own
-# `template` when it has one, otherwise the app-level default from
+# The reference document a render styles against: the app-level
 # `getOption("blockr.outline.template")`, otherwise the bundled deck above.
+# An app declares it once, typically from its theme
+# (`blockr.theme::theme_template(thm, "pptx")`).
 #
-# The option exists because the deck is a property of the DEPLOYMENT, not of
-# the board. `template` is extension STATE, so it serialises with the board --
-# which means a constructor argument only ever reaches boards created after it
-# was added: every workflow saved before an app shipped a house template
-# restores its own empty template and keeps rendering against the fallback
-# deck, with no way to fix it short of every user typing the path into the
-# gear. The option applies to all of them, old and new.
+# One source, and deliberately not the board. The deck is a property of the
+# DEPLOYMENT: the same workflow downloaded from the house instance and from a
+# laptop should carry the house master in the first case and not pretend to in
+# the second. Both extensions used to offer a `template` field in their gear,
+# which made it extension STATE -- so it serialised with the board as an
+# ABSOLUTE path from whichever machine last saved it, resolved nowhere on the
+# next one, and quietly lost to the fallback deck. It also only ever reached
+# boards created after an app shipped a house template: every workflow saved
+# before that kept rendering against the stock deck, with no fix short of
+# every user typing the path in by hand. The option applies to all of them,
+# old and new, and is resolved at RENDER time.
 #
-# Resolved at RENDER time and deliberately NOT folded into the state
-# reactiveVal: an empty template must keep meaning "whatever this app
-# declares", never "the absolute path that happened to exist on the machine
-# where this board was last saved". A template typed into the gear still wins.
-#
-# A stored path that no longer EXISTS is treated the same as an empty one, and
-# that is the half this used to miss. The stored value is an absolute path from
-# whichever machine last saved the board, so a board moved between deployments
-# (or saved on a laptop and opened on Connect) carries one that resolves
-# nowhere. Returning it anyway does not fail: render_pptx_officer() checks
-# file.exists() and quietly falls back to the fallback deck -- so the house
-# template is silently ignored while an app-level default sits right there
-# unused. Exactly the "absolute path that happened to exist" case the paragraph
-# above rules out.
-effective_template <- function(x) {
-  x <- coal(x, "")
-  usable <- is.character(x) && length(x) == 1L && nzchar(x)
-
-  if (usable && file.exists(x)) {
-    return(x)
-  }
-
-  fallback <- coal(getOption("blockr.outline.template", default_template()), "")
-
-  # Worth saying out loud: the render succeeds either way, so a stale path is
-  # otherwise indistinguishable from having no house deck at all.
-  if (usable) {
-    message(
-      "Board template '", x, "' does not exist here; ",
-      if (nzchar(fallback)) {
-        paste0("using the app default '", fallback, "'.")
-      } else {
-        "no app default is set, so the render uses the stock deck."
-      }
-    )
-  }
-
-  fallback
-}
-
-# Call `fn` passing only the named arguments its installed version
-# accepts, dropping any the current signature does not know. Guards
-# against version skew in an external dependency: blockr.io's
-# path_input_* signatures have grown over releases (e.g. `placeholder`,
-# `extensions`), and a hard call to a not-yet-present argument aborts UI
-# construction. Positional arguments and every named argument pass through
-# untouched when the target takes `...`.
-io_call <- function(fn, ...) {
-  args <- list(...)
-  fmls <- names(formals(fn))
-  if ("..." %in% fmls) {
-    return(do.call(fn, args))
-  }
-  nms <- names(args)
-  keep <- is.null(nms) | nms == "" | nms %in% fmls
-  do.call(fn, args[keep])
+# The `template` constructor arguments survive as ignored LEGACY arguments,
+# because a board saved with the old field restores its state through the
+# constructor and must not error on the way in.
+effective_template <- function() {
+  coal(getOption("blockr.outline.template", default_template()), "")
 }
 
 pkg_version <- function() {

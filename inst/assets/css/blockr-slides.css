@@ -77,42 +77,6 @@
   color: #14532d; }
 .blockr-sld-renderbtn .fa, .blockr-sld-renderbtn svg { font-size: 0.7rem; }
 
-.blockr-sld-gearbtn { width: 26px; height: 26px; }
-
-/* ---- settings band ------------------------------------------------- */
-
-/* blockr.dplyr's settings-band selectors (.blockr-settings / __title /
-   __grid / __field) -- the shared layer bound for blockr.ui -- so the band
-   matches every other gear band in the ecosystem. */
-.blockr-sld-panel .blockr-settings { display: none; position: relative;
-  margin: 0 0 10px;
-  border: 1px solid var(--blockr-color-border, #e5e7eb); border-radius: 8px;
-  padding: 12px 14px 16px; background: #fff; box-sizing: border-box; }
-.blockr-sld-panel .blockr-settings.blockr-settings--open { display: flex;
-  flex-wrap: wrap; align-items: flex-start; gap: 0 14px; }
-.blockr-sld-panel .blockr-settings--beak.blockr-settings--open::before {
-  content: ""; position: absolute; top: -6px; right: 13px;
-  width: 10px; height: 10px; background: #fff;
-  border-left: 1px solid var(--blockr-color-border, #e5e7eb);
-  border-top: 1px solid var(--blockr-color-border, #e5e7eb);
-  transform: rotate(45deg); }
-.blockr-sld-panel .blockr-settings__title { flex: 1 1 100%;
-  font-size: var(--blockr-font-size-xs, 0.75rem); font-weight: 500;
-  color: var(--blockr-color-text-muted, #6b7280); text-transform: uppercase;
-  letter-spacing: 0.05em; margin-bottom: 10px; }
-.blockr-sld-panel .blockr-settings__grid { flex: 1 1 100%; display: flex;
-  flex-wrap: wrap; align-items: flex-end; gap: 6px 12px; margin-bottom: 6px; }
-.blockr-sld-panel .blockr-settings__field { flex: 1 1 190px; min-width: 0;
-  display: flex; flex-direction: column; }
-.blockr-sld-panel .blockr-settings__field--full { flex: 1 1 100%; }
-.blockr-sld-panel .blockr-settings__field > label {
-  font-size: var(--blockr-font-size-xs, 0.75rem);
-  color: var(--blockr-grey-700, #374151); margin: 0 0 4px; }
-.blockr-sld-panel .blockr-settings__field .shiny-input-container {
-  margin: 0; width: 100% !important; }
-.blockr-sld-panel .blockr-settings__hint { font-size: 0.7rem;
-  color: var(--blockr-grey-400, #9ca3af); margin-top: 4px; }
-
 /* ---- picker: the block browser's search box ------------------------- */
 
 /* The field, the magnifier, the focus ring, the menu rows and the icon

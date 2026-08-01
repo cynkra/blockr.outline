@@ -470,7 +470,9 @@ test_that("state round-trips what the constructor was given", {
       expect_identical(state$slides(), c("audit", "plot"))
       expect_identical(state$title(), "Iris topline")
       expect_identical(state$format(), "html")
-      expect_identical(state$template(), "")
+      # The deck's whole state: no template. That is the deployment's, from
+      # getOption("blockr.outline.template").
+      expect_named(state, c("slides", "title", "format"))
     },
     args = list(board = blind_board_args(), update = reactiveVal())
   )

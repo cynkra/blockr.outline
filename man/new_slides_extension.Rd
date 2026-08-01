@@ -25,11 +25,12 @@ neither needs the quarto CLI on the machine. \code{"revealjs"}, the format
 string of the quarto render the HTML deck replaced, still restores as
 \code{"html"}.}
 
-\item{template}{Path to a pandoc reference document (\code{.pptx}) styling the
-PowerPoint render. \code{""} falls back to the app-level default,
-\code{getOption("blockr.outline.template")}, and then to the bundled
-widescreen deck. See \code{\link[=new_outline_extension]{new_outline_extension()}} for why the option is
-the right place for a house deck.}
+\item{template}{LEGACY, ignored. The reference deck is a property of the
+deployment, not of a board: it comes from
+\code{getOption("blockr.outline.template")} (an app sets it once, typically
+from \code{\link[blockr.theme:theme_template]{blockr.theme::theme_template()}}), falling back to the bundled
+widescreen deck. Accepted only so boards saved while the deck panel
+still offered a template field restore without error.}
 
 \item{...}{Forwarded to \code{\link[blockr.dock:extension]{blockr.dock::new_dock_extension()}}}
 }

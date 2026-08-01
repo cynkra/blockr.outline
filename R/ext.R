@@ -20,11 +20,12 @@
 #'   exhibit caption), `"#"`, `"##"` or `"###"` for a heading of that
 #'   level, `"none"` to omit them. A block title is a heading or a
 #'   caption, never both.
-#' @param template Path to a pandoc reference document (`.pptx` / `.docx`)
-#'   styling the corresponding render. `""` falls back to the app-level
-#'   default, `getOption("blockr.outline.template")` -- the place to declare
-#'   a house deck, since it also reaches boards saved before the app had one
-#'   (this argument is extension state and only ever reaches new boards).
+#' @param template LEGACY, ignored. The reference document is a property of
+#'   the deployment, not of a board: it comes from
+#'   `getOption("blockr.outline.template")` (an app sets it once, typically
+#'   from [blockr.theme::theme_template()]), falling back to the bundled
+#'   widescreen deck. Accepted only so boards saved while the gear still
+#'   offered a template field restore without error.
 #' @param ... Forwarded to [blockr.dock::new_dock_extension()]
 #'
 #' @return A dock extension object, to be passed in a board's `extensions`
@@ -68,7 +69,7 @@ new_outline_extension <- function(annotations = list(),
   blockr.dock::new_dock_extension(
     outline_ext_srv(
       annotations, block_order, title, stack_annotations,
-      stack_title_level, block_title_level, template
+      stack_title_level, block_title_level
     ),
     outline_ext_ui,
     name = "Outline",
@@ -323,39 +324,18 @@ outline_settings_band <- function(ns) {
           )
         )
       )
-    ),
-
-    div(class = "blockr-settings__title", "Template"),
-    div(
-      class = "blockr-settings__grid",
-      div(
-        class = "blockr-settings__field blockr-settings__field--full",
-        tags$label("Reference doc"),
-        # blockr.io's path picker (autocompleting, extension-filtered),
-        # not a bare text field. Its server half lives in the extension
-        # server; the dep ships with the UI. Called defensively because
-        # path_input_ui's signature has grown across blockr.io versions
-        # (`placeholder` is absent in older ones) -- pass only the
-        # arguments the installed version actually accepts.
-        io_call(
-          blockr.io::path_input_ui,
-          ns("otl_template"),
-          placeholder = "path to .pptx / .docx"
-        ),
-        div(
-          class = "blockr-settings__hint",
-          "A pandoc reference document styles the pptx / docx render."
-        )
-      )
     )
+
+    # No Template section. The reference doc styles every render of a
+    # deployment, so it is the app's to declare, not the reader's to type:
+    # see effective_template().
   )
 }
 
 outline_ext_srv <- function(annotations, block_order, title,
                             stack_annotations = list(),
                             stack_title_level = "#",
-                            block_title_level = "caption",
-                            template = "") {
+                            block_title_level = "caption") {
 
   function(id, board, update, session, parent, actions = NULL,
            visibility = NULL, ...) {
@@ -372,7 +352,6 @@ outline_ext_srv <- function(annotations, block_order, title,
         )
         rv_stack_level <- reactiveVal(coal(stack_title_level, "#"))
         rv_block_level <- reactiveVal(coal(block_title_level, "caption"))
-        rv_template <- reactiveVal(coal(template, ""))
         editing <- reactiveVal(NULL)
         # "Insert after X" intent: the id the add link was clicked on, and
         # the block ids last seen on the board. A new block must land where
@@ -734,7 +713,7 @@ outline_ext_srv <- function(annotations, block_order, title,
           )
         )
 
-        # Gear -> Headings / Template. Value-guarded so a no-op update
+        # Gear -> Headings. Value-guarded so a no-op update
         # (e.g. a re-render restoring the same choice) does not churn.
         #
         # ignoreInit is load-bearing, and the reason is not obvious. The two
@@ -750,9 +729,6 @@ outline_ext_srv <- function(annotations, block_order, title,
         # control, so the gear displays what is actually in effect; that
         # update re-delivers the input, this time not as init, and the
         # identical-guard makes it a no-op.
-        #
-        # `template` already had this treatment (see the onFlushed seed
-        # further down) -- these two selects were simply missed.
         observeEvent(input$otl_stack_level, {
           if (!identical(input$otl_stack_level, rv_stack_level())) {
             rv_stack_level(input$otl_stack_level)
@@ -776,41 +752,6 @@ outline_ext_srv <- function(annotations, block_order, title,
         updateSelectInput(
           session, "otl_block_level", selected = isolate(rv_block_level())
         )
-        tmpl_path <- io_call(
-          blockr.io::path_input_server,
-          "otl_template", mode = "file", extensions = c("pptx", "docx")
-        )
-        # ignoreInit for the same reason as the selects above, by a different
-        # route. path_input_server() reports "" until the DOM has echoed a
-        # path back, and the seed below only fires on flush -- so a plain
-        # observe() runs first, sees "", and wipes a constructor-supplied or
-        # restored template before the seed can land. That is why passing
-        # `template =` produced a report rendered against quarto's stock
-        # reference-doc instead of the one that was asked for. Skipping the
-        # initial read leaves state alone; a later change (including the user
-        # genuinely clearing the field) still propagates.
-        observeEvent(tmpl_path(), {
-          p <- coal(tmpl_path(), "")
-          if (!identical(p, isolate(rv_template()))) {
-            rv_template(p)
-          }
-        }, ignoreInit = TRUE, ignoreNULL = FALSE)
-        # path_input_ui takes no initial value, so seed the field once from
-        # the constructor / restored state (a demo default or a saved
-        # board's template). set-value fires the DOM input event, so
-        # tmpl_path() picks it up and rv_template re-syncs.
-        if (nzchar(coal(template, ""))) {
-          session$onFlushed(
-            function() {
-              session$sendCustomMessage(
-                "blockr-path-set-value",
-                list(id = session$ns("otl_template-path_text"),
-                     value = template)
-              )
-            },
-            once = TRUE
-          )
-        }
 
         # Which blocks are ACTIVE in the outline: the ones whose panel is a
         # member of the active dock view. Activation is expressed as view
@@ -2159,7 +2100,7 @@ outline_ext_srv <- function(annotations, block_order, title,
                 input$code_render_format,
                 file,
                 rv_title(),
-                template = effective_template(rv_template()),
+                template = effective_template(),
                 sects = sections()
               )
             )
@@ -2180,8 +2121,7 @@ outline_ext_srv <- function(annotations, block_order, title,
             title = rv_title,
             stack_annotations = rv_stack_ann,
             stack_title_level = rv_stack_level,
-            block_title_level = rv_block_level,
-            template = rv_template
+            block_title_level = rv_block_level
           )
         )
       }

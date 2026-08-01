@@ -35,11 +35,12 @@ exhibit caption), \code{"#"}, \code{"##"} or \code{"###"} for a heading of that
 level, \code{"none"} to omit them. A block title is a heading or a
 caption, never both.}
 
-\item{template}{Path to a pandoc reference document (\code{.pptx} / \code{.docx})
-styling the corresponding render. \code{""} falls back to the app-level
-default, \code{getOption("blockr.outline.template")} -- the place to declare
-a house deck, since it also reaches boards saved before the app had one
-(this argument is extension state and only ever reaches new boards).}
+\item{template}{LEGACY, ignored. The reference document is a property of
+the deployment, not of a board: it comes from
+\code{getOption("blockr.outline.template")} (an app sets it once, typically
+from \code{\link[blockr.theme:theme_template]{blockr.theme::theme_template()}}), falling back to the bundled
+widescreen deck. Accepted only so boards saved while the gear still
+offered a template field restore without error.}
 
 \item{...}{Forwarded to \code{\link[blockr.dock:extension]{blockr.dock::new_dock_extension()}}}
 }

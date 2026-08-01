@@ -2,18 +2,18 @@
 # state, and must survive the UI's initial input delivery.
 #
 # WHY THIS FILE EXISTS
-# `new_outline_extension(block_title_level = "##", template = "x.pptx")`
-# accepted both arguments, stored them, and then discarded them one flush
-# later: outline_settings_band() hardcodes `selected` on its two selectInputs
-# (it only receives `ns`, so it cannot see the arguments), Shiny delivers that
-# hardcoded default at session start, and the sync observers overwrote state
-# with it. Programmatic boards silently got "caption" and no template, and a
-# restored board lost whatever the user had chosen.
+# `new_outline_extension(block_title_level = "##")` accepted the argument,
+# stored it, and then discarded it one flush later: outline_settings_band()
+# hardcodes `selected` on its two selectInputs (it only receives `ns`, so it
+# cannot see the arguments), Shiny delivers that hardcoded default at session
+# start, and the sync observers overwrote state with it. Programmatic boards
+# silently got "caption", and a restored board lost whatever the user had
+# chosen.
 #
 # The existing state tests did not catch it for two compounding reasons, and
 # the second is the interesting one:
 #
-#   1. They only ever exercised three of the seven arguments (annotations,
+#   1. They only ever exercised three of the arguments (annotations,
 #      block_order, title), passing the rest positionally as defaults.
 #   2. More fundamentally, testServer() renders no UI. With no UI there is no
 #      hardcoded default to deliver, so the clobber cannot happen and the
@@ -26,8 +26,8 @@
 # really does. Any future "UI default overwrites constructor argument" bug in
 # this extension is caught by that pattern and by nothing weaker.
 
-# Non-default values for all seven arguments, so nothing can pass by
-# coinciding with a default.
+# Non-default values for every argument, so nothing can pass by coinciding
+# with a default.
 otl_srv_all_args <- function() {
   outline_ext_srv(
     annotations = list(data = list(description = "hi", report = FALSE)),
@@ -35,8 +35,7 @@ otl_srv_all_args <- function() {
     title = "My report",
     stack_annotations = list(prep = list(description = "prep stack")),
     stack_title_level = "##",
-    block_title_level = "###",
-    template = "/tmp/ref.pptx"
+    block_title_level = "###"
   )
 }
 
@@ -56,7 +55,6 @@ test_that("every constructor argument surfaces in state", {
       )
       expect_identical(st$stack_title_level(), "##")
       expect_identical(st$block_title_level(), "###")
-      expect_identical(st$template(), "/tmp/ref.pptx")
     },
     args = list(board = otl_board_args(), update = reactiveVal())
   )
@@ -83,7 +81,6 @@ test_that("the arguments survive the startup flush", {
 
       expect_identical(st$stack_title_level(), "##")
       expect_identical(st$block_title_level(), "###")
-      expect_identical(st$template(), "/tmp/ref.pptx")
     },
     args = list(board = otl_board_args(), update = reactiveVal())
   )
@@ -147,7 +144,6 @@ test_that("defaults still apply when no arguments are given", {
       st <- session$getReturned()$state
       expect_identical(st$stack_title_level(), "#")
       expect_identical(st$block_title_level(), "caption")
-      expect_identical(st$template(), "")
     },
     args = list(board = otl_board_args(), update = reactiveVal())
   )

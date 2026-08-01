@@ -10,7 +10,7 @@ test_that("the server exposes every state reactive", {
         st,
         c(
           "annotations", "block_order", "title", "stack_annotations",
-          "stack_title_level", "block_title_level", "template"
+          "stack_title_level", "block_title_level"
         )
       )
       expect_true(all(vapply(st, is.function, logical(1L))))

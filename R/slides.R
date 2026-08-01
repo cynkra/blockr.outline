@@ -34,11 +34,12 @@
 #'   neither needs the quarto CLI on the machine. `"revealjs"`, the format
 #'   string of the quarto render the HTML deck replaced, still restores as
 #'   `"html"`.
-#' @param template Path to a pandoc reference document (`.pptx`) styling the
-#'   PowerPoint render. `""` falls back to the app-level default,
-#'   `getOption("blockr.outline.template")`, and then to the bundled
-#'   widescreen deck. See [new_outline_extension()] for why the option is
-#'   the right place for a house deck.
+#' @param template LEGACY, ignored. The reference deck is a property of the
+#'   deployment, not of a board: it comes from
+#'   `getOption("blockr.outline.template")` (an app sets it once, typically
+#'   from [blockr.theme::theme_template()]), falling back to the bundled
+#'   widescreen deck. Accepted only so boards saved while the deck panel
+#'   still offered a template field restore without error.
 #' @param ... Forwarded to [blockr.dock::new_dock_extension()]
 #'
 #' @return A dock extension object, to be passed in a board's `extensions`
@@ -71,7 +72,7 @@ new_slides_extension <- function(slides = character(),
                                  ...) {
 
   blockr.dock::new_dock_extension(
-    slides_ext_srv(slides, title, format, template),
+    slides_ext_srv(slides, title, format),
     slides_ext_ui,
     name = "Slides",
     description = paste(
@@ -140,31 +141,14 @@ slides_ext_ui <- function(id, board, ...) {
             class = "blockr-sld-renderbtn"
           ),
           downloadLink(ns("sld_dl"), label = NULL, style = "display: none;")
-        ),
-        tags$button(
-          id = ns("sld_gear"),
-          type = "button",
-          class = "blockr-gear-btn blockr-sld-gearbtn",
-          title = "Deck settings",
-          HTML(paste0(
-            "<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' ",
-            "fill='currentColor' viewBox='0 0 16 16'><path d='M9.405 1.05c-",
-            ".413-1.4-2.397-1.4-2.81 0l-.1.34a1.464 1.464 0 0 1-2.105.872l-",
-            ".31-.17c-1.283-.698-2.686.705-1.987 1.987l.169.311c.446.82.023 ",
-            "1.841-.872 2.105l-.34.1c-1.4.413-1.4 2.397 0 2.81l.34.1a1.464 ",
-            "1.464 0 0 1 .872 2.105l-.17.31c-.698 1.283.705 2.686 1.987 ",
-            "1.987l.311-.169a1.464 1.464 0 0 1 2.105.872l.1.34c.413 1.4 ",
-            "2.397 1.4 2.81 0l.1-.34a1.464 1.464 0 0 1 2.105-.872l.31.17c",
-            "1.283.698 2.686-.705 1.987-1.987l-.169-.311a1.464 1.464 0 0 1 ",
-            ".872-2.105l.34-.1c1.4-.413 1.4-2.397 0-2.81l-.34-.1a1.464 ",
-            "1.464 0 0 1-.872-2.105l.17-.31c.698-1.283-.705-2.686-1.987-",
-            "1.987l-.311.169a1.464 1.464 0 0 1-2.105-.872zM8 10.93a2.929 ",
-            "2.929 0 1 1 0-5.86 2.929 2.929 0 0 1 0 5.858z'/></svg>"
-          ))
         )
+        # No gear. The deck's one settable property used to be the reference
+        # template, and that is not the user's to set here: it styles every
+        # download of a deployment, so it comes from the app (see
+        # effective_template()). With nothing left to configure, a gear would
+        # open on an empty band.
       )
     ),
-    slides_settings_band(ns),
     # The picker: the outline's search-and-add box, which is itself the
     # block browser's. Same classes, hence the same magnifier, focus ring,
     # rows and icon tiles as every other "find a block" control in the app,
@@ -193,33 +177,6 @@ slides_ext_ui <- function(id, board, ...) {
   )
 }
 
-slides_settings_band <- function(ns) {
-  div(
-    class = "blockr-settings blockr-settings--beak",
-    id = ns("sld_settings"),
-    div(class = "blockr-settings__title", "Template"),
-    div(
-      class = "blockr-settings__grid",
-      div(
-        class = "blockr-settings__field blockr-settings__field--full",
-        tags$label("Reference deck"),
-        io_call(
-          blockr.io::path_input_ui,
-          ns("sld_template"),
-          placeholder = "path to .pptx"
-        ),
-        div(
-          class = "blockr-settings__hint",
-          paste(
-            "A PowerPoint file whose masters, layouts, fonts and slide size",
-            "the download is built on."
-          )
-        )
-      )
-    )
-  )
-}
-
 slides_dep <- function() {
   htmlDependency(
     "blockr-slides",
@@ -235,14 +192,9 @@ slides_dep <- function() {
 slides_js <- function(ns) {
 
   consts <- sprintf(
-    paste(
-      "var ACT = '%s', MOVE = '%s', GEAR = '%s', SETTINGS = '%s',",
-      "DL = '%s', ADD = '%s', ROOT = '%s';"
-    ),
+    "var ACT = '%s', MOVE = '%s', DL = '%s', ADD = '%s', ROOT = '%s';",
     ns("sld_act"),
     ns("sld_move"),
-    ns("sld_gear"),
-    ns("sld_settings"),
     ns("sld_dl"),
     ns("sld_add"),
     ns("sld_root")
@@ -255,18 +207,6 @@ slides_js <- function(ns) {
       // Delegated from document so the list can be re-rendered freely --
       // rows are markup, never Shiny inputs, so there is nothing to rebind.
       document.addEventListener('click', function(e) {
-
-        var gear = e.target.closest ? e.target.closest('#' + GEAR) : null;
-        if (gear) {
-          var band = document.getElementById(SETTINGS);
-          if (band) {
-            gear.classList.toggle(
-              'blockr-gear-active',
-              band.classList.toggle('blockr-settings--open')
-            );
-          }
-          return;
-        }
 
         var btn = e.target.closest ? e.target.closest('.blockr-sld-act') : null;
         if (!btn) return;
@@ -592,7 +532,7 @@ slides_js <- function(ns) {
   )))
 }
 
-slides_ext_srv <- function(slides, title, format = "pptx", template = "") {
+slides_ext_srv <- function(slides, title, format = "pptx") {
 
   function(id, board, update, session, parent, actions = NULL,
            visibility = NULL, ...) {
@@ -611,7 +551,6 @@ slides_ext_srv <- function(slides, title, format = "pptx", template = "") {
             "pptx"
           }
         )
-        rv_template <- reactiveVal(coal(template, ""))
 
         # ---- the board, as names ------------------------------------
         #
@@ -840,35 +779,6 @@ slides_ext_srv <- function(slides, title, format = "pptx", template = "") {
         }, ignoreInit = TRUE)
 
         updateSelectInput(session, "sld_format", selected = isolate(rv_format()))
-
-        tmpl_path <- io_call(
-          blockr.io::path_input_server,
-          "sld_template", mode = "file", extensions = "pptx"
-        )
-
-        # ignoreInit for the reason spelled out in the outline's copy:
-        # path_input_server() reports "" until the DOM echoes a path back,
-        # and a plain observe() would run first and wipe a constructor-
-        # supplied or restored template before the seed below lands.
-        observeEvent(tmpl_path(), {
-          p <- coal(tmpl_path(), "")
-          if (!identical(p, isolate(rv_template()))) {
-            rv_template(p)
-          }
-        }, ignoreInit = TRUE, ignoreNULL = FALSE)
-
-        if (nzchar(coal(template, ""))) {
-          session$onFlushed(
-            function() {
-              session$sendCustomMessage(
-                "blockr-path-set-value",
-                list(id = session$ns("sld_template-path_text"),
-                     value = template)
-              )
-            },
-            once = TRUE
-          )
-        }
 
         # ---- the projection, on demand -------------------------------
         #
@@ -1128,7 +1038,7 @@ slides_ext_srv <- function(slides, title, format = "pptx", template = "") {
                 rv_format(),
                 file,
                 rv_title(),
-                template = effective_template(rv_template()),
+                template = effective_template(),
                 sects = sections()
               )
             )
@@ -1144,8 +1054,7 @@ slides_ext_srv <- function(slides, title, format = "pptx", template = "") {
           state = list(
             slides = rv_slides,
             title = rv_title,
-            format = rv_format,
-            template = rv_template
+            format = rv_format
           )
         )
       }
