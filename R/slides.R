@@ -37,7 +37,7 @@
 #' @param template LEGACY, ignored. The reference deck is a property of the
 #'   deployment, not of a board: it comes from
 #'   `getOption("blockr.outline.template")` (an app sets it once, typically
-#'   from [blockr.theme::theme_template()]), falling back to the bundled
+#'   from `blockr.theme::theme_template()`), falling back to the bundled
 #'   widescreen deck. Accepted only so boards saved while the deck panel
 #'   still offered a template field restore without error.
 #' @param ... Forwarded to [blockr.dock::new_dock_extension()]
@@ -164,7 +164,7 @@ slides_ext_ui <- function(id, board, ...) {
       tags$input(
         type = "search",
         class = "blockr-block-browser-search blockr-sld-searchinput",
-        placeholder = "Search or add a block…",
+        placeholder = "Search or add a block\u2026",
         `aria-label` = "Search blocks",
         autocomplete = "off",
         spellcheck = "false"
@@ -975,7 +975,7 @@ slides_ext_srv <- function(slides, title, format = "pptx") {
               showNotification(
                 sprintf(
                   paste(
-                    "Evaluating %d block%s… the download starts when",
+                    "Evaluating %d block%s\u2026 the download starts when",
                     "the deck is ready."
                   ),
                   length(pending),

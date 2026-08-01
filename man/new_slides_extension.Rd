@@ -28,7 +28,7 @@ string of the quarto render the HTML deck replaced, still restores as
 \item{template}{LEGACY, ignored. The reference deck is a property of the
 deployment, not of a board: it comes from
 \code{getOption("blockr.outline.template")} (an app sets it once, typically
-from \code{\link[blockr.theme:theme_template]{blockr.theme::theme_template()}}), falling back to the bundled
+from \code{blockr.theme::theme_template()}), falling back to the bundled
 widescreen deck. Accepted only so boards saved while the deck panel
 still offered a template field restore without error.}
 

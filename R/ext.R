@@ -23,7 +23,7 @@
 #' @param template LEGACY, ignored. The reference document is a property of
 #'   the deployment, not of a board: it comes from
 #'   `getOption("blockr.outline.template")` (an app sets it once, typically
-#'   from [blockr.theme::theme_template()]), falling back to the bundled
+#'   from `blockr.theme::theme_template()`), falling back to the bundled
 #'   widescreen deck. Accepted only so boards saved while the gear still
 #'   offered a template field restore without error.
 #' @param ... Forwarded to [blockr.dock::new_dock_extension()]

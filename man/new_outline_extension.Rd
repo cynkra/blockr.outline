@@ -38,7 +38,7 @@ caption, never both.}
 \item{template}{LEGACY, ignored. The reference document is a property of
 the deployment, not of a board: it comes from
 \code{getOption("blockr.outline.template")} (an app sets it once, typically
-from \code{\link[blockr.theme:theme_template]{blockr.theme::theme_template()}}), falling back to the bundled
+from \code{blockr.theme::theme_template()}), falling back to the bundled
 widescreen deck. Accepted only so boards saved while the gear still
 offered a template field restore without error.}
 

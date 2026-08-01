@@ -18,8 +18,14 @@ test_that("a failed render names the cause instead of the wrapper's noise", {
   # PLACE OF the render error and the browser got a bare "an error has
   # occurred" with the real cause nowhere. Called here with no Shiny session
   # at all, which is the same shape.
+  # The failing chunk goes to BOTH renderers: render_report() reads `qmd_txt`
+  # when quarto is usable and `spin_txt` when it falls back to rmarkdown. With
+  # spin_txt empty the fallback renders a title and nothing else, succeeds, and
+  # the test asserts against TRUE -- which is what it did on a runner whose
+  # quarto CLI the R session could not see.
+  body <- "stop(\"the actual cause\")"
   err <- tryCatch(
-    render_report(qmd_doc("stop(\"the actual cause\")"), "", "html",
+    render_report(qmd_doc(body), body, "html",
                   tempfile(fileext = ".html"), "T"),
     error = conditionMessage
   )

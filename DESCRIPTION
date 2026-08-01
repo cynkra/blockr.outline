@@ -20,7 +20,8 @@ Encoding: UTF-8
 Remotes:
     BristolMyersSquibb/blockr.core,
     BristolMyersSquibb/blockr.dock,
-    BristolMyersSquibb/blockr.dag
+    BristolMyersSquibb/blockr.dag,
+    BristolMyersSquibb/blockr.viz
 Imports:
     blockr.core,
     blockr.dock,
@@ -41,6 +42,7 @@ Suggests:
     base64enc,
     blockr.viz (>= 0.2.49),
     blockr.dag,
+    ggplot2,
     shinytest2,
     chromote,
     xml2,
