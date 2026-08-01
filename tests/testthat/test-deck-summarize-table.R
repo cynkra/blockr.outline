@@ -85,3 +85,35 @@ test_that("the same table reaches an HTML slide as the app's own markup", {
   # other dependency the deck carries.
   expect_false(grepl("<script[^>]+src=", txt))
 })
+
+test_that("a chart is placed by the same method its own download calls", {
+  skip_if_not_installed("officer")
+  skip_if_not_installed("ggplot2")
+  skip_if_not_installed("blockr.viz")
+  skip_if_not(!is.null(pptx_exhibit_method("gg")))
+
+  board <- blockr.core::new_board(
+    blocks = c(
+      data = blockr.core::new_dataset_block("iris"),
+      ch = blockr.viz::new_chart_block(chart_type = "bar", group = "Species",
+                                       func = "count", block_name = "Chart")
+    ),
+    links = blockr.core::links(from = "data", to = "ch")
+  )
+  exprs <- structure(
+    list(data = quote(datasets::iris), ch = quote(identity(data))),
+    pending = character()
+  )
+  s <- slide_sections(exprs, board, slides = "ch")
+
+  # The chart rebuilds itself as a ggplot rather than printing its data.
+  expect_match(sect_output(s, which(s$ids == "ch")), "ggplot2::ggplot",
+               fixed = TRUE)
+
+  f <- withr::local_tempfile(fileext = ".pptx")
+  render_pptx_officer(s, f, "Deck", template = NULL, title_slide = FALSE)
+
+  files <- utils::unzip(f, list = TRUE)$Name
+  expect_true(any(grepl("^ppt/media/", files)))
+  expect_identical(length(officer::read_pptx(f)), 1L)
+})

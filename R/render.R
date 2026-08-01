@@ -1791,12 +1791,31 @@ deck_pageable <- function(x) {
     return(!is.null(attr(x, "exhibit_data")))
   }
 
-  if (inherits(x, c("gg", "ggplot", "patchwork", "trellis", "gt_tbl",
-                    "gt_group", "htmlwidget"))) {
+  # A ggplot goes through the same seam, when blockr.viz has a method for it.
+  # Not because a plot needs paging -- it is one slide by definition -- but
+  # because the chart block's own PowerPoint download calls that method, and a
+  # chart placed here by different code would be a different picture on the
+  # slide than the one the block hands you. One placement rule, one result.
+  if (inherits(x, c("gg", "ggplot"))) {
+    return(!is.null(pptx_exhibit_method("gg")))
+  }
+
+  if (inherits(x, c("patchwork", "trellis", "gt_tbl", "gt_group",
+                    "htmlwidget"))) {
     return(FALSE)
   }
 
   is.data.frame(x)
+}
+
+# Does blockr.viz carry a pptx_add_exhibit() method for this class? Asked
+# rather than assumed: the method arrived in blockr.viz 0.2.54, and an older
+# one installed beside this package must keep placing plots the way it did.
+pptx_exhibit_method <- function(cls) {
+  tryCatch(
+    utils::getS3method("pptx_add_exhibit", cls, envir = asNamespace("blockr.viz")),
+    error = function(e) NULL
+  )
 }
 
 # Place one exhibit on the current slide at its intended coordinates.

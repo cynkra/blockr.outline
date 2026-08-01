@@ -296,16 +296,29 @@ test_that("a table longer than a slide is paged, not run off the bottom", {
   expect_gt(length(officer::read_pptx(f)), 3L)
 })
 
-test_that("a plot slide is placed whole, not handed to the paginator", {
+test_that("a plot slide is placed whole, by the renderer its block downloads", {
   skip_if_not_installed("officer")
   skip_if_not_installed("ggplot2")
 
   p <- ggplot2::ggplot(datasets::iris, ggplot2::aes(Sepal.Length)) +
     ggplot2::geom_histogram(bins = 5)
 
-  expect_false(deck_pageable(p))
-  expect_null(deck_add_table(officer::read_pptx(), p, "P", NULL, NULL, NULL))
-  # ...and a flextable nobody annotated cannot be re-cut either.
+  # A plot is one slide by definition -- nothing to page. It goes through
+  # pptx_add_exhibit() anyway, because that is the method the chart block's
+  # own PowerPoint download calls: placed here by different code, the deck
+  # would show a different picture than the file the block hands you.
+  if (is.null(pptx_exhibit_method("gg"))) {
+    # An older blockr.viz without the method: placed by this package, as before.
+    expect_false(deck_pageable(p))
+    expect_null(deck_add_table(officer::read_pptx(), p, "P", NULL, NULL, NULL))
+  } else {
+    expect_true(deck_pageable(p))
+    out <- deck_add_table(officer::read_pptx(), p, "P", NULL, NULL, NULL)
+    expect_false(is.null(out))
+    expect_identical(out$n, 1L)
+  }
+
+  # A flextable nobody annotated cannot be re-cut.
   expect_false(deck_pageable(flextable::flextable(head(datasets::iris))))
   # A frame is the paginator's own input, so that one goes to it.
   expect_true(deck_pageable(datasets::iris))
