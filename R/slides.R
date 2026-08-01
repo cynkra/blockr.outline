@@ -336,8 +336,20 @@ slides_js <- function(ns) {
       // The rows ARE the block browser's rows: same classes, same
       // stylesheet, so picking a block looks the same everywhere in the
       // app and this file owns no row styling.
+      // The catalogue describes the BOARD (names, icons, descriptions) and
+      // moves only when the board does; which blocks are in the deck is a
+      // separate, tiny message, because that flips on every add and the
+      // catalogue costs tens of KB to resend. Icon markup is shipped once
+      // per block class and referenced by key for the same reason.
       var catalog = [];
+      var icons = {};
+      var picked = [];
+      var pickedAt = {};
       var hot = 0;
+
+      function isPicked(b) {
+        return pickedAt[b.id] !== undefined;
+      }
 
       function panel() {
         return document.getElementById(ROOT);
@@ -382,7 +394,7 @@ slides_js <- function(ns) {
           esc(b.id) + '\" data-idx=\"' + idx + '\">' +
           '<div class=\"blockr-block-browser-card-header\">' +
             '<span class=\"blockr-block-browser-card-icon\">' +
-              (b.icon || '') + '</span>' +
+              (icons[b.icon_key] || '') + '</span>' +
             '<div class=\"blockr-block-browser-card-body\">' +
               '<div class=\"blockr-block-browser-card-titles\">' +
                 '<span class=\"blockr-block-browser-card-name\">' +
@@ -391,13 +403,27 @@ slides_js <- function(ns) {
                   '<span class=\"blockr-block-browser-card-package\">' +
                   esc(b.kind) + '</span>' : '') +
                 '<span class=\"blockr-sld-optact\">' +
-                  (b.picked ? 'In the deck' : 'Add') + '</span>' +
+                  (isPicked(b) ? 'In the deck' : 'Add') + '</span>' +
               '</div>' +
               '<p class=\"blockr-sld-optdesc\">' +
                 (b.desc ? mark(b.desc, q) : esc(b.id)) + '</p>' +
             '</div>' +
           '</div>' +
         '</div>';
+      }
+      // The menu's two sections, and the flat order the keyboard index and
+      // the click index both count in. ONE definition: the renderer and the
+      // chooser used to sort independently, which was safe only while the
+      // server happened to send the catalogue unpicked-first.
+      function orderedHits(q) {
+        var hits = searchHits(q);
+        var out = hits.filter(function(b) { return !isPicked(b); });
+        // Deck order, matching the rows below -- the catalogue no longer
+        // carries it, since it would change on every add.
+        var inn = hits.filter(isPicked).sort(function(a, b) {
+          return pickedAt[a.id] - pickedAt[b.id];
+        });
+        return {out: out, inn: inn, all: out.concat(inn)};
       }
       function sectionHtml(title, items, q, start) {
         if (!items.length) return '';
@@ -424,14 +450,13 @@ slides_js <- function(ns) {
         if (!menu) return;
 
         var q = searchQuery();
-        var all = searchHits(q);
-        var out = all.filter(function(b) { return !b.picked; });
-        var inn = all.filter(function(b) { return b.picked; });
+        var split = orderedHits(q);
+        var out = split.out, inn = split.inn, all = split.all;
         if (hot >= all.length) hot = Math.max(0, all.length - 1);
 
         var count = root.querySelector('.blockr-sld-searchcount');
         if (count) {
-          var pool = catalog.filter(function(b) { return !b.picked; }).length;
+          var pool = catalog.filter(function(b) { return !isPicked(b); }).length;
           count.textContent = pool ? pool + ' not in the deck' : '';
         }
         root.classList.toggle('has-value', !!q);
@@ -470,20 +495,16 @@ slides_js <- function(ns) {
         row.classList.add('blockr-sld-flash');
       }
       function searchChoose(idx) {
-        var q = searchQuery();
-        var all = searchHits(q);
-        var out = all.filter(function(b) { return !b.picked; });
-        var inn = all.filter(function(b) { return b.picked; });
-        var b = out.concat(inn)[idx];
+        var b = orderedHits(searchQuery()).all[idx];
         if (!b) return;
-        if (b.picked) {
+        if (isPicked(b)) {
           searchClose();
           var inp = searchInput();
           if (inp) inp.blur();
           gotoRow(b.id);
           return;
         }
-        // Add: the server appends the slide and pushes a new catalogue,
+        // Add: the server appends the slide and pushes the new picked set,
         // which re-renders the menu with the entry moved to the second
         // group.
         Shiny.setInputValue(ADD, b.id, {priority: 'event'});
@@ -491,6 +512,18 @@ slides_js <- function(ns) {
 
       Shiny.addCustomMessageHandler('blockr-slides-catalog', function(msg) {
         catalog = msg.items || [];
+        icons = msg.icons || {};
+        renderMenu();
+      });
+
+      // Which blocks are in the deck, and in what order. Its own message:
+      // this flips on every add, and re-sending the catalogue to say so
+      // meant resending every name, description and icon with it.
+      Shiny.addCustomMessageHandler('blockr-slides-picked', function(msg) {
+        picked = msg.ids || [];
+        if (typeof picked === 'string') picked = [picked];
+        pickedAt = {};
+        picked.forEach(function(id, i) { pickedAt[id] = i; });
         renderMenu();
       });
 
@@ -636,22 +669,31 @@ slides_ext_srv <- function(slides, title, format = "pptx", template = "") {
         # its projection (`board_shape`, R/ext.R).
         catalog_sig <- NULL
 
+        # The catalogue describes the BOARD, and nothing in it depends on
+        # the deck: which blocks are picked (and in what order) rides in its
+        # own message below. It used to be a field on every entry, plus the
+        # entry ORDER, so adding one slide resent the whole array --
+        # every name, description and icon -- to say one flag had moved.
+        # Icon markup is shared by block class for the same reason: inline
+        # SVG is up to 1.4KB and a board repeats each of them per block.
         observe(
           {
             meta <- block_meta()
-            picked <- rv_slides()
-            ids <- c(setdiff(names(meta), picked), picked)
+            ids <- names(meta)
+            tbl <- icon_key_table(
+              chr_ply(ids, function(i) na_blank(meta[[i]]$icon))
+            )
 
             items <- lapply(
-              ids,
-              function(i) {
+              seq_along(ids),
+              function(k) {
+                i <- ids[[k]]
                 list(
                   id = i,
                   name = coal(na_blank(meta[[i]]$name), i),
-                  icon = na_blank(meta[[i]]$icon),
+                  icon_key = tbl$keys[[k]],
                   kind = coal(meta[[i]]$kind, ""),
-                  desc = coal(meta[[i]]$desc, ""),
-                  picked = i %in% picked
+                  desc = coal(meta[[i]]$desc, "")
                 )
               }
             )
@@ -660,9 +702,19 @@ slides_ext_srv <- function(slides, title, format = "pptx", template = "") {
               catalog_sig <<- items
               session$sendCustomMessage(
                 "blockr-slides-catalog",
-                list(items = items)
+                list(items = items, icons = tbl$icons)
               )
             }
+          }
+        )
+
+        # The deck: a list of ids, pushed on every change. Tens of bytes.
+        observe(
+          {
+            session$sendCustomMessage(
+              "blockr-slides-picked",
+              list(ids = as.list(rv_slides()))
+            )
           }
         )
 

@@ -695,6 +695,39 @@ desc_oneline <- function(x) {
   gsub("\\s+", " ", trimws(commonmark::markdown_text(x, extensions = TRUE)))
 }
 
+# Icons, shared by the block class that drew them.
+#
+# `block_icon_html()` is an inline SVG -- 500 to 1400 bytes -- and it is a
+# property of the block's CLASS, so a board of eighty blocks over a dozen
+# types shipped the same dozen pictures eighty times. Both search catalogues
+# send this table once and reference it per entry, which is most of their
+# payload: 54KB down to 16KB at eighty blocks. Keys are positional, so they
+# are stable for a given catalogue and mean nothing outside it.
+#
+# @param html Character vector of icon markup, `NA` where a block has none.
+# @return `list(keys, icons)` -- one key per input (empty string for none)
+#   and the distinct markup, named by key.
+icon_key_table <- function(html) {
+
+  html <- ifelse(is.na(html), "", as.character(html))
+  uniq <- unique(html[nzchar(html)])
+
+  # A board whose blocks all lack icons has nothing to key. Guarded rather
+  # than left to fall through: `paste0("i", integer(0))` is "i", not
+  # character(0), so the table would come back with one phantom entry.
+  if (!length(uniq)) {
+    return(list(keys = rep("", length(html)), icons = list()))
+  }
+
+  lookup <- stats::setNames(paste0("i", seq_along(uniq)), uniq)
+  keys <- ifelse(nzchar(html), unname(lookup[html]), "")
+
+  list(
+    keys = keys,
+    icons = stats::setNames(as.list(uniq), unname(lookup))
+  )
+}
+
 # The search catalogue: one entry per board block, the listed ones first
 # and each group in document order. The search box is a single control over
 # the whole board -- a listed block is a "go to", an unlisted one an "add"
@@ -702,12 +735,17 @@ desc_oneline <- function(x) {
 # block the document runs without showing: an ancestor of a reported block,
 # listed as an `#| include: false` row. Switching it on only makes its
 # output visible, it was going to be evaluated either way.
+#
+# Entries carry an icon KEY into the `icons` table beside them (see
+# icon_key_table), never the markup itself.
 outline_catalog <- function(sects, listed) {
 
   is_listed <- sects$ids %in% listed
   ord <- c(which(is_listed), which(!is_listed))
 
-  lapply(
+  tbl <- icon_key_table(sects$icons)
+
+  items <- lapply(
     ord,
     function(i) {
       # `[[` throughout: names / icons / descriptions are NAMED vectors, and
@@ -715,7 +753,7 @@ outline_catalog <- function(sects, listed) {
       list(
         id = sects$ids[[i]],
         name = sects$names[[i]],
-        icon = na_blank(sects$icons[[i]]),
+        icon_key = tbl$keys[[i]],
         chapter = na_blank(sects$stack_names[[i]]),
         desc = desc_oneline(sects$descriptions[[i]]),
         listed = is_listed[[i]],
@@ -723,6 +761,8 @@ outline_catalog <- function(sects, listed) {
       )
     }
   )
+
+  list(items = items, icons = tbl$icons)
 }
 
 # Narrow a sections projection to the ids the outline LISTS (the export

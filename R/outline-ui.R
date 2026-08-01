@@ -252,7 +252,11 @@ outline_js <- function(ns) {
       // second line is the DESCRIPTION rather than the package name (on a
       // report board that is what tells two similar tables apart), and the
       // package pill carries the \"runs\" marker instead.
+      // The icon markup, keyed by block class and shipped once beside the
+      // catalogue: an inline SVG is up to 1.4KB and a board repeats each of
+      // them once per block of that type.
       var catalog = [];
+      var icons = {};
       var hot = 0;
 
       function searchRoot() {
@@ -297,7 +301,7 @@ outline_js <- function(ns) {
           (b.listed ? '1' : '0') + '\">' +
           '<div class=\"blockr-block-browser-card-header\">' +
             '<span class=\"blockr-block-browser-card-icon\">' +
-              (b.icon || '') + '</span>' +
+              (icons[b.icon_key] || '') + '</span>' +
             '<div class=\"blockr-block-browser-card-body\">' +
               '<div class=\"blockr-block-browser-card-titles\">' +
                 '<span class=\"blockr-block-browser-card-name\">' +
@@ -409,6 +413,7 @@ outline_js <- function(ns) {
 
       Shiny.addCustomMessageHandler('blockr-outline-catalog', function(msg) {
         catalog = msg.items || [];
+        icons = msg.icons || {};
         renderMenu();
       });
 

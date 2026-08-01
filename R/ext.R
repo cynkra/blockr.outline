@@ -1019,9 +1019,9 @@ outline_ext_srv <- function(annotations, block_order, title,
         )
 
         # The search menu is filled client-side from this payload. Pushed
-        # whole rather than diffed: it is one small array (id, name, icon,
-        # chapter, one description line per block) and it only moves when
-        # the projection does.
+        # whole rather than diffed: it is one small array (id, name, icon
+        # key, chapter, one description line per block) plus the icon table
+        # those keys point into, and it only moves when the projection does.
         observe(
           {
             cat <- catalog_store()
@@ -1029,7 +1029,7 @@ outline_ext_srv <- function(annotations, block_order, title,
 
             session$sendCustomMessage(
               "blockr-outline-catalog",
-              list(items = cat)
+              list(items = cat$items, icons = cat$icons)
             )
           }
         )

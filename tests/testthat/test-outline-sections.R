@@ -162,7 +162,8 @@ test_that("the catalogue puts listed blocks first and flags the pool", {
     )
   )
 
-  cat <- outline_catalog(s, listed = "sub")
+  full <- outline_catalog(s, listed = "sub")
+  cat <- full$items
 
   expect_identical(
     vapply(cat, `[[`, character(1L), "id"), c("sub", "data", "head")
@@ -170,6 +171,15 @@ test_that("the catalogue puts listed blocks first and flags the pool", {
   expect_identical(
     vapply(cat, `[[`, logical(1L), "listed"), c(TRUE, FALSE, FALSE)
   )
+
+  # Icons ride in a table beside the entries, keyed by block class: the
+  # markup is an inline SVG, and a board repeats each of them once per
+  # block of that type.
+  expect_true(all(
+    vapply(cat, `[[`, character(1L), "icon_key") %in%
+      c("", names(full$icons))
+  ))
+  expect_false(any(grepl("<svg", unlist(cat), fixed = TRUE)))
 
   # `data` is excluded but `sub` (reported) needs it, so it runs anyway;
   # `head` is excluded and nothing needs it.
@@ -186,6 +196,23 @@ test_that("the catalogue puts listed blocks first and flags the pool", {
   expect_identical(
     Filter(function(e) identical(e$id, "sub"), cat)[[1L]]$chapter, "Stack"
   )
+})
+
+test_that("the icon table shares markup across blocks of one class", {
+  # Repeated icons collapse to one entry, a block without an icon gets an
+  # empty key, and every key resolves.
+  tbl <- icon_key_table(c("<svg>a</svg>", "<svg>b</svg>", "<svg>a</svg>", NA))
+
+  expect_length(tbl$icons, 2L)
+  expect_identical(tbl$keys[[1L]], tbl$keys[[3L]])
+  expect_false(identical(tbl$keys[[1L]], tbl$keys[[2L]]))
+  expect_identical(tbl$keys[[4L]], "")
+  expect_identical(tbl$icons[[tbl$keys[[1L]]]], "<svg>a</svg>")
+
+  # Nothing to share is not an error
+  empty <- icon_key_table(c(NA_character_, NA_character_))
+  expect_length(empty$icons, 0L)
+  expect_identical(empty$keys, c("", ""))
 })
 
 test_that("desc_oneline collapses whitespace and drops markdown", {

@@ -248,7 +248,7 @@ test_that("the skeleton lists the document; the rest are searchable", {
 
       # The catalogue carries the WHOLE board: the listed blocks first
       # (a "go to"), the pool after (an "add").
-      cat <- catalog_store()
+      cat <- catalog_store()$items
       expect_identical(
         vapply(cat, `[[`, character(1L), "id"),
         c("data", "sub", "audit", "plot")
@@ -288,7 +288,7 @@ test_that("picking a block from the pool lists it", {
       expect_true(sections_store()$report[sections_store()$ids == "plot"])
 
       # And the catalogue now calls it listed, so the menu offers "go to".
-      entry <- Filter(function(e) identical(e$id, "plot"), catalog_store())
+      entry <- Filter(function(e) identical(e$id, "plot"), catalog_store()$items)
       expect_true(entry[[1L]]$listed)
     },
     args = list(board = otl_board_args(), update = reactiveVal())
@@ -311,7 +311,7 @@ test_that("show-all restores the full board overview", {
       skel <- skel_store()
       expect_setequal(skel$ids, c("data", "sub", "plot", "audit"))
       # Show-all lists everything, so nothing is left to add.
-      expect_true(all(vapply(catalog_store(), `[[`, logical(1L), "listed")))
+      expect_true(all(vapply(catalog_store()$items, `[[`, logical(1L), "listed")))
     },
     args = list(board = otl_board_args(), update = reactiveVal())
   )
@@ -345,7 +345,7 @@ test_that("the ancestors of a reported block are listed, switched off", {
 
       # Ancestors are rows, so the catalogue calls them a "go to" and marks
       # them code-only; only the branch outside the document is an "add".
-      cat <- catalog_store()
+      cat <- catalog_store()$items
       flag <- function(id, fld) {
         Filter(function(e) identical(e$id, id), cat)[[1L]][[fld]]
       }
