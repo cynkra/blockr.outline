@@ -29,10 +29,11 @@
 #   * "Readings by day" is a summarize table, which reaches a slide as a
 #     painted picture. It has the same ladder now: at 11pt it pages, at 7pt
 #     it does not.
-#   * "One wide row" is the other half of the fitting story: a single row
-#     whose cells are much wider than the rest of their column. A column is
-#     sized for its TYPICAL cells now, so that row wraps to a second line
-#     instead of inflating every column and pushing the stub to its floor.
+#   * "Wide cells in every column" is the other half of the fitting story:
+#     six columns of medium-long text under longer headers. When they cannot
+#     all have their full width, the stub and the columns come down together
+#     and the cells wrap between words, rather than the stub alone being
+#     crushed to hold every cell on one line.
 #   * The Composer view is the real clinical case: a composer demographics
 #     table (17 rows, one column per arm plus the total) that splits at the
 #     11pt default and comes back whole at 10pt. One point of type is the
@@ -112,22 +113,23 @@ function(data) {
 }
 '
 
-# One row unlike the rest of its column: a cell several times wider than
-# every other cell in the same column. It used to set the width for all of
-# them, since a data cell never wraps, so the columns inflated and the stub
-# fell to its floor. Now that cell takes a second line instead.
+# Cells of several short words, in every column, under headers longer again.
+# Six of them do not fit a slide at full width, and a cell used to be the one
+# thing that never gave any of it back: the stub was pinned at its floor and
+# read over three lines while the cells kept every word on one. Now the stub
+# and the columns come down together and the cells wrap between words, which
+# is what their headers have always done.
 wide_fn <- '
 function(data) {
-  rows <- c(sprintf("Measure %d", 1:10), "The wide one")
+  rows <- sprintf("Measure %d", 1:8)
   out <- data.frame(.label = rows, .indent = 1L, check.names = FALSE)
   set.seed(3)
-  for (grp in c("Group A", "Group B", "Group C")) {
-    v <- sprintf("%d (%.1f)", sample(10:99, length(rows), TRUE),
-                 runif(length(rows), 1, 90))
-    v[length(rows)] <- "a cell a good deal wider than the rest of its column"
-    out[[grp]] <- v
+  for (j in 1:6) {
+    grp <- sprintf("Group %d, everyone in the population", j)
+    out[[grp]] <- sprintf("%.1f [%.1f, %.1f] per group", runif(8, 10, 60),
+                          runif(8, 1, 9), runif(8, 60, 99))
   }
-  attr(out, "label") <- "One wide row"
+  attr(out, "label") <- "Wide cells in every column"
   out
 }
 '
@@ -187,11 +189,11 @@ board <- new_dock_board(
 
     wide = blockr.extra::new_function_block(
       fn = wide_fn,
-      block_name = "One wide row, frame"
+      block_name = "Wide cells, frame"
     ),
     tbl_wide = blockr.viz::new_table_block(
-      block_name = "One wide row",
-      title = "One wide row",
+      block_name = "Wide cells in every column",
+      title = "Wide cells in every column",
       download = TRUE
     )
   ),
