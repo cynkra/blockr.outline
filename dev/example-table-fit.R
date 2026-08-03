@@ -29,6 +29,10 @@
 #   * "Readings by day" is a summarize table, which reaches a slide as a
 #     painted picture. It has the same ladder now: at 11pt it pages, at 7pt
 #     it does not.
+#   * "One wide row" is the other half of the fitting story: a single row
+#     whose cells are much wider than the rest of their column. A column is
+#     sized for its TYPICAL cells now, so that row wraps to a second line
+#     instead of inflating every column and pushing the stub to its floor.
 #   * The Composer view is the real clinical case: a composer demographics
 #     table (17 rows, one column per arm plus the total) that splits at the
 #     11pt default and comes back whole at 10pt. One point of type is the
@@ -108,6 +112,26 @@ function(data) {
 }
 '
 
+# One row unlike the rest of its column: a cell several times wider than
+# every other cell in the same column. It used to set the width for all of
+# them, since a data cell never wraps, so the columns inflated and the stub
+# fell to its floor. Now that cell takes a second line instead.
+wide_fn <- '
+function(data) {
+  rows <- c(sprintf("Measure %d", 1:10), "The wide one")
+  out <- data.frame(.label = rows, .indent = 1L, check.names = FALSE)
+  set.seed(3)
+  for (grp in c("Group A", "Group B", "Group C")) {
+    v <- sprintf("%d (%.1f)", sample(10:99, length(rows), TRUE),
+                 runif(length(rows), 1, 90))
+    v[length(rows)] <- "a cell a good deal wider than the rest of its column"
+    out[[grp]] <- v
+  }
+  attr(out, "label") <- "One wide row"
+  out
+}
+'
+
 board <- new_dock_board(
   blocks = c(
     aq = new_dataset_block("airquality", block_name = "Air quality data"),
@@ -159,14 +183,26 @@ board <- new_dock_board(
       block_name = "Demographic and Baseline Characteristics",
       title = "Demographic and Baseline Characteristics",
       download = TRUE
+    ),
+
+    wide = blockr.extra::new_function_block(
+      fn = wide_fn,
+      block_name = "One wide row, frame"
+    ),
+    tbl_wide = blockr.viz::new_table_block(
+      block_name = "One wide row",
+      title = "One wide row",
+      download = TRUE
     )
   ),
   links = links(
-    from = c("aq", "first26", "aq", "aq", "adsl", "demog"),
-    to   = c("first26", "tbl_fit", "tbl_long", "summ", "demog", "tbl_demog")
+    from = c("aq", "first26", "aq", "aq", "adsl", "demog", "adsl",
+             "wide"),
+    to   = c("first26", "tbl_fit", "tbl_long", "summ", "demog", "tbl_demog",
+             "wide", "tbl_wide")
   ),
   views = list(
-    Composer = c("tbl_demog", "slides", "dag"),
+    Composer = c("tbl_demog", "tbl_wide", "slides", "dag"),
     Main = c("tbl_fit", "slides"),
     More = c("tbl_long", "summ", "slides")
   ),
@@ -175,7 +211,8 @@ board <- new_dock_board(
     blockr.dag::new_dag_extension(),
     blockr.outline::new_slides_extension(
       title = "Fit study",
-      slides = c("tbl_demog", "tbl_fit", "tbl_long", "summ")
+      slides = c("tbl_demog", "tbl_wide", "tbl_fit", "tbl_long",
+                 "summ")
     )
   )
 )
