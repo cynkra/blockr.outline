@@ -426,8 +426,23 @@ with_render_guard <- function(expr) {
     }
   }
 
-  tryCatch(
-    force(expr),
+  # What the renderer could not keep on one slide. blockr.viz signals one
+  # `blockr_exhibit_split` message per table it had to break, carrying the
+  # size that would have kept it whole; a deck of forty slides emits them
+  # over the course of the render, so they are collected here and reported
+  # once at the end rather than as forty notifications.
+  #
+  # Not muffled: the message still reaches the log, which is where the
+  # per-table detail belongs.
+  notes <- list()
+
+  out <- tryCatch(
+    withCallingHandlers(
+      force(expr),
+      blockr_exhibit_split = function(cnd) {
+        notes[[length(notes) + 1L]] <<- cnd
+      }
+    ),
     error = function(e) {
       msg <- explain(e)
       notify_render_error(msg)
@@ -437,6 +452,66 @@ with_render_guard <- function(expr) {
       msg <- "The report render was interrupted."
       notify_render_error(msg)
       stop(msg, call. = FALSE)
+    }
+  )
+
+  notify_split_tables(notes)
+
+  out
+}
+
+# One notification for every table the export had to break, and the number
+# that would have prevented it.
+#
+# A split table is not an error -- the deck is complete and correct -- but it
+# is the thing a reader notices and cannot explain, and the warning blockr.viz
+# writes to the log is a warning nobody deployed will ever see. Naming the
+# tables and the size they fit at turns it into one action: lower "Smallest
+# table font" in the board settings.
+notify_split_tables <- function(notes) {
+
+  if (!length(notes)) {
+    return(invisible(NULL))
+  }
+
+  try(
+    showNotification(split_tables_msg(notes), type = "warning", duration = 15),
+    silent = TRUE
+  )
+
+  invisible(NULL)
+}
+
+# The text of that notification, apart from the showing of it: what a render
+# says about the tables it broke is worth a test, and a notification is not
+# testable outside a session.
+split_tables_msg <- function(notes) {
+
+  one <- function(cnd) {
+    how <- c(
+      if (isTRUE(cnd$pages > 1L)) paste0(cnd$pages, " slides"),
+      if (isTRUE(cnd$sets > 1L)) paste0("columns over ", cnd$sets, " sets")
+    )
+    paste0(
+      "'", coal(cnd$what, "a table"), "' (",
+      paste(how, collapse = ", "),
+      if (!is.null(cnd$fit_size)) paste0(", fits at ", cnd$fit_size, "pt"),
+      ")"
+    )
+  }
+
+  fits <- any(vapply(notes, function(n) !is.null(n$fit_size), logical(1L)))
+
+  paste0(
+    if (length(notes) == 1L) {
+      "One table did not fit one slide: "
+    } else {
+      paste0(length(notes), " tables did not fit one slide: ")
+    },
+    paste(vapply(notes, one, character(1L)), collapse = ", "),
+    ".",
+    if (fits) {
+      " Lower 'Smallest table font' in the board settings to keep them whole."
     }
   )
 }

@@ -66,6 +66,22 @@ Blocks upstream of a picked block are still evaluated -- picking a table
 means running what feeds it -- but they are not shown and take no slide.
 Branches nothing picked depends on are never evaluated at all.
 }
+\section{Tables that do not fit}{
+
+A table too tall for its slide is carried onto the next one, and blockr.viz
+shrinks the type before it does that: one slide at 10pt beats two at 13pt.
+How far it may shrink is the board's \code{exhibit_min_font_size} option
+(\code{blockr.viz::new_exhibit_font_option()}, "Smallest table font" in the
+board settings), so a deck that must not split its tables asks for it
+there rather than here. It is a board option and not a field in this
+panel because the same number governs the PowerPoint download on a table
+or summarize block: a slide and the block it came from have to be the same
+table.
+
+What still does not fit at that size is split, and the download says which
+tables and at what size they would have stayed whole.
+}
+
 \examples{
 if (interactive()) {
   library(blockr.core)

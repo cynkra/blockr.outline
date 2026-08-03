@@ -248,3 +248,56 @@ test_that("render_timeout falls back on nonsense", {
   withr::local_options(list(blockr.outline.render_timeout = 30))
   expect_identical(render_timeout(), 30)
 })
+
+# --- tables the export could not keep on one slide ---------------------------
+
+split_note <- function(what = "Adverse events", pages = 3L, sets = 1L,
+                       fit_size = 8) {
+  structure(
+    class = c("blockr_exhibit_split", "message", "condition"),
+    list(message = "split\n", call = NULL, what = what, pages = pages,
+         sets = sets, size = 13, floor = 11, fit_size = fit_size)
+  )
+}
+
+test_that("a split table is collected by the guard and still reaches the log", {
+  # blockr.viz signals one message per table it had to break. The guard
+  # collects them for a single notification and does NOT muffle them: the
+  # per-table detail belongs in the app's log.
+  expect_message(
+    out <- with_render_guard({
+      message(split_note())
+      "the deck"
+    }),
+    class = "blockr_exhibit_split"
+  )
+
+  # Collecting must not swallow the render's own value.
+  expect_identical(suppressMessages(
+    with_render_guard({ message(split_note()); "the deck" })
+  ), "the deck")
+})
+
+test_that("the split report names the tables and the size that would fit", {
+  msg <- split_tables_msg(list(split_note()))
+
+  expect_match(msg, "One table did not fit one slide", fixed = TRUE)
+  expect_match(msg, "'Adverse events' (3 slides, fits at 8pt)", fixed = TRUE)
+  # The one action it leaves the reader with.
+  expect_match(msg, "Smallest table font", fixed = TRUE)
+
+  many <- split_tables_msg(
+    list(split_note(), split_note("Demographics", pages = 1L, sets = 2L,
+                                  fit_size = NULL))
+  )
+
+  expect_match(many, "2 tables did not fit one slide", fixed = TRUE)
+  # A table dealt sideways reports its sets, not "1 slides".
+  expect_match(many, "'Demographics' (columns over 2 sets)", fixed = TRUE)
+
+  # Nothing to act on, nothing suggested.
+  expect_no_match(
+    split_tables_msg(list(split_note(fit_size = NULL))),
+    "Smallest table font", fixed = TRUE
+  )
+})
