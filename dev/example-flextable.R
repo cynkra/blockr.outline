@@ -42,7 +42,8 @@ message("Open http://127.0.0.1:", port, "/")
 
 root <- "."
 deps <- c("dockViewR", "blockr.core", "blockr.dag", "blockr.dock",
-          "blockr.extra", "blockr.viz", "blockr.topline", "blockr.outline")
+          "blockr.extra", "blockr.viz", "blockr.sandbox/inst/blockr.topline",
+          "blockr.outline")
 for (d in deps) {
   pkgload::load_all(
     file.path(root, d),
@@ -50,14 +51,9 @@ for (d in deps) {
   )
 }
 
-# The BMS reference template ships in blockr.topline.
-bms_template <- system.file(
-  "templates", "bms-template.pptx", package = "blockr.topline"
-)
-if (!nzchar(bms_template)) {
-  bms_template <- file.path(root, "blockr.topline", "inst", "templates",
-                            "bms-template.pptx")
-}
+# The BMS reference template ships in the vendored blockr.bms.
+bms_template <- file.path(root, "blockr.sandbox", "inst", "blockr.bms",
+                          "inst", "templates", "bms-template.pptx")
 
 # A clinical demographics frame in topline's annotated shape: `.label` is the
 # row stub, `.indent` the display depth, `.bold` the section rows. The two

@@ -31,7 +31,8 @@ message("Open http://127.0.0.1:", port, "/")
 root <- "."
 deps <- c("dockViewR", "blockr.core", "blockr.dplyr", "blockr.ui",
           "blockr.dag", "blockr.dock", "blockr.ggplot", "blockr.extra",
-          "blockr.viz", "blockr.topline", "blockr.outline")
+          "blockr.viz", "blockr.sandbox/inst/blockr.topline",
+          "blockr.outline")
 for (d in deps) {
   pkgload::load_all(
     file.path(root, d),
@@ -39,13 +40,8 @@ for (d in deps) {
   )
 }
 
-bms_template <- system.file(
-  "templates", "bms-template.pptx", package = "blockr.topline"
-)
-if (!nzchar(bms_template)) {
-  bms_template <- file.path(root, "blockr.topline", "inst", "templates",
-                            "bms-template.pptx")
-}
+bms_template <- file.path(root, "blockr.sandbox", "inst", "blockr.bms",
+                          "inst", "templates", "bms-template.pptx")
 
 board <- new_dock_board(
   blocks = c(

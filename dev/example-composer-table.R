@@ -37,8 +37,8 @@ port <- local({
 root <- "."
 deps <- c("dockViewR", "blockr.core", "blockr.dplyr", "blockr.ui",
           "blockr.dag", "blockr.dock", "blockr.dm", "blockr.extra",
-          "composer", "blockr.viz", "blockr.sandbox", "blockr.topline",
-          "blockr.outline")
+          "composer", "blockr.viz", "blockr.sandbox",
+          "blockr.sandbox/inst/blockr.topline", "blockr.outline")
 for (d in deps) {
   pkgload::load_all(
     file.path(root, d),
@@ -51,13 +51,8 @@ options(blockr.dock_is_locked = FALSE)
 options(blockr.background_construction_delay = 0)
 options(blockr.tabular_display = blockr.ui::html_table_display)
 
-bms_template <- system.file(
-  "templates", "bms-template.pptx", package = "blockr.topline"
-)
-if (!nzchar(bms_template)) {
-  bms_template <- file.path(root, "blockr.topline", "inst", "templates",
-                            "bms-template.pptx")
-}
+bms_template <- file.path(root, "blockr.sandbox", "inst", "blockr.bms",
+                          "inst", "templates", "bms-template.pptx")
 
 message("Open http://127.0.0.1:", port, "/")
 
