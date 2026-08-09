@@ -177,7 +177,8 @@
   background: var(--md-primary-bg);
 }
 .minidag .md-chip.drop-no { border-color: #fca5a5; }
-.minidag .md-chip.sel {
+.minidag .md-chip.sel,
+.minidag .md-stackhead.sel {
   border-color: var(--md-primary);
   box-shadow: 0 0 0 1px var(--md-primary);
 }

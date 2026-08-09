@@ -184,6 +184,13 @@
 
       mkstackBtn.addEventListener('click', () => {
         const members = [...selection];
+        const already = members.filter((id) => stackOf(id));
+        if (already.length) {
+          barEl.classList.add('err');
+          selcountEl.textContent =
+            already.length + ' of them are already in a stack';
+          return;
+        }
         const trial = [...stacks, { id: '_trial', name: '', blocks: members }];
         if (G.superOrder(model(), trial).hadCycle) {
           barEl.classList.add('err');
@@ -599,7 +606,6 @@
       if (a < 0 || z < 0) return;
       const lo = Math.min(a, z), hi = Math.max(a, z);
       ids.slice(lo, hi + 1).forEach((id) => {
-        if (stackOf(id)) return;
         selection.add(id);
         const row = deckEl.querySelector('.md-chip[data-id="' + CSS.escape(id) + '"]');
         if (row) row.classList.add('sel');
@@ -679,7 +685,11 @@
           return;
         }
         if (opts.stacks && (e.metaKey || e.ctrlKey || e.shiftKey)) {
-          if (stackOf(b.id)) return; // stacked blocks: dissolve first
+          // A stacked block used to refuse selection outright, because the
+          // only thing selection did was make a stack and a block cannot be
+          // in two. Selection now also feeds copy, so the refusal belonged on
+          // "Stack them", not here -- and while it sat here a stack could not
+          // be copied at all.
           if (selection.has(b.id)) selection.delete(b.id); else selection.add(b.id);
           el.classList.toggle('sel');
           selAnchor = b.id;
@@ -702,10 +712,8 @@
           );
           // a stacked block still refuses selection (dissolve first), so the
           // click clears and selects nothing rather than lying about it
-          if (!stackOf(b.id)) {
-            selection.add(b.id);
-            el.classList.add('sel');
-          }
+          selection.add(b.id);
+          el.classList.add('sel');
           updateBar();
         }
 
@@ -807,8 +815,12 @@
       el.appendChild(chev);
 
       el.addEventListener('click', (e) => {
-        if (e.metaKey || e.ctrlKey || e.target.closest('button')) return;
-        openConn(el, 'stack:' + stack.id);
+        if (e.target.closest('button')) return;
+        if (!opts.stacks) {
+          openConn(el, 'stack:' + stack.id);
+          return;
+        }
+        selectStack(stack, e.metaKey || e.ctrlKey || e.shiftKey);
       });
 
       return el;
@@ -863,6 +875,14 @@
 
       const aside = stackAside(stack, false);
       if (aside) el.appendChild(aside);
+
+      // The header selects the whole group, same as the collapsed row: they
+      // are two views of one object, so one gesture.
+      el.addEventListener('click', (e) => {
+        if (e.target.closest('button') || e.target.isContentEditable) return;
+        if (!opts.stacks) return;
+        selectStack(stack, e.metaKey || e.ctrlKey || e.shiftKey);
+      });
 
       const rm = document.createElement('button');
       rm.className = 'md-rm';
@@ -1080,8 +1100,44 @@
 
     /* ---- selection ---- */
 
+    // A stack row carries `.sel` when the whole group is selected, which is
+    // the only way it can be: `selection` holds block ids, and a collapsed
+    // stack has no member rows to mark.
+    const wholeStackSelected = (s) =>
+      s.blocks.length > 0 && s.blocks.every((id) => selection.has(id));
+
+    const paintStackSel = () => {
+      deckEl.querySelectorAll('.md-stackchip').forEach((el) => {
+        const s = stacks.find((x) => 'stack:' + x.id === el.dataset.id);
+        el.classList.toggle('sel', !!s && wholeStackSelected(s));
+      });
+      deckEl.querySelectorAll('.md-stackhead').forEach((el) => {
+        const s = stacks.find((x) => x.id === el.dataset.stack);
+        el.classList.toggle('sel', !!s && wholeStackSelected(s));
+      });
+    };
+
+    const selectStack = (stack, additive) => {
+      const whole = wholeStackSelected(stack);
+      if (!additive) {
+        selection.clear();
+        deckEl.querySelectorAll('.md-chip.sel, .md-stackhead.sel').forEach(
+          (x) => x.classList.remove('sel')
+        );
+      }
+      stack.blocks.forEach((id) => {
+        if (whole && additive) selection.delete(id); else selection.add(id);
+      });
+      deckEl.querySelectorAll('.md-chip[data-id]').forEach((el) => {
+        el.classList.toggle('sel', selection.has(el.dataset.id));
+      });
+      selAnchor = stack.blocks[stack.blocks.length - 1] || null;
+      updateBar();
+    };
+
     const updateBar = () => {
       if (!barEl) return;
+      paintStackSel();
       barEl.classList.toggle('on', selection.size >= 2);
       barEl.classList.remove('err');
       selcountEl.textContent = selection.size + ' blocks selected';
