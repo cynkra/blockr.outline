@@ -895,7 +895,12 @@
     // cold start is slower than a move between rows (once you are reading
     // lineage you want it to follow), and both debounce: a pointer sweeping
     // past a row never paints it, it only paints where you settle.
-    const FOCUS_IN_MS = 120, FOCUS_MOVE_MS = 60, FOCUS_OUT_MS = 260;
+    // A dwell, not a brush. `FOCUS_MOVE_MS` used to be 60, so once engaged
+    // the lineage re-struck about sixteen times a second while the pointer
+    // travelled -- the deck answering a question on every row it passed.
+    // Both thresholds now want the pointer to stop somewhere. Leaving stays
+    // quick: releasing late would keep a stale chain lit after you have gone.
+    const FOCUS_IN_MS = 320, FOCUS_MOVE_MS = 320, FOCUS_OUT_MS = 260;
 
     let focusId = null, focusTimer = null;
 

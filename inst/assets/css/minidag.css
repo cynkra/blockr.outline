@@ -164,11 +164,13 @@
 /* Lineage focus. The deck dims, the rows related to the hovered block keep
    their `md-rel`. Two classes rather than a write per row, so the fade is
    CSS's job and hovering a 92-row board costs a handful of DOM writes. */
-.minidag .md-deck.md-focused .md-chip,
-.minidag .md-deck.md-focused .md-stackhead { opacity: 0.28; }
-.minidag .md-deck.md-focused .md-chip.md-rel,
-.minidag .md-deck.md-focused .md-stackhead.md-rel { opacity: 1; }
-.minidag .md-deck.md-focused .md-edge { opacity: 0.12; }
+/* The fade lands on the RAIL, not on the rows. Tracing a chain is a rail
+   question, and the rail is a gutter you are not reading while the pointer
+   travels -- whereas the rows carry the names, and taking those to 0.28
+   made the whole list blink on every pointer move. Row text now holds
+   still; the lines answer the question.
+   (Rows keep a rule here only so a future variant has somewhere to live.) */
+.minidag .md-deck.md-focused .md-edge { opacity: 0.1; }
 .minidag .md-deck.md-focused .md-edge.md-rel { opacity: 1; }
 .minidag .md-chip.drop-ok {
   border-color: var(--md-primary);
@@ -443,18 +445,32 @@
 /* In the sticky header, under the search box -- not pinned to the bottom edge
    of a panel you have scrolled away from. It is in the header's normal flow,
    so appearing pushes the list down rather than covering its first row. */
+/* The selection bar OVERLAYS the search row rather than stacking above it.
+   In flow it added its own height to the sticky header, so the moment a
+   second row was selected everything below slid down -- including the row
+   just clicked, which is the one place the eye was. Out of flow, nothing
+   moves. Covering the search field is not a loss either: with a
+   multi-selection in hand you are acting on it, not searching, and clearing
+   the selection puts the field straight back. */
 .minidag .md-actionbar {
-  margin: 0 0 10px;
   display: none;
   align-items: center;
   gap: 8px;
   background: var(--md-g900);
   color: #fff;
-  border-radius: 8px;
-  padding: 6px 10px;
+  border-radius: 7px;
+  padding: 0 10px;
   font-size: 12px;
 }
-.minidag .md-actionbar.on { display: flex; }
+.minidag .md-actionbar.on {
+  display: flex;
+  position: absolute;
+  top: 10px;          /* .md-head's padding-top */
+  left: 12px;         /* .md-head's padding-x */
+  right: 12px;
+  height: 30px;       /* the search row it covers */
+  margin: 0;
+}
 .minidag .md-actionbar.err { background: #b91c1c; }
 .minidag .md-actionbar button {
   height: 22px;
