@@ -528,7 +528,7 @@
       inp.placeholder = 'Search block types…';
       box.appendChild(inp);
 
-      const list = el('md-pick-list');
+      const list = el('md-pick-list', 'div');
       box.appendChild(list);
 
       // The block browser's resting row: tinted tile, name, package badge,
@@ -542,7 +542,7 @@
       const isCur = (i) => i >= 0 && i === pickCursor;
 
       const rowFor = (m, i) => {
-        const r = el('md-pick-row' + (isCur(i) ? ' cur' : ''));
+        const r = el('md-pick-row' + (isCur(i) ? ' cur' : ''), 'div');
         r.dataset.cat = m.category || 'other';
         const ic = el('md-pick-ico');
         if (m.icon) {
@@ -580,7 +580,7 @@
           groups.forEach((items, cat) => {
             // the category name alone, as `category_section()` renders it
             // (`tags$h3(category)`) -- the count was one more thing to read
-            const h = el('md-pick-group');
+            const h = el('md-pick-group', 'div');
             h.textContent = cat;
             list.appendChild(h);
             items.forEach((m) => list.appendChild(rowFor(m, -1)));
@@ -601,7 +601,7 @@
         pickMatches.forEach((m, i) => list.appendChild(rowFor(m, i)));
 
         if (!pickMatches.length) {
-          const e = el('md-pick-group');
+          const e = el('md-pick-group', 'div');
           e.textContent = 'no block type matches';
           list.appendChild(e);
         }
