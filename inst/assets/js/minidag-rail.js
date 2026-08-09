@@ -158,13 +158,13 @@
       headEl.appendChild(searchRow);
     }
 
-    let barEl = null, selcountEl = null;
+    let barEl = null, selcountEl = null, mkstackBtn = null;
     if (opts.stacks) {
       barEl = document.createElement('div');
       barEl.className = 'md-actionbar';
       selcountEl = document.createElement('span');
       barEl.appendChild(selcountEl);
-      const mkstackBtn = document.createElement('button');
+      mkstackBtn = document.createElement('button');
       mkstackBtn.className = 'md-go';
       mkstackBtn.textContent = 'Stack them';
       barEl.appendChild(mkstackBtn);
@@ -1106,6 +1106,10 @@
     const wholeStackSelected = (s) =>
       s.blocks.length > 0 && s.blocks.every((id) => selection.has(id));
 
+    // One mark per selected thing. When a whole stack is selected the GROUP
+    // is what is selected, so the ring goes on its row and comes off the
+    // members -- otherwise a two-block stack drew three rings for one
+    // selection, on top of the frame the stack already has.
     const paintStackSel = () => {
       deckEl.querySelectorAll('.md-stackchip').forEach((el) => {
         const s = stacks.find((x) => 'stack:' + x.id === el.dataset.id);
@@ -1113,7 +1117,16 @@
       });
       deckEl.querySelectorAll('.md-stackhead').forEach((el) => {
         const s = stacks.find((x) => x.id === el.dataset.stack);
-        el.classList.toggle('sel', !!s && wholeStackSelected(s));
+        const whole = !!s && wholeStackSelected(s);
+        el.classList.toggle('sel', whole);
+        if (whole) {
+          s.blocks.forEach((id) => {
+            const row = deckEl.querySelector(
+              '.md-chip[data-id="' + CSS.escape(id) + '"]'
+            );
+            if (row) row.classList.remove('sel');
+          });
+        }
       });
     };
 
@@ -1140,7 +1153,24 @@
       paintStackSel();
       barEl.classList.toggle('on', selection.size >= 2);
       barEl.classList.remove('err');
-      selcountEl.textContent = selection.size + ' blocks selected';
+
+      // Offering "Stack them" for blocks that are already stacked is an
+      // offer that can only fail -- and selecting a stack is now a normal
+      // gesture, so it would fail often. The button goes away instead, and
+      // the bar says what you have rather than what you cannot do with it.
+      const stacked = [...selection].filter((id) => stackOf(id));
+      const whole = stacked.length === selection.size && selection.size > 0
+        ? stackOf([...selection][0]) : null;
+      const allOne = whole && wholeStackSelected(whole) &&
+        whole.blocks.length === selection.size;
+
+      if (mkstackBtn) {
+        mkstackBtn.style.display = stacked.length ? 'none' : '';
+      }
+
+      selcountEl.textContent = allOne
+        ? 'Stack "' + whole.name + '" selected'
+        : selection.size + ' blocks selected';
     };
 
     /* ---- unlink: hover a rail edge for a ✕ at its midpoint ---- */
