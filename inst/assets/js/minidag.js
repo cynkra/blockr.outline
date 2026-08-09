@@ -61,6 +61,10 @@
       const inst = getInst(msg.el);
       if (inst) inst.setRegistry(msg);
     });
+    Shiny.addCustomMessageHandler('minidag-clipboard', (msg) => {
+      const inst = getInst(msg.el);
+      if (inst) inst.setClipboard(msg.json);
+    });
   }
 
   // test/inspection hook
@@ -664,6 +668,95 @@
       if (picker && !picker.contains(ev.target)) closePicker();
     }, true);
 
+    /* ---- clipboard -------------------------------------------------
+     *
+     * Wire-compatible with blockr.dag's: the same `{object: "subboard"}`
+     * envelope, so a selection copied on the canvas pastes into the deck
+     * and back.
+     *
+     * Two browser constraints shape this. A clipboard WRITE is only allowed
+     * inside the gesture that triggered it, and a Shiny round-trip breaks
+     * that chain -- so the write is opened as a pending Promise the instant
+     * the key is pressed and resolved when the server answers. A clipboard
+     * READ needs permission, so paste asks for the text first and only
+     * bothers the server once it sees an envelope it recognises.
+     *
+     * Scoped to the deck you last clicked in, so a board mounting both this
+     * and the DAG canvas does not act on one gesture twice.
+     */
+
+    let clipResolve = null;
+    let lastInside = false;
+
+    document.addEventListener('mousedown', (ev) => {
+      lastInside = rootEl.contains(ev.target);
+    }, true);
+
+    const deferClipboardWrite = () => {
+      if (!window.ClipboardItem || !navigator.clipboard) return;
+      try {
+        navigator.clipboard.write([
+          new ClipboardItem({
+            'text/plain': new Promise((resolve) => {
+              clipResolve = (text) =>
+                resolve(new Blob([text], { type: 'text/plain' }));
+            })
+          })
+        ]).catch(() => {});
+      } catch (e) { /* older browsers fall back to writeText below */ }
+    };
+
+    const setClipboard = (json) => {
+      if (clipResolve) {
+        clipResolve(json);
+        clipResolve = null;
+        return;
+      }
+      if (navigator.clipboard) navigator.clipboard.writeText(json).catch(() => {});
+    };
+
+    document.addEventListener('keydown', async (ev) => {
+
+      if (!lastInside) return;
+
+      const t = ev.target;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' ||
+                t.tagName === 'SELECT' || t.isContentEditable)) {
+        return;
+      }
+
+      // real text selected anywhere: leave copy to the browser, so an error
+      // message or a column name lands on the clipboard as itself
+      const sel = window.getSelection && window.getSelection();
+      const hasText = sel && sel.toString().length > 0;
+
+      const mod = ev.ctrlKey || ev.metaKey;
+      if (!mod) return;
+
+      const key = ev.key.toLowerCase();
+
+      if (key === 'c' || key === 'x') {
+        if (hasText) return;
+        const ids = rail.inspect().selection;
+        if (!ids.length) return;
+        ev.preventDefault();
+        deferClipboardWrite();
+        push('block_copy', { ids, cut: key === 'x' });
+      }
+
+      if (key === 'v') {
+        if (!navigator.clipboard) return;
+        try {
+          const text = await navigator.clipboard.readText();
+          const data = JSON.parse(text);
+          if (data && data.object === 'subboard') {
+            ev.preventDefault();
+            push('block_paste', { json: text });
+          }
+        } catch (e) { /* not our payload, or no permission */ }
+      }
+    });
+
     const asArr = (x) => x == null ? [] : (Array.isArray(x) ? x : [x]);
 
     const setData = (msg) => {
@@ -702,6 +795,7 @@
       announced: false,
       setData,
       setRegistry,
+      setClipboard,
       setBadge: rail.setBadge,
       inspect: rail.inspect
     };

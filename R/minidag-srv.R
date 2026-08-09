@@ -249,6 +249,46 @@ minidag_ext_srv <- function(id, board, update, actions, ...) {
         }
       })
 
+      # --- clipboard ---------------------------------------------------
+      #
+      # The client cannot write to the clipboard after a server round-trip
+      # (Safari only allows it inside the originating gesture), so it opens
+      # a pending write the moment the key is pressed and this resolves it.
+      shiny::observeEvent(input$block_copy, {
+
+        ids <- intersect(
+          unlist(input$block_copy$ids),
+          names(blockr.core::board_blocks(board$board))
+        )
+
+        if (!length(ids)) {
+          return()
+        }
+
+        json <- minidag_clip_json(
+          board$board, ids, minidag_live_states(board, ids)
+        )
+
+        if (is.null(json)) {
+          return()
+        }
+
+        send("clipboard", list(json = json))
+
+        # cut is copy, then remove; `augment_board_update()` cascades the
+        # incident links and prunes any stack left short
+        if (isTRUE(input$block_copy$cut)) {
+          update(list(blocks = list(rm = ids)))
+        }
+      })
+
+      shiny::observeEvent(input$block_paste, {
+        delta <- minidag_paste_delta(board$board, input$block_paste$json)
+        if (!is.null(delta)) {
+          update(delta)
+        }
+      })
+
       # --- views -------------------------------------------------------
       #
       # Membership is the only view property the deck writes per row. The

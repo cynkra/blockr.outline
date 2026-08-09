@@ -219,3 +219,81 @@ test_that("a block inserted from the deck lands beside its origin", {
   expect_null(elsewhere$mod[["one"]]$add[[pid]]$near)
   expect_identical(elsewhere$mod[["one"]]$add[[pid]]$side, "right")
 })
+
+test_that("the clipboard round-trips a selection with fresh ids", {
+
+  board <- blockr.dock::new_dock_board(
+    blocks = c(
+      a = blockr.core::new_dataset_block("iris"),
+      b = blockr.core::new_head_block(n = 3L),
+      c = blockr.core::new_head_block(n = 9L)
+    ),
+    links = blockr.core::links(
+      from = c("a", "b"), to = c("b", "c"), input = c("data", "data")
+    ),
+    stacks = blockr.core::stacks(
+      s1 = blockr.dock::new_dock_stack(c("a", "b"), name = "Prep",
+                                       color = "#2563eb")
+    ),
+    extensions = list(mini = new_minidag_extension())
+  )
+
+  json <- minidag_clip_json(board, c("a", "b"), list())
+
+  # blockr.dag's envelope, so a canvas copy pastes here and back
+  expect_identical(jsonlite::fromJSON(json)$object, "subboard")
+
+  delta <- minidag_paste_delta(board, json)
+
+  expect_length(delta$blocks$add, 2L)
+  expect_false(
+    any(names(delta$blocks$add) %in%
+          names(blockr.core::board_blocks(board)))
+  )
+
+  # the a -> b link travels because both ends were copied; b -> c does not,
+  # since pasting it would wire the copy to a block nobody copied
+  ld <- as.data.frame(delta$links$add)
+  expect_equal(nrow(ld), 1L)
+  expect_true(all(c(ld$from, ld$to) %in% names(delta$blocks$add)))
+
+  # a stack the selection covers comes along, renamed and re-pointed
+  expect_length(delta$stacks$add, 1L)
+  expect_identical(
+    blockr.core::stack_name(delta$stacks$add[[1L]]), "Prep (copy)"
+  )
+  expect_true(
+    all(blockr.core::stack_blocks(delta$stacks$add[[1L]]) %in%
+          names(delta$blocks$add))
+  )
+
+  # one block on its own carries no links at all
+  solo <- minidag_paste_delta(board, minidag_clip_json(board, "b", list()))
+  expect_null(solo$links)
+
+  expect_null(minidag_paste_delta(board, '{"object":"nope"}'))
+  expect_null(minidag_paste_delta(board, "not json at all"))
+})
+
+test_that("a NULL state field survives the clipboard as NULL", {
+
+  # blockr.dag#144: without `null = "null"` every NULL state field becomes
+  # `{}` in JSON and comes back as an empty `list()`, which poisons the
+  # pasted block -- and survives a save, re-emitting on the next copy.
+  board <- blockr.dock::new_dock_board(
+    blocks = c(a = blockr.core::new_dataset_block("iris")),
+    extensions = list(mini = new_minidag_extension())
+  )
+
+  json <- minidag_clip_json(
+    board, "a", list(a = list(dataset = "iris", row_color = NULL))
+  )
+
+  expect_match(json, '"row_color":null', fixed = TRUE)
+  expect_false(grepl('"row_color":{}', json, fixed = TRUE))
+
+  back <- jsonlite::fromJSON(
+    json, simplifyDataFrame = FALSE, simplifyMatrix = FALSE
+  )
+  expect_null(back$payload$blocks$payload$a$payload$state$row_color)
+})
