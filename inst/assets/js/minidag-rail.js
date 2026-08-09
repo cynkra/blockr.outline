@@ -686,7 +686,29 @@
           updateBar();
           return;
         }
+        // A plain click IS a selection of one -- the row you clicked replaces
+        // whatever was selected. Requiring a modifier for the first block and
+        // a modifier for every one after it made the opening gesture of every
+        // multi-select a keystroke nobody asked for, and left a plain click
+        // with no visible consequence in the list at all. Revealing the panel
+        // still happens; the two are not in competition, one is what you
+        // looked at and the other is what you are about to act on.
         selAnchor = b.id;
+
+        if (opts.stacks) {
+          selection.clear();
+          deckEl.querySelectorAll('.md-chip.sel').forEach(
+            (x) => x.classList.remove('sel')
+          );
+          // a stacked block still refuses selection (dissolve first), so the
+          // click clears and selects nothing rather than lying about it
+          if (!stackOf(b.id)) {
+            selection.add(b.id);
+            el.classList.add('sel');
+          }
+          updateBar();
+        }
+
         emit('block_select', { id: b.id });
       });
 
