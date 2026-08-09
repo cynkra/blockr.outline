@@ -54,9 +54,12 @@ minidag_registry_entries <- memoise0(function() {
       description = reg_attr(ctor, "description", ""),
       category = reg_attr(ctor, "category", "other"),
       package = reg_attr(ctor, "package", "local"),
-      # No icon. A registry icon has no colour of its own -- the deck tints
-      # one per block from board metadata -- and base64-encoding 66 of them
-      # at startup buys a tile the client can draw from the category alone.
+      # The registry's glyph, raw, exactly as blockr.dock's block browser
+      # renders it (`htmltools::HTML(meta$icon)`). Not run through
+      # `blk_icon_data_uri()`: that bakes in a colour, and the tile's tint
+      # comes from the category in CSS here, the same way the browser does
+      # it. A string costs less than 66 base64 encodings at startup.
+      icon = reg_attr(ctor, "icon", ""),
       inputs = I(as.list(
         if (is.null(blk)) character() else blockr.core::block_inputs(blk)
       )),

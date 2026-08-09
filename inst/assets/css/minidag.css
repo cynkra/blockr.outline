@@ -711,84 +711,98 @@
 
 /* --- the inline block picker ------------------------------------------
    One surface for add and append, opened AT the insertion point so the
-   rail and the origin row stay visible while you choose. Two states: it
-   browses at rest (grouped, described) and recalls once you type. */
+   rail and the origin row stay visible while you choose.
+
+   Chrome is the design system's dropdown and nothing else: grey-200
+   border, 8px radius, the single sanctioned shadow. No primary on the
+   container -- blockr.docs reserves it for focus rings and active states,
+   and the search field's ring below is the only place it appears. There
+   is no context header: the picker opens on the row you pressed, so
+   position states the origin.
+
+   The rows are the block browser's, down to the metrics: tinted tile,
+   name, package badge, flush (no rules between), description as `title`.
+   A second style for the same job is what made this read as clutter. */
 
 .minidag .md-picker {
   position: absolute;
   z-index: 40;
-  width: 430px;
+  width: 400px;
   max-width: calc(100% - 8px);
   background: var(--md-bg);
-  border: 1px solid var(--md-primary);
-  border-radius: 9px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.14);
+  border: 1px solid var(--md-border);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   overflow: hidden;
 }
-.minidag .md-pick-head {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 9px;
-  border-bottom: 1px solid var(--md-border);
-  background: var(--md-primary-bg);
-  font-size: 11.5px;
-  color: var(--md-g600);
-}
-.minidag .md-pick-from { font-weight: 600; color: var(--md-g900); }
-.minidag .md-pick-arrow { color: var(--md-primary); }
-.minidag .md-pick-slot {
-  margin-left: auto;
-  font-size: 10.5px;
-  color: var(--md-g500);
-  background: var(--md-bg);
+
+/* the block browser's search field, magnifier and all */
+.minidag .md-pick-search {
+  display: block;
+  width: calc(100% - 24px);
+  margin: 10px 12px;
+  padding: 8px 12px 8px 34px;
   border: 1px solid var(--md-border);
-  border-radius: 4px;
-  padding: 1px 5px;
-}
-.minidag .md-pick-input {
-  width: 100%;
-  border: none;
-  border-bottom: 1px solid var(--md-border);
-  padding: 8px 11px;
+  border-radius: 8px;
+  background: var(--md-bg-input)
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%239ca3af'><path d='M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z'/></svg>")
+    no-repeat 11px center / 14px 14px;
   font: inherit;
   font-size: 13px;
+  color: var(--md-g900);
   outline: none;
 }
-.minidag .md-pick-list { max-height: 230px; overflow-y: auto; }
-.minidag .md-pick-list.browse { max-height: 360px; }
-.minidag .md-pick-group {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--md-g400);
-  padding: 9px 10px 4px;
-  background: var(--md-bg-input);
-  position: sticky;
-  top: 0;
+.minidag .md-pick-search::placeholder { color: var(--md-g400); }
+.minidag .md-pick-search:focus {
+  border-color: var(--md-primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
 }
+
+.minidag .md-pick-list {
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 0 6px 6px;
+}
+
+.minidag .md-pick-group {
+  margin: 8px 0 2px;
+  padding: 0 6px;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--md-g500);
+}
+.minidag .md-pick-group:first-child { margin-top: 2px; }
+
 .minidag .md-pick-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
+  gap: 10px;
+  padding: 8px 6px;
+  border: 1px solid transparent;
+  border-radius: 8px;
   cursor: pointer;
-  border-bottom: 1px solid #f3f4f6;
 }
 .minidag .md-pick-row:hover,
-.minidag .md-pick-row.cur { background: var(--md-primary-bg); }
+.minidag .md-pick-row.cur {
+  border-color: var(--md-border);
+  background: rgba(249, 250, 251, 0.6);
+}
 .minidag .md-pick-ico {
-  width: 18px;
-  height: 18px;
-  border-radius: 5px;
-  flex: 0 0 18px;
-  color: #fff;
-  font-size: 9.5px;
-  font-weight: 600;
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  background: rgba(120, 120, 120, 0.12);
+  color: var(--md-g500);
 }
+.minidag .md-pick-ico svg { width: 16px; height: 16px; display: block; }
 .minidag .md-pick-name {
   flex: 1 1 auto;
   min-width: 0;
@@ -796,15 +810,38 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.minidag .md-pick-pkg { font-size: 10.5px; color: var(--md-g400); }
-.minidag .md-pick-list.browse .md-pick-row { flex-wrap: wrap; }
-.minidag .md-pick-desc {
-  flex: 1 0 100%;
-  font-size: 11px;
-  color: var(--md-g500);
-  line-height: 1.4;
-  padding-left: 26px;
-  margin-top: 1px;
+.minidag .md-pick-pkg { font-size: 11px; color: var(--md-g400); }
+
+/* Category tints, the same values blockr.dock gives the browser's cards.
+   Keyed off the registry category rather than a colour read from a block
+   on the board, so a category nothing on this board uses is still tinted. */
+.minidag .md-pick-row[data-cat="input"] .md-pick-ico {
+  background: rgba(0, 114, 178, 0.15);
+  color: #0072b2;
+}
+.minidag .md-pick-row[data-cat="transform"] .md-pick-ico {
+  background: rgba(0, 158, 115, 0.15);
+  color: #009e73;
+}
+.minidag .md-pick-row[data-cat="structured"] .md-pick-ico {
+  background: rgba(86, 180, 233, 0.18);
+  color: #2b8fd0;
+}
+.minidag .md-pick-row[data-cat="plot"] .md-pick-ico {
+  background: rgba(230, 159, 0, 0.18);
+  color: #b97c00;
+}
+.minidag .md-pick-row[data-cat="table"] .md-pick-ico {
+  background: rgba(204, 121, 167, 0.18);
+  color: #cc79a7;
+}
+.minidag .md-pick-row[data-cat="model"] .md-pick-ico {
+  background: rgba(240, 228, 66, 0.25);
+  color: #9a8f00;
+}
+.minidag .md-pick-row[data-cat="output"] .md-pick-ico {
+  background: rgba(213, 94, 0, 0.16);
+  color: #d55e00;
 }
 
 /* the mouse fallback for the drag: append after this row */

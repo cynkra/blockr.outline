@@ -497,14 +497,6 @@
     let registry = { add: [], append: [] };
     let picker = null, pickMatches = [], pickCursor = -1;
 
-    const catColor = () => {
-      const m = new Map();
-      blocks.forEach((b) => {
-        if (b.category && b.color && !m.has(b.category)) m.set(b.category, b.color);
-      });
-      return m;
-    };
-
     const closePicker = () => {
       if (picker) picker.remove();
       picker = null;
@@ -524,44 +516,34 @@
       const pool = originId ? registry.append : registry.add;
       if (!pool.length) return;
 
-      const origin = originId ? blockOf(originId) : null;
-      const colors = catColor();
       const box = el('md-picker', 'div');
 
-      const head = el('md-pick-head');
-      if (origin) {
-        const from = el('md-pick-from');
-        from.textContent = origin.name;
-        head.appendChild(from);
-        const arrow = el('md-pick-arrow');
-        arrow.textContent = '→';
-        head.appendChild(arrow);
-        head.appendChild(document.createTextNode('new block'));
-        const slot = el('md-pick-slot');
-        slot.textContent = 'links into its first free input';
-        head.appendChild(slot);
-      } else {
-        head.appendChild(document.createTextNode('New block'));
-        const slot = el('md-pick-slot');
-        slot.textContent = 'no origin, no link';
-        head.appendChild(slot);
-      }
-      box.appendChild(head);
-
+      // No context header. The picker opens ON the row whose `+` you pressed,
+      // or where you released the drag, so the origin is stated by position;
+      // a line above the list would only restate what you can see. It is also
+      // the one element here that had no equivalent in the block browser.
       const inp = document.createElement('input');
-      inp.className = 'md-pick-input';
-      inp.type = 'text';
-      inp.placeholder = 'Type to filter ' + pool.length + ' block types…';
+      inp.className = 'md-pick-search';
+      inp.type = 'search';
+      inp.placeholder = 'Search block types…';
       box.appendChild(inp);
 
       const list = el('md-pick-list');
       box.appendChild(list);
 
+      // The block browser's resting row: tinted tile, name, package badge,
+      // and the description as `title` only. Its own comment says the
+      // description band "stays hidden until the card is expanded, keeping
+      // the resting list dense" -- putting all 60 on screen was the clutter.
       const rowFor = (m, i) => {
         const r = el('md-pick-row' + (i === pickCursor ? ' cur' : ''));
+        r.dataset.cat = m.category || 'other';
         const ic = el('md-pick-ico');
-        ic.style.background = colors.get(m.category) || '#9ca3af';
-        ic.textContent = (m.name || '?').slice(0, 1).toUpperCase();
+        if (m.icon) {
+          ic.innerHTML = m.icon;          // registry glyph, as the browser
+        } else {
+          ic.textContent = (m.name || '?').slice(0, 1).toUpperCase();
+        }
         r.appendChild(ic);
         const nm = el('md-pick-name');
         nm.textContent = m.name;
@@ -590,16 +572,12 @@
             groups.get(k).push(m);
           });
           groups.forEach((items, cat) => {
+            // the category name alone, as `category_section()` renders it
+            // (`tags$h3(category)`) -- the count was one more thing to read
             const h = el('md-pick-group');
-            h.textContent = cat + ' · ' + items.length;
+            h.textContent = cat;
             list.appendChild(h);
-            items.forEach((m) => {
-              const r = rowFor(m, -1);
-              const d = el('md-pick-desc');
-              d.textContent = m.description || '';
-              r.appendChild(d);
-              list.appendChild(r);
-            });
+            items.forEach((m) => list.appendChild(rowFor(m, -1)));
           });
           return;
         }
