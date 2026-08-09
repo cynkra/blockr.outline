@@ -670,91 +670,86 @@
 
     /* ---- clipboard -------------------------------------------------
      *
-     * Wire-compatible with blockr.dag's: the same `{object: "subboard"}`
-     * envelope, so a selection copied on the canvas pastes into the deck
-     * and back.
+     * Built on the native `copy` / `cut` / `paste` events, not on
+     * `navigator.clipboard`. That API needs a permission Chrome prompts for
+     * and Safari largely refuses, and reading from it is async -- so a
+     * handler that awaits the read has already lost the user gesture by the
+     * time it would call `preventDefault()`. The events carry
+     * `clipboardData` synchronously and need no permission, because the user
+     * pressing the key IS the authorisation.
      *
-     * Two browser constraints shape this. A clipboard WRITE is only allowed
-     * inside the gesture that triggered it, and a Shiny round-trip breaks
-     * that chain -- so the write is opened as a pending Promise the instant
-     * the key is pressed and resolved when the server answers. A clipboard
-     * READ needs permission, so paste asks for the text first and only
-     * bothers the server once it sees an envelope it recognises.
+     * That leaves one problem: on `copy` the payload has to be handed over
+     * synchronously, but only the server can build it. So the payload is
+     * prepared AHEAD of the keystroke -- every time the selection changes,
+     * the server sends the serialised subboard and it is cached here. By the
+     * time anyone presses the key it is already sitting in `clipCache`.
      *
-     * Scoped to the deck you last clicked in, so a board mounting both this
-     * and the DAG canvas does not act on one gesture twice.
+     * Wire-compatible with blockr.dag: the same `{object: "subboard"}`
+     * envelope, so a selection copied on the canvas pastes here and back.
+     *
+     * Scoped to the deck last clicked in, so a board mounting both this and
+     * the DAG canvas does not act twice on one keystroke.
      */
 
-    let clipResolve = null;
+    let clipCache = null;     // serialised subboard for the current selection
+    let clipIds = [];         // what it was built from
+    let lastSel = '';
     let lastInside = false;
 
     document.addEventListener('mousedown', (ev) => {
       lastInside = rootEl.contains(ev.target);
     }, true);
 
-    const deferClipboardWrite = () => {
-      if (!window.ClipboardItem || !navigator.clipboard) return;
-      try {
-        navigator.clipboard.write([
-          new ClipboardItem({
-            'text/plain': new Promise((resolve) => {
-              clipResolve = (text) =>
-                resolve(new Blob([text], { type: 'text/plain' }));
-            })
-          })
-        ]).catch(() => {});
-      } catch (e) { /* older browsers fall back to writeText below */ }
+    // The renderer owns the selection and does not announce changes, so the
+    // adapter reads it back after any gesture that could have altered it.
+    const syncSelection = () => {
+      const ids = rail.inspect().selection;
+      const key = ids.join(',');
+      if (key === lastSel) return;
+      lastSel = key;
+      clipCache = null;
+      clipIds = ids;
+      if (ids.length) push('block_selection', { ids });
     };
 
-    const setClipboard = (json) => {
-      if (clipResolve) {
-        clipResolve(json);
-        clipResolve = null;
-        return;
+    rootEl.addEventListener('mouseup', () => setTimeout(syncSelection, 0));
+    rootEl.addEventListener('keyup', () => setTimeout(syncSelection, 0));
+
+    const setClipboard = (json) => { clipCache = json; };
+
+    const ownsGesture = () => {
+      if (!lastInside) return false;
+      const a = document.activeElement;
+      if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' ||
+                a.tagName === 'SELECT' || a.isContentEditable)) {
+        return false;
       }
-      if (navigator.clipboard) navigator.clipboard.writeText(json).catch(() => {});
-    };
-
-    document.addEventListener('keydown', async (ev) => {
-
-      if (!lastInside) return;
-
-      const t = ev.target;
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' ||
-                t.tagName === 'SELECT' || t.isContentEditable)) {
-        return;
-      }
-
-      // real text selected anywhere: leave copy to the browser, so an error
-      // message or a column name lands on the clipboard as itself
+      // real prose selected: leave the clipboard to the browser so an error
+      // message or a column name copies as itself
       const sel = window.getSelection && window.getSelection();
-      const hasText = sel && sel.toString().length > 0;
+      return !(sel && sel.toString().length > 0);
+    };
 
-      const mod = ev.ctrlKey || ev.metaKey;
-      if (!mod) return;
+    const onCopy = (cut) => (ev) => {
+      if (!ownsGesture() || !clipIds.length) return;
+      if (!clipCache) return;              // payload not back yet: do nothing
+      ev.preventDefault();
+      ev.clipboardData.setData('text/plain', clipCache);
+      if (cut) push('block_cut', { ids: clipIds });
+    };
 
-      const key = ev.key.toLowerCase();
+    document.addEventListener('copy', onCopy(false));
+    document.addEventListener('cut', onCopy(true));
 
-      if (key === 'c' || key === 'x') {
-        if (hasText) return;
-        const ids = rail.inspect().selection;
-        if (!ids.length) return;
-        ev.preventDefault();
-        deferClipboardWrite();
-        push('block_copy', { ids, cut: key === 'x' });
-      }
-
-      if (key === 'v') {
-        if (!navigator.clipboard) return;
-        try {
-          const text = await navigator.clipboard.readText();
-          const data = JSON.parse(text);
-          if (data && data.object === 'subboard') {
-            ev.preventDefault();
-            push('block_paste', { json: text });
-          }
-        } catch (e) { /* not our payload, or no permission */ }
-      }
+    document.addEventListener('paste', (ev) => {
+      if (!ownsGesture()) return;
+      const text = ev.clipboardData && ev.clipboardData.getData('text/plain');
+      if (!text) return;
+      let data = null;
+      try { data = JSON.parse(text); } catch (e) { return; }
+      if (!data || data.object !== 'subboard') return;   // not ours: let it be
+      ev.preventDefault();
+      push('block_paste', { json: text });
     });
 
     const asArr = (x) => x == null ? [] : (Array.isArray(x) ? x : [x]);

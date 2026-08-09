@@ -251,13 +251,16 @@ minidag_ext_srv <- function(id, board, update, actions, ...) {
 
       # --- clipboard ---------------------------------------------------
       #
-      # The client cannot write to the clipboard after a server round-trip
-      # (Safari only allows it inside the originating gesture), so it opens
-      # a pending write the moment the key is pressed and this resolves it.
-      shiny::observeEvent(input$block_copy, {
+      # The payload is prepared when the SELECTION changes, not when the copy
+      # key is pressed. A `copy` event has to hand its data over
+      # synchronously, and only the server can build it -- so it is built
+      # ahead of time and cached client-side. `navigator.clipboard` would
+      # avoid that, but it needs a permission Safari largely refuses and
+      # Chrome prompts for, and its read is async, which loses the gesture.
+      shiny::observeEvent(input$block_selection, {
 
         ids <- intersect(
-          unlist(input$block_copy$ids),
+          unlist(input$block_selection$ids),
           names(blockr.core::board_blocks(board$board))
         )
 
@@ -269,15 +272,22 @@ minidag_ext_srv <- function(id, board, update, actions, ...) {
           board$board, ids, minidag_live_states(board, ids)
         )
 
-        if (is.null(json)) {
-          return()
+        if (!is.null(json)) {
+          send("clipboard", list(json = json))
         }
+      })
 
-        send("clipboard", list(json = json))
+      # Cut is copy plus remove, and the copy half already happened on the
+      # client from the cached payload. `augment_board_update()` cascades the
+      # incident links and prunes any stack left short.
+      shiny::observeEvent(input$block_cut, {
 
-        # cut is copy, then remove; `augment_board_update()` cascades the
-        # incident links and prunes any stack left short
-        if (isTRUE(input$block_copy$cut)) {
+        ids <- intersect(
+          unlist(input$block_cut$ids),
+          names(blockr.core::board_blocks(board$board))
+        )
+
+        if (length(ids)) {
           update(list(blocks = list(rm = ids)))
         }
       })
