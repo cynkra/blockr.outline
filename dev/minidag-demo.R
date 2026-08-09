@@ -50,6 +50,13 @@ port <- local({
 
 options(
   blockr.tabular_display = blockr.ui::html_table_display,
+  # Nothing gets stacked onto the deck's tab strip. blockr.dock's
+  # `determine_panel_pos()` drops a new panel into the last active group,
+  # and the deck's group is a candidate unless it is named here (the option
+  # defaults to the DAG alone). The deck places the blocks IT inserts, so
+  # this covers the other paths: the navbar browser, the DAG canvas.
+  # Keyed by MOUNT NAME, hence "minidag" below and in `extensions = `.
+  blockr.visible_extensions = c("dag", "minidag"),
   shiny.port = port,
   shiny.host = "0.0.0.0"
 )

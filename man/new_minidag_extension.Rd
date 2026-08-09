@@ -28,8 +28,11 @@ drop-in replacement for the DAG extension in a
 arity is enforced the same way the DAG canvas does it (data blocks
 accept no inputs, transform blocks one, n-ary blocks fill their named
 slots, variadic blocks never fill up),
-\item release the drag on empty space to append a new block (opens the
-block browser, wired from the drag source),
+\item release the drag on empty space (the left gutter works at any scroll
+position) to append a new block: a picker opens at the release point,
+browsing the catalogue by category at rest and filtering as you type.
+The \code{+} on a row appends after it, the \code{+} in the search row adds a
+block with no origin and so no link,
 \item click a row to reveal that block's panel, double-click to rename,
 \item click a dot (or hover a rail edge) to inspect and remove connections,
 \item board stacks show as named frames; collapse them to a single row,
@@ -37,3 +40,28 @@ block browser, wired from the drag source),
 per row, identical in meaning to the DAG node badge.
 }
 }
+\section{Keeping the deck clear}{
+
+A block added from the deck is placed by the deck: appended blocks open
+beside the block they read from, and a block added with no origin opens
+among the other panels. Blocks added by other routes -- the navbar's block
+browser, the DAG canvas -- are placed by blockr.dock's
+\code{determine_panel_pos()}, which drops a new panel into the last active
+group. The deck's own group is a candidate for that unless it is named in
+the \code{blockr.visible_extensions} option, which defaults to the DAG alone.
+
+So an app that mounts the deck and wants nothing ever stacked onto it
+names it there, using the \strong{mount name} it gave the extension:
+
+\if{html}{\out{<div class="sourceCode r">}}\preformatted{options(blockr.visible_extensions = c("dag", "minidag"))
+
+new_dock_board(
+  extensions = list(minidag = new_minidag_extension()),
+  ...
+)
+}\if{html}{\out{</div>}}
+
+This is a global option rather than a board one, so it is set once per
+deployment.
+}
+
