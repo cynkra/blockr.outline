@@ -12,6 +12,7 @@
   "scripts": {
     "build": "npx esbuild srcjs/md-editor/index.js --bundle --outfile=inst/js/md-editor.js --format=iife --define:process.env.NODE_ENV=\\\"production\\\"",
     "build:meta": "npm run build -- --metafile=tools/meta.json",
-    "licenses": "node tools/licenses.js tools/meta.json"
+    "licenses": "node tools/licenses.js tools/meta.json",
+    "test": "node --test \"tests/js/*.test.js\""
   }
 }

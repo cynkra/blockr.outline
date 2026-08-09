@@ -1,0 +1,1294 @@
+{
+ "name": "cdex",
+ "note": "blockr.cdex cedx_board_no_latest(), captured 2026-08-06",
+ "blocks": [
+  {
+   "id": "data",
+   "name": "ADaM data (pharmaverseadam)",
+   "inputs": [],
+   "variadic": false
+  },
+  {
+   "id": "prod_adapter",
+   "name": "Demo adapter (shape pharmaverseadam to look like prod)",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "cdisc",
+   "name": "CDISC check",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "global_filter",
+   "name": "Global Filter",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "pop_pull",
+   "name": "ADSL",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "pop_demog",
+   "name": "Demographic Characteristics (config)",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "pop_demog_tbl",
+   "name": "Demographic Characteristics",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "pop_anova",
+   "name": "Oneway Anova Analysis - Demographic",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "pop_anova_model",
+   "name": "Demographics: ANOVA fit (aov)",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "pop_anova_tbl",
+   "name": "Demographics: ANOVA table",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "ae_flat",
+   "name": "AE",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "ae_flags",
+   "name": "AE: Flags (config)",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "ae_filter",
+   "name": "AE: Local Filter",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "ae_summary",
+   "name": "AE Summary (config)",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "ae_summary_tbl",
+   "name": "AE Summary",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "ae_sev_summary",
+   "name": "AE Summary by Worst CTC Grade (config)",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "ae_sev_tbl",
+   "name": "AE Summary by Worst CTC Grade",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "ae_display",
+   "name": "AE: Display",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "ae_pt_grade",
+   "name": "AE worst grade per patient (config)",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "ae_freq",
+   "name": "Most Frequent AE",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "ae_heatmap",
+   "name": "AE Heatmap (config)",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "ae_heatmap_tbl",
+   "name": "AE Heatmap",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "cm_flat",
+   "name": "CM",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "cm_summary",
+   "name": "CM Summary (config)",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "cm_summary_tbl",
+   "name": "CM summary",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "cm_ft",
+   "name": "CM Table",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "ex_flat",
+   "name": "EX",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "ex_summary",
+   "name": "Exposure (config)",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "ex_summary_tbl",
+   "name": "Exposure Overview",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "lab_flat",
+   "name": "Lab",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "lab_summary",
+   "name": "Laboratory Summary (config)",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "lab_summary_tbl",
+   "name": "Laboratory Summary",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "lab_flags",
+   "name": "Lab: Flags (config)",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "lab_filter",
+   "name": "Lab: Local Filter",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "lab_display",
+   "name": "Lab: Display",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "lab_chart",
+   "name": "Lab: Records by Parameter",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "lab_traj",
+   "name": "Lab: Linechart",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "lab_waterfall",
+   "name": "Lab: Waterfall",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "lab_box",
+   "name": "Lab: Box Plot",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "lab_anova",
+   "name": "Lab: One-way ANOVA",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "lab_anova_model",
+   "name": "Lab: ANOVA fit (aov)",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "lab_anova_tbl",
+   "name": "Lab: ANOVA table",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "lab_anova_es",
+   "name": "Lab: ANOVA effect size",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "lab_kw",
+   "name": "Lab: Kruskal-Wallis",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "lab_shift",
+   "name": "Lab: Shift Plot",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "lab_errorbar",
+   "name": "Lab: Error Bar",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "lab_edish_prep",
+   "name": "Lab: eDish (config)",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "lab_edish",
+   "name": "Lab: eDish",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "vs_flat",
+   "name": "VS",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "vs_summary",
+   "name": "VS Summary (config)",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "vs_summary_tbl",
+   "name": "VS: Summary",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "vs_flags",
+   "name": "VS: Flags (config)",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "vs_filter",
+   "name": "VS: Local Filter",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "vs_display",
+   "name": "VS: Display",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "vs_chart",
+   "name": "VS: Records by Parameter",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "vs_traj",
+   "name": "VS: Timeline",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "vs_waterfall",
+   "name": "VS: Waterfall",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "vs_box",
+   "name": "VS: Box Plot",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "vs_anova",
+   "name": "VS: One-way ANOVA",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "vs_shift",
+   "name": "VS: Shift Plot",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "vs_errorbar",
+   "name": "VS: Error Bar",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "eff_pull",
+   "name": "ADEFTM",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "eff_sdiam",
+   "name": "Efficacy Flag (config)",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "eff_summary",
+   "name": "Efficacy Summary Statistics (config)",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "eff_summary_tbl",
+   "name": "Efficacy: Summary",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "eff_waterfall",
+   "name": "Efficacy: Individual Waterfall",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "eff_shift",
+   "name": "Efficacy: Shift Plot",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "eff_traj",
+   "name": "Efficacy: Individual Linechart",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "eff_errorbar",
+   "name": "Efficacy Error Bar",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "eff_box",
+   "name": "Efficacy: Box Plots",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "eff_anova",
+   "name": "Efficacy: One-way ANOVA",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "eff_anova_model",
+   "name": "Efficacy: ANOVA fit (aov)",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "eff_anova_tbl",
+   "name": "Efficacy: ANOVA table",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "eff_bor_pull",
+   "name": "ADRS",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "eff_bor",
+   "name": "Efficacy: BOR (config)",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "eff_bor_summary",
+   "name": "BOR Summary Statistics (config)",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "eff_bor_summary_tbl",
+   "name": "Efficacy: BOR Summary",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "eff_bor_demog",
+   "name": "Efficacy: BOR by Demographic (config)",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "eff_bor_demog_tbl",
+   "name": "Efficacy: BOR",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "eff_ovr",
+   "name": "Efficacy: OVR (config)",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "eff_swim_prep",
+   "name": "Response Swimmer (config)",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "eff_swim",
+   "name": "Efficacy: Response Swimmer",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "explore_cor_agg",
+   "name": "Exploratory: Correlation Plot (config 1)",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "explore_cor_wide",
+   "name": "Exploratory: Correlation Plot (config 2)",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "explore_cor_tbl",
+   "name": "Exploratory: Correlation Plot",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "pt_semi",
+   "name": "Drill-down filter",
+   "inputs": [
+    "data",
+    "by"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "pt_profile",
+   "name": "Patient profile",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "dx_pull",
+   "name": "Select Table",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "dx_select",
+   "name": "Select Columns",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "dx_search",
+   "name": "Table",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  },
+  {
+   "id": "dx_download",
+   "name": "Download",
+   "inputs": [],
+   "variadic": true
+  },
+  {
+   "id": "gantt_chart",
+   "name": "AE: Individual Timelines",
+   "inputs": [
+    "data"
+   ],
+   "variadic": false
+  }
+ ],
+ "links": [
+  {
+   "id": "paganist_unau",
+   "from": "data",
+   "to": "prod_adapter",
+   "input": "data"
+  },
+  {
+   "id": "gleesome_erin",
+   "from": "prod_adapter",
+   "to": "cdisc",
+   "input": "data"
+  },
+  {
+   "id": "endowed_ape",
+   "from": "cdisc",
+   "to": "global_filter",
+   "input": "data"
+  },
+  {
+   "id": "choosey_waxwing",
+   "from": "global_filter",
+   "to": "pop_pull",
+   "input": "data"
+  },
+  {
+   "id": "exorable_stag",
+   "from": "global_filter",
+   "to": "ae_flat",
+   "input": "data"
+  },
+  {
+   "id": "gnomonic_fossa",
+   "from": "global_filter",
+   "to": "cm_flat",
+   "input": "data"
+  },
+  {
+   "id": "drouthy_pony",
+   "from": "global_filter",
+   "to": "ex_flat",
+   "input": "data"
+  },
+  {
+   "id": "homeless_firefly",
+   "from": "global_filter",
+   "to": "lab_flat",
+   "input": "data"
+  },
+  {
+   "id": "sightly_halcyon",
+   "from": "global_filter",
+   "to": "vs_flat",
+   "input": "data"
+  },
+  {
+   "id": "illicit_halibut",
+   "from": "pop_pull",
+   "to": "pop_demog",
+   "input": "data"
+  },
+  {
+   "id": "furry_nag",
+   "from": "pop_demog",
+   "to": "pop_demog_tbl",
+   "input": "data"
+  },
+  {
+   "id": "spinous_conch",
+   "from": "pop_pull",
+   "to": "pop_anova",
+   "input": "data"
+  },
+  {
+   "id": "centered_bettong",
+   "from": "pop_pull",
+   "to": "pop_anova_model",
+   "input": "data"
+  },
+  {
+   "id": "stoic_joey",
+   "from": "pop_anova_model",
+   "to": "pop_anova_tbl",
+   "input": "data"
+  },
+  {
+   "id": "joyless_husky",
+   "from": "ae_flat",
+   "to": "ae_summary",
+   "input": "data"
+  },
+  {
+   "id": "nonroyal_ovenbird",
+   "from": "ae_summary",
+   "to": "ae_summary_tbl",
+   "input": "data"
+  },
+  {
+   "id": "airtight_kouprey",
+   "from": "ae_flat",
+   "to": "ae_flags",
+   "input": "data"
+  },
+  {
+   "id": "sardonic_vicuna",
+   "from": "ae_flags",
+   "to": "ae_filter",
+   "input": "data"
+  },
+  {
+   "id": "groovy_kitty",
+   "from": "ae_filter",
+   "to": "ae_display",
+   "input": "data"
+  },
+  {
+   "id": "pudgy_pilchard",
+   "from": "ae_display",
+   "to": "ae_pt_grade",
+   "input": "data"
+  },
+  {
+   "id": "mahogany_echidna",
+   "from": "ae_pt_grade",
+   "to": "ae_freq",
+   "input": "data"
+  },
+  {
+   "id": "maize_acouchi",
+   "from": "ae_flat",
+   "to": "ae_heatmap",
+   "input": "data"
+  },
+  {
+   "id": "drowsy_rat",
+   "from": "ae_heatmap",
+   "to": "ae_heatmap_tbl",
+   "input": "data"
+  },
+  {
+   "id": "diopside_bluet",
+   "from": "ae_flat",
+   "to": "ae_sev_summary",
+   "input": "data"
+  },
+  {
+   "id": "hippy_antbear",
+   "from": "ae_sev_summary",
+   "to": "ae_sev_tbl",
+   "input": "data"
+  },
+  {
+   "id": "lukewarm_seal",
+   "from": "cm_flat",
+   "to": "cm_summary",
+   "input": "data"
+  },
+  {
+   "id": "wrathful_scaup",
+   "from": "cm_summary",
+   "to": "cm_summary_tbl",
+   "input": "data"
+  },
+  {
+   "id": "wooded_cattle",
+   "from": "cm_summary",
+   "to": "cm_ft",
+   "input": "data"
+  },
+  {
+   "id": "furtive_piranha",
+   "from": "ex_flat",
+   "to": "ex_summary",
+   "input": "data"
+  },
+  {
+   "id": "thinnish_aurochs",
+   "from": "ex_summary",
+   "to": "ex_summary_tbl",
+   "input": "data"
+  },
+  {
+   "id": "barathea_polyp",
+   "from": "lab_flat",
+   "to": "lab_summary",
+   "input": "data"
+  },
+  {
+   "id": "weighty_halcyon",
+   "from": "lab_summary",
+   "to": "lab_summary_tbl",
+   "input": "data"
+  },
+  {
+   "id": "dicey_snail",
+   "from": "lab_flat",
+   "to": "lab_chart",
+   "input": "data"
+  },
+  {
+   "id": "deistic_galah",
+   "from": "lab_flat",
+   "to": "lab_flags",
+   "input": "data"
+  },
+  {
+   "id": "afraid_yeti",
+   "from": "lab_flags",
+   "to": "lab_filter",
+   "input": "data"
+  },
+  {
+   "id": "pearl_hoiho",
+   "from": "lab_filter",
+   "to": "lab_display",
+   "input": "data"
+  },
+  {
+   "id": "ignoble_coot",
+   "from": "lab_display",
+   "to": "lab_traj",
+   "input": "data"
+  },
+  {
+   "id": "aerobic_astarte",
+   "from": "lab_display",
+   "to": "lab_waterfall",
+   "input": "data"
+  },
+  {
+   "id": "talky_ant",
+   "from": "lab_display",
+   "to": "lab_box",
+   "input": "data"
+  },
+  {
+   "id": "marginal_squid",
+   "from": "lab_display",
+   "to": "lab_anova",
+   "input": "data"
+  },
+  {
+   "id": "archival_stinkpot",
+   "from": "lab_display",
+   "to": "lab_anova_model",
+   "input": "data"
+  },
+  {
+   "id": "endurant_olingo",
+   "from": "lab_anova_model",
+   "to": "lab_anova_tbl",
+   "input": "data"
+  },
+  {
+   "id": "basic_quoll",
+   "from": "lab_anova_model",
+   "to": "lab_anova_es",
+   "input": "data"
+  },
+  {
+   "id": "brambly_bunny",
+   "from": "lab_display",
+   "to": "lab_kw",
+   "input": "data"
+  },
+  {
+   "id": "zincic_creature",
+   "from": "lab_display",
+   "to": "lab_shift",
+   "input": "data"
+  },
+  {
+   "id": "frosted_mollusk",
+   "from": "lab_flat",
+   "to": "lab_edish_prep",
+   "input": "data"
+  },
+  {
+   "id": "deerskin_willet",
+   "from": "lab_edish_prep",
+   "to": "lab_edish",
+   "input": "data"
+  },
+  {
+   "id": "marked_pangolin",
+   "from": "lab_display",
+   "to": "lab_errorbar",
+   "input": "data"
+  },
+  {
+   "id": "agatoid_cutworm",
+   "from": "vs_flat",
+   "to": "vs_summary",
+   "input": "data"
+  },
+  {
+   "id": "impish_cony",
+   "from": "vs_summary",
+   "to": "vs_summary_tbl",
+   "input": "data"
+  },
+  {
+   "id": "slavish_vulture",
+   "from": "vs_flat",
+   "to": "vs_chart",
+   "input": "data"
+  },
+  {
+   "id": "laminate_ladybug",
+   "from": "vs_flat",
+   "to": "vs_flags",
+   "input": "data"
+  },
+  {
+   "id": "emotive_kestrel",
+   "from": "vs_flags",
+   "to": "vs_filter",
+   "input": "data"
+  },
+  {
+   "id": "pale_kinglet",
+   "from": "vs_filter",
+   "to": "vs_display",
+   "input": "data"
+  },
+  {
+   "id": "frolicky_eyra",
+   "from": "vs_display",
+   "to": "vs_traj",
+   "input": "data"
+  },
+  {
+   "id": "runty_sealion",
+   "from": "vs_display",
+   "to": "vs_waterfall",
+   "input": "data"
+  },
+  {
+   "id": "sultanic_flicker",
+   "from": "vs_display",
+   "to": "vs_box",
+   "input": "data"
+  },
+  {
+   "id": "velour_sphinx",
+   "from": "vs_display",
+   "to": "vs_anova",
+   "input": "data"
+  },
+  {
+   "id": "unkissed_queenant",
+   "from": "vs_display",
+   "to": "vs_shift",
+   "input": "data"
+  },
+  {
+   "id": "strict_otter",
+   "from": "vs_display",
+   "to": "vs_errorbar",
+   "input": "data"
+  },
+  {
+   "id": "worrying_turtle",
+   "from": "prod_adapter",
+   "to": "eff_pull",
+   "input": "data"
+  },
+  {
+   "id": "paper_sora",
+   "from": "eff_pull",
+   "to": "eff_sdiam",
+   "input": "data"
+  },
+  {
+   "id": "above_tanager",
+   "from": "eff_sdiam",
+   "to": "eff_summary",
+   "input": "data"
+  },
+  {
+   "id": "herby_squamata",
+   "from": "eff_summary",
+   "to": "eff_summary_tbl",
+   "input": "data"
+  },
+  {
+   "id": "silvan_cougar",
+   "from": "eff_sdiam",
+   "to": "eff_waterfall",
+   "input": "data"
+  },
+  {
+   "id": "lemony_gourami",
+   "from": "eff_sdiam",
+   "to": "eff_shift",
+   "input": "data"
+  },
+  {
+   "id": "stomachy_morayeel",
+   "from": "eff_sdiam",
+   "to": "eff_traj",
+   "input": "data"
+  },
+  {
+   "id": "glassy_seahog",
+   "from": "eff_sdiam",
+   "to": "eff_errorbar",
+   "input": "data"
+  },
+  {
+   "id": "cornmeal_foxhound",
+   "from": "eff_sdiam",
+   "to": "eff_box",
+   "input": "data"
+  },
+  {
+   "id": "impudent_crow",
+   "from": "eff_sdiam",
+   "to": "eff_anova",
+   "input": "data"
+  },
+  {
+   "id": "abyssal_copepod",
+   "from": "eff_sdiam",
+   "to": "eff_anova_model",
+   "input": "data"
+  },
+  {
+   "id": "pygmy_hoopoe",
+   "from": "eff_anova_model",
+   "to": "eff_anova_tbl",
+   "input": "data"
+  },
+  {
+   "id": "domestic_siskin",
+   "from": "prod_adapter",
+   "to": "eff_bor_pull",
+   "input": "data"
+  },
+  {
+   "id": "desired_booby",
+   "from": "eff_bor_pull",
+   "to": "eff_bor",
+   "input": "data"
+  },
+  {
+   "id": "complete_tamarin",
+   "from": "eff_bor",
+   "to": "eff_bor_summary",
+   "input": "data"
+  },
+  {
+   "id": "dorsal_yearling",
+   "from": "eff_bor_summary",
+   "to": "eff_bor_summary_tbl",
+   "input": "data"
+  },
+  {
+   "id": "faithful_xenops",
+   "from": "eff_bor",
+   "to": "eff_bor_demog",
+   "input": "data"
+  },
+  {
+   "id": "batiste_arrowana",
+   "from": "eff_bor_demog",
+   "to": "eff_bor_demog_tbl",
+   "input": "data"
+  },
+  {
+   "id": "puzzled_ostrich",
+   "from": "eff_bor_pull",
+   "to": "eff_ovr",
+   "input": "data"
+  },
+  {
+   "id": "velvet_mustang",
+   "from": "eff_ovr",
+   "to": "eff_swim_prep",
+   "input": "data"
+  },
+  {
+   "id": "ghetto_junco",
+   "from": "eff_swim_prep",
+   "to": "eff_swim",
+   "input": "data"
+  },
+  {
+   "id": "grey_umbrette",
+   "from": "lab_flat",
+   "to": "explore_cor_agg",
+   "input": "data"
+  },
+  {
+   "id": "ebony_gannet",
+   "from": "explore_cor_agg",
+   "to": "explore_cor_wide",
+   "input": "data"
+  },
+  {
+   "id": "variable_naga",
+   "from": "explore_cor_wide",
+   "to": "explore_cor_tbl",
+   "input": "data"
+  },
+  {
+   "id": "gamy_bovine",
+   "from": "pt_semi",
+   "to": "pt_profile",
+   "input": "data"
+  },
+  {
+   "id": "legal_moray",
+   "from": "global_filter",
+   "to": "dx_pull",
+   "input": "data"
+  },
+  {
+   "id": "hexed_harrier",
+   "from": "dx_pull",
+   "to": "dx_select",
+   "input": "data"
+  },
+  {
+   "id": "broody_starfish",
+   "from": "dx_select",
+   "to": "dx_search",
+   "input": "data"
+  },
+  {
+   "id": "broken_grunion",
+   "from": "dx_search",
+   "to": "dx_download",
+   "input": ""
+  },
+  {
+   "id": "chordal_hamster",
+   "from": "ae_filter",
+   "to": "gantt_chart",
+   "input": "data"
+  },
+  {
+   "id": "scaled_magpie",
+   "from": "global_filter",
+   "to": "pt_semi",
+   "input": "data"
+  },
+  {
+   "id": "soupy_queenbee",
+   "from": "gantt_chart",
+   "to": "pt_semi",
+   "input": "by"
+  }
+ ],
+ "stacks": []
+}
