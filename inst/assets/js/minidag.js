@@ -535,8 +535,14 @@
       // and the description as `title` only. Its own comment says the
       // description band "stays hidden until the card is expanded, keeping
       // the resting list dense" -- putting all 60 on screen was the clutter.
+      // `-1` means "no row is current", and it is also what `pickCursor`
+      // holds while browsing -- so a bare `i === pickCursor` marked every
+      // row current, giving all 60 the hover border and wash at rest. That
+      // is what turned a flush list into a column of boxes.
+      const isCur = (i) => i >= 0 && i === pickCursor;
+
       const rowFor = (m, i) => {
-        const r = el('md-pick-row' + (i === pickCursor ? ' cur' : ''));
+        const r = el('md-pick-row' + (isCur(i) ? ' cur' : ''));
         r.dataset.cat = m.category || 'other';
         const ic = el('md-pick-ico');
         if (m.icon) {
