@@ -1271,14 +1271,23 @@
           }
           if (verdict === 'ok') target = band;
         } else if (!band && moved) {
+          // Where the appended block would land, drawn WHERE THE POINTER IS.
+          // It used to be pinned at `listH`, the end of the list: correct as
+          // a statement about the topological order, invisible on any board
+          // long enough to scroll. Releasing over the gutter is a legal
+          // append at every scroll position, and it looked like a dead zone
+          // purely because its only confirmation was rendered off-screen.
           ghost = document.createElement('div');
           ghost.className = 'md-ghost';
           const rows = deckEl.querySelector('.md-rows');
           ghost.style.left = rows.style.marginLeft;
           ghost.style.right = '0';
-          ghost.style.top = listH + 'px';
+          ghost.style.top = Math.max(0, Math.min(y - ROW_H / 2, listH)) + 'px';
           deckEl.appendChild(ghost);
         }
+        // The gutter is the drop zone that is always reachable, so say so for
+        // as long as the drag is live rather than leaving it to be discovered.
+        deckEl.classList.toggle('md-dropzone', !band && moved);
       };
 
       const onUp = (ev) => {
@@ -1287,6 +1296,7 @@
         dragging = false;
         path.remove();
         if (ghost) ghost.remove();
+        deckEl.classList.remove('md-dropzone');
         deckEl.querySelectorAll('.md-chip').forEach((c) =>
           c.classList.remove('drop-ok', 'drop-no'));
         const x = ev.clientX - deckBox.left, y = ev.clientY - deckBox.top;

@@ -146,3 +146,31 @@ test_that("minidag_views is empty on a board that has no views", {
   # the deck renders a plain core board too; views are a dock concept
   expect_identical(minidag_views(blockr.core::new_board()), list())
 })
+
+test_that("the registry splits into add and append pools", {
+
+  reg <- minidag_registry()
+
+  expect_named(reg, c("add", "append"))
+  expect_true(length(reg$add) > 0L)
+
+  # Appending links the source INTO the new block, so every candidate must be
+  # able to receive one: a named input slot, or variadic arity. A source-only
+  # block (a dataset block, arity 0) can be added but never appended.
+  can_receive <- function(m) length(m$inputs) > 0L || isTRUE(m$variadic)
+  expect_true(all(vapply(reg$append, can_receive, logical(1))))
+  expect_true(length(reg$append) <= length(reg$add))
+
+  types <- vapply(reg$add, `[[`, "", "type")
+  expect_setequal(types, names(blockr.core::available_blocks()))
+
+  # a dataset block takes no input, so it is offered for add and withheld
+  # from append
+  expect_true("dataset_block" %in% types)
+  expect_false("dataset_block" %in% vapply(reg$append, `[[`, "", "type"))
+
+  entry <- reg$add[[match("dataset_block", types)]]
+  expect_true(nzchar(entry$name))
+  expect_true(nzchar(entry$category))
+  expect_true(nzchar(entry$package))
+})

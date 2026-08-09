@@ -24,6 +24,15 @@ minidag_ext_srv <- function(id, board, update, actions, ...) {
         }
       )
 
+      # The catalogue does not depend on the board, so it travels once, when
+      # the client announces itself -- not on every board change with the
+      # model. Until it lands the picker declines to open and the gestures
+      # fall back to the board's own block browser.
+      shiny::observeEvent(input$ready, {
+        shiny::req(isTRUE(input$ready))
+        send("registry", minidag_registry())
+      })
+
       # Connect: the client proposes an input slot (it knows the free
       # slots), the server re-derives the free set from the committed
       # board and only honours the proposal when it is (still) free --
@@ -129,12 +138,81 @@ minidag_ext_srv <- function(id, board, update, actions, ...) {
       # Drag released on empty canvas: open the block browser, wired from
       # the drag source (the deck's drop-on-canvas append, same flow the
       # DAG extension triggers for an edge dropped on the canvas).
+      # The deck's picker handles both gestures itself, so `block_append` and
+      # `block_add` only reach here when the catalogue never arrived (the
+      # client falls back rather than swallowing the gesture). The board's
+      # own browser is then the safety net.
       shiny::observeEvent(input$block_append, {
         actions[["append_block_action"]](input$block_append$from)
       })
 
       shiny::observeEvent(input$block_add, {
         actions[["add_block_action"]](input$block_add)
+      })
+
+      # Insert a block chosen in the deck. Adding and appending are one
+      # operation: the origin decides only whether a link is made, and which
+      # of its free input slots receives it.
+      shiny::observeEvent(input$block_insert, {
+
+        msg <- input$block_insert
+        type <- as.character(msg$type)
+
+        if (!length(type) || !nzchar(type) ||
+              !type %in% names(blockr.core::available_blocks())) {
+          return()
+        }
+
+        blk <- tryCatch(
+          blockr.core::create_block(type),
+          error = function(e) {
+            shiny::showNotification(
+              sprintf("Could not create a %s: %s", type, conditionMessage(e)),
+              type = "error"
+            )
+            NULL
+          }
+        )
+
+        if (is.null(blk)) {
+          return()
+        }
+
+        blocks <- blockr.core::board_blocks(board$board)
+        blk_id <- blockr.core::rand_names(names(blocks))
+        upd <- list(
+          blocks = list(
+            add = blockr.core::as_blocks(stats::setNames(list(blk), blk_id))
+          )
+        )
+
+        from <- msg$from
+
+        if (length(from) == 1L && !is.na(from) && from %in% names(blocks)) {
+
+          # The link lands on a free slot of the NEW block, so the choice is
+          # made against the block just built, not against anything on the
+          # board yet. A variadic block reports no named slots but still
+          # accepts a link, on a fresh one.
+          inps <- blockr.core::block_inputs(blk)
+          slot <- if (length(inps)) {
+            inps[[1L]]
+          } else if (is.na(blockr.core::block_arity(blk))) {
+            "1"
+          } else {
+            NULL
+          }
+
+          if (!is.null(slot)) {
+            upd$links <- list(
+              add = blockr.core::as_links(
+                blockr.core::new_link(from = from, to = blk_id, input = slot)
+              )
+            )
+          }
+        }
+
+        update(upd)
       })
 
       shiny::observeEvent(input$stack_add, {

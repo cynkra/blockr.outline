@@ -55,6 +55,12 @@
       const inst = getInst(msg.el);
       if (inst) inst.setBadge(msg);
     });
+    // The catalogue is a pure function of the registry, so it arrives once
+    // when the client announces itself, not on every board change.
+    Shiny.addCustomMessageHandler('minidag-registry', (msg) => {
+      const inst = getInst(msg.el);
+      if (inst) inst.setRegistry(msg);
+    });
   }
 
   // test/inspection hook
@@ -153,7 +159,24 @@
     };
 
     const rail = minidagRail.create(rootEl, {
-      emit: push,
+      // Adding and appending are the same operation; only the origin
+      // differs, so they open the same picker rather than two sidebars.
+      // `block_append` carries the release coordinates, which is what the
+      // renderer has always sent them for.
+      emit: (name, payload) => {
+        // Until the catalogue lands the picker cannot open, and swallowing
+        // the gesture would be worse than the old behaviour -- so fall
+        // through to the board's own browser instead.
+        if (name === 'block_append' && registry.append.length) {
+          openPicker(payload.from, null, { x: payload.x, y: payload.y });
+          return;
+        }
+        if (name === 'block_add' && registry.add.length) {
+          openPicker(null, rootEl.querySelector('.md-add'), null);
+          return;
+        }
+        push(name, payload);
+      },
 
       // a fragment, so icon and pips stay DIRECT children of the row: the
       // chip is a flex line and a wrapper span would collapse them into one
@@ -178,7 +201,20 @@
       showSlot: (l) => l.input !== '' &&
         ((blockOf(l.to) || {}).inputs || []).includes(l.input),
 
-      nodeAside: (b) => membershipEl([b.id]),
+      nodeAside: (b) => {
+        const wrap = membershipEl([b.id]) || el('md-views');
+        if (!registry.append.length) return wrap;
+        const plus = el('md-rowadd', 'button');
+        plus.type = 'button';
+        plus.textContent = '+';
+        plus.title = 'Append a block after ' + b.name;
+        plus.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          openPicker(b.id, ev.currentTarget.closest('.md-chip'), null);
+        });
+        wrap.appendChild(plus);
+        return wrap;
+      },
       stackAside: (s, collapsed) => membershipEl(s.blocks, collapsed)
     });
 
@@ -439,6 +475,211 @@
       rootEl.classList.toggle('md-viewfocus', !!focus);
     };
 
+    /* ---- the inline block picker ----------------------------------------
+     *
+     * One surface for adding and appending, because they are one operation:
+     * blockr.dock's `target_mode()` returns "add" when there is no target,
+     * and the only downstream difference is that an append also makes a
+     * link. So the origin decides two things and nothing else -- whether a
+     * link is created, and which pool is offered (appending needs a block
+     * that can receive a link).
+     *
+     * Two states, one component. At REST it browses: every type, grouped by
+     * category, with its description. That is the catalogue, which is why
+     * the deck needs no second copy of it in a pane. As soon as you type it
+     * RECALLS: flat, ranked, keyboard-driven, uncapped -- a silent
+     * truncation would hide types from the only place they are listed.
+     *
+     * It opens AT the insertion point rather than as a page overlay, so the
+     * rail and the origin row stay on screen while you choose.
+     */
+
+    let registry = { add: [], append: [] };
+    let picker = null, pickMatches = [], pickCursor = -1;
+
+    const catColor = () => {
+      const m = new Map();
+      blocks.forEach((b) => {
+        if (b.category && b.color && !m.has(b.category)) m.set(b.category, b.color);
+      });
+      return m;
+    };
+
+    const closePicker = () => {
+      if (picker) picker.remove();
+      picker = null;
+      pickMatches = [];
+      pickCursor = -1;
+    };
+
+    const commitPick = (meta, originId) => {
+      closePicker();
+      push('block_insert', { type: meta.type, from: originId || null });
+    };
+
+    const openPicker = (originId, anchor, at) => {
+
+      closePicker();
+
+      const pool = originId ? registry.append : registry.add;
+      if (!pool.length) return;
+
+      const origin = originId ? blockOf(originId) : null;
+      const colors = catColor();
+      const box = el('md-picker', 'div');
+
+      const head = el('md-pick-head');
+      if (origin) {
+        const from = el('md-pick-from');
+        from.textContent = origin.name;
+        head.appendChild(from);
+        const arrow = el('md-pick-arrow');
+        arrow.textContent = '→';
+        head.appendChild(arrow);
+        head.appendChild(document.createTextNode('new block'));
+        const slot = el('md-pick-slot');
+        slot.textContent = 'links into its first free input';
+        head.appendChild(slot);
+      } else {
+        head.appendChild(document.createTextNode('New block'));
+        const slot = el('md-pick-slot');
+        slot.textContent = 'no origin, no link';
+        head.appendChild(slot);
+      }
+      box.appendChild(head);
+
+      const inp = document.createElement('input');
+      inp.className = 'md-pick-input';
+      inp.type = 'text';
+      inp.placeholder = 'Type to filter ' + pool.length + ' block types…';
+      box.appendChild(inp);
+
+      const list = el('md-pick-list');
+      box.appendChild(list);
+
+      const rowFor = (m, i) => {
+        const r = el('md-pick-row' + (i === pickCursor ? ' cur' : ''));
+        const ic = el('md-pick-ico');
+        ic.style.background = colors.get(m.category) || '#9ca3af';
+        ic.textContent = (m.name || '?').slice(0, 1).toUpperCase();
+        r.appendChild(ic);
+        const nm = el('md-pick-name');
+        nm.textContent = m.name;
+        r.appendChild(nm);
+        const pk = el('md-pick-pkg');
+        pk.textContent = m.package;
+        r.appendChild(pk);
+        r.title = m.description || m.name;
+        r.addEventListener('click', () => commitPick(m, originId));
+        return r;
+      };
+
+      const paint = () => {
+
+        const q = inp.value.trim().toLowerCase();
+        list.innerHTML = '';
+        list.classList.toggle('browse', !q);
+
+        if (!q) {
+          pickMatches = pool;
+          pickCursor = -1;            // nothing preselected while browsing
+          const groups = new Map();
+          pool.forEach((m) => {
+            const k = m.category || 'other';
+            if (!groups.has(k)) groups.set(k, []);
+            groups.get(k).push(m);
+          });
+          groups.forEach((items, cat) => {
+            const h = el('md-pick-group');
+            h.textContent = cat + ' · ' + items.length;
+            list.appendChild(h);
+            items.forEach((m) => {
+              const r = rowFor(m, -1);
+              const d = el('md-pick-desc');
+              d.textContent = m.description || '';
+              r.appendChild(d);
+              list.appendChild(r);
+            });
+          });
+          return;
+        }
+
+        // name matches first, then the ones that only match by package or
+        // category -- typing "dplyr" should find that package's blocks
+        const hit = (m) => (m.name || '').toLowerCase().includes(q);
+        const near = (m) => (m.package || '').toLowerCase().includes(q) ||
+          (m.category || '').toLowerCase().includes(q) ||
+          (m.description || '').toLowerCase().includes(q);
+        pickMatches = pool.filter(hit).concat(
+          pool.filter((m) => !hit(m) && near(m))
+        );
+        pickCursor = Math.max(0, Math.min(pickCursor, pickMatches.length - 1));
+        pickMatches.forEach((m, i) => list.appendChild(rowFor(m, i)));
+
+        if (!pickMatches.length) {
+          const e = el('md-pick-group');
+          e.textContent = 'no block type matches';
+          list.appendChild(e);
+        }
+      };
+
+      inp.addEventListener('input', () => { pickCursor = 0; paint(); });
+      inp.addEventListener('keydown', (ev) => {
+        if (ev.key === 'ArrowDown') {
+          ev.preventDefault();
+          pickCursor = Math.min(pickCursor + 1, pickMatches.length - 1);
+          paint();
+          const cur = list.querySelector('.cur');
+          if (cur) cur.scrollIntoView({ block: 'nearest' });
+        }
+        if (ev.key === 'ArrowUp') {
+          ev.preventDefault();
+          pickCursor = Math.max(0, pickCursor - 1);
+          paint();
+          const cur = list.querySelector('.cur');
+          if (cur) cur.scrollIntoView({ block: 'nearest' });
+        }
+        // only when something is genuinely selected: browsing preselects
+        // nothing, so Enter there must not add whatever happens to be first
+        if (ev.key === 'Enter' && pickCursor >= 0 && pickMatches[pickCursor]) {
+          commitPick(pickMatches[pickCursor], originId);
+        }
+        if (ev.key === 'Escape') { ev.stopPropagation(); closePicker(); }
+      });
+
+      rootEl.appendChild(box);
+      picker = box;
+      paint();
+
+      // Anchor at the insertion point. `at` is the drag's release position
+      // (the renderer sends x/y on `block_append` for exactly this); a
+      // trigger with no coordinates anchors under its own element.
+      const rootBox = rootEl.getBoundingClientRect();
+      let left, top;
+      if (at) {
+        left = at.x;
+        top = at.y + 8;
+      } else {
+        const r = anchor.getBoundingClientRect();
+        left = r.left - rootBox.left;
+        top = r.bottom - rootBox.top + 6;
+      }
+      const w = box.offsetWidth, h = box.offsetHeight;
+      // flip up rather than run off the bottom, which is the common case
+      // when appending from the last row
+      if (top + h > rootEl.clientHeight && top - h - 12 > 0) top = top - h - 20;
+      box.style.left = Math.max(4, Math.min(left, rootEl.clientWidth - w - 4)) + 'px';
+      box.style.top = Math.max(4, top) + 'px';
+
+      inp.focus();
+    };
+
+    // Click outside closes it. Capture phase, so a click that also lands on
+    // a row does not reopen it in the same gesture.
+    document.addEventListener('mousedown', (ev) => {
+      if (picker && !picker.contains(ev.target)) closePicker();
+    }, true);
+
     const asArr = (x) => x == null ? [] : (Array.isArray(x) ? x : [x]);
 
     const setData = (msg) => {
@@ -461,10 +702,22 @@
       paintChrome();
     };
 
+    const setRegistry = (msg) => {
+      registry = {
+        add: asArr(msg.add).map((m) => Object.assign({}, m, {
+          inputs: asArr(m.inputs)
+        })),
+        append: asArr(msg.append).map((m) => Object.assign({}, m, {
+          inputs: asArr(m.inputs)
+        }))
+      };
+    };
+
     return {
       ns,
       announced: false,
       setData,
+      setRegistry,
       setBadge: rail.setBadge,
       inspect: rail.inspect
     };
