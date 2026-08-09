@@ -544,7 +544,7 @@
       const rowFor = (m, i) => {
         const r = el('md-pick-row' + (isCur(i) ? ' cur' : ''), 'div');
         r.dataset.cat = m.category || 'other';
-        const ic = el('md-pick-ico');
+        const ic = el('md-kind');
         if (m.icon) {
           ic.innerHTML = m.icon;          // registry glyph, as the browser
         } else {

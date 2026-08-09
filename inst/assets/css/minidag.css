@@ -139,13 +139,23 @@
   transition: opacity 0.12s;
 }
 .minidag .md-chip {
-  background: var(--md-bg-input);
-  border: 1px solid var(--md-border);
+  /* Flush at rest. A border and a fill on every row made the deck a column
+     of cards, which left the stack frame -- a box drawn BEHIND those rows --
+     competing with 92 smaller boxes; it is now the only filled thing on
+     screen and reads immediately. Hover still separates a row, and the
+     selection / drop states below read louder against transparent than they
+     did against a border that was always there. */
+  background: transparent;
+  border: 1px solid transparent;
   cursor: pointer;
   /* shift-clicking a range would otherwise drag a blue text highlight across
      every row it passed; a row is chrome, not prose. The rename control is
      the exception -- there the text IS the point. */
   user-select: none;
+}
+.minidag .md-chip:hover {
+  background: var(--md-bg-input);
+  border-color: var(--md-border);
 }
 .minidag .md-chip input,
 .minidag .md-chip [contenteditable="true"] { user-select: text; }
@@ -169,7 +179,11 @@
   border-color: var(--md-primary);
   box-shadow: 0 0 0 1px var(--md-primary);
 }
-.minidag .md-chip.instack { background: #fff; }
+/* A row inside a stack stays transparent too. It was white so it would read
+   against the frame's tint back when every row carried a grey fill; now that
+   rows are flush, filling it would put a card back exactly where the frame is
+   meant to be doing the work. */
+.minidag .md-chip.instack { background: transparent; }
 
 .minidag .md-kind {
   flex: 0 0 18px;
@@ -781,74 +795,48 @@
 }
 .minidag .md-pick-group:first-child { margin-top: 2px; }
 
+/* The picker row IS the deck row: same height, gap, padding, radius and
+   tile. A block is one object, so it should not be drawn one way in the
+   list and another in the menu that adds it. The tile reuses `.md-kind`
+   outright rather than restating its geometry, so the two cannot drift. */
 .minidag .md-pick-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 6px;
+  gap: 7px;
+  height: var(--md-row-h, 28px);
+  margin-bottom: 2px;
+  padding: 0 6px;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: 7px;
   cursor: pointer;
 }
 .minidag .md-pick-row:hover,
 .minidag .md-pick-row.cur {
   border-color: var(--md-border);
-  background: rgba(249, 250, 251, 0.6);
+  background: var(--md-bg-input);
 }
-.minidag .md-pick-ico {
-  flex: 0 0 auto;
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  font-weight: 600;
-  background: rgba(120, 120, 120, 0.12);
-  color: var(--md-g500);
-}
-.minidag .md-pick-ico svg { width: 16px; height: 16px; display: block; }
 .minidag .md-pick-name {
   flex: 1 1 auto;
   min-width: 0;
+  font-size: 12.5px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .minidag .md-pick-pkg { font-size: 11px; color: var(--md-g400); }
 
-/* Category tints, the same values blockr.dock gives the browser's cards.
-   Keyed off the registry category rather than a colour read from a block
-   on the board, so a category nothing on this board uses is still tinted. */
-.minidag .md-pick-row[data-cat="input"] .md-pick-ico {
-  background: rgba(0, 114, 178, 0.15);
-  color: #0072b2;
-}
-.minidag .md-pick-row[data-cat="transform"] .md-pick-ico {
-  background: rgba(0, 158, 115, 0.15);
-  color: #009e73;
-}
-.minidag .md-pick-row[data-cat="structured"] .md-pick-ico {
-  background: rgba(86, 180, 233, 0.18);
-  color: #2b8fd0;
-}
-.minidag .md-pick-row[data-cat="plot"] .md-pick-ico {
-  background: rgba(230, 159, 0, 0.18);
-  color: #b97c00;
-}
-.minidag .md-pick-row[data-cat="table"] .md-pick-ico {
-  background: rgba(204, 121, 167, 0.18);
-  color: #cc79a7;
-}
-.minidag .md-pick-row[data-cat="model"] .md-pick-ico {
-  background: rgba(240, 228, 66, 0.25);
-  color: #9a8f00;
-}
-.minidag .md-pick-row[data-cat="output"] .md-pick-ico {
-  background: rgba(213, 94, 0, 0.16);
-  color: #d55e00;
-}
+/* `blk_color()` is a pure function of the category, so the same values it
+   gives a block on the board give its type here -- the tile a block will
+   have is the tile you picked. */
+.minidag .md-pick-row[data-cat="input"] .md-kind { background: #0072B2; }
+.minidag .md-pick-row[data-cat="transform"] .md-kind { background: #009E73; }
+.minidag .md-pick-row[data-cat="structured"] .md-kind { background: #56B4E9; }
+.minidag .md-pick-row[data-cat="plot"] .md-kind { background: #E69F00; }
+.minidag .md-pick-row[data-cat="table"] .md-kind { background: #CC79A7; }
+.minidag .md-pick-row[data-cat="model"] .md-kind { background: #F0E442; }
+.minidag .md-pick-row[data-cat="output"] .md-kind { background: #D55E00; }
+.minidag .md-pick-row[data-cat="utility"] .md-kind { background: #CCCCCC; }
+.minidag .md-pick-row .md-kind { background: #999999; }
 
 /* the mouse fallback for the drag: append after this row */
 .minidag .md-rowadd {
