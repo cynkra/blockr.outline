@@ -212,6 +212,8 @@ minidag_ext_srv <- function(id, board, update, actions, ...) {
           }
         }
 
+        upd$views <- minidag_place_delta(board$board, blk_id, from)
+
         update(upd)
       })
 

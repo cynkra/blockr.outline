@@ -174,3 +174,48 @@ test_that("the registry splits into add and append pools", {
   expect_true(nzchar(entry$category))
   expect_true(nzchar(entry$package))
 })
+
+test_that("a block inserted from the deck lands beside its origin", {
+
+  board <- blockr.dock::new_dock_board(
+    blocks = c(
+      d1 = blockr.core::new_dataset_block("iris"),
+      h1 = blockr.core::new_head_block()
+    ),
+    links = blockr.core::links(from = "d1", to = "h1"),
+    extensions = list(mini = new_minidag_extension()),
+    views = list(one = blockr.dock::dock_view(c("mini", "d1", "h1")))
+  )
+
+  view <- blockr.dock::active_view(blockr.dock::board_views(board))
+  pid <- as.character(blockr.dock::as_block_panel_id("new1"))
+
+  # appended: beside the block it reads from, which is where the eye is
+  delta <- minidag_place_delta(board, "new1", from = "h1")
+  hint <- delta$mod[[view]]$add[[pid]]
+  expect_identical(
+    hint$near, as.character(blockr.dock::as_block_panel_id("h1"))
+  )
+  expect_identical(hint$side, "within")
+  expect_identical(delta$mod[[view]]$select, pid)
+
+  # no origin: nothing to sit beside
+  bare <- minidag_place_delta(board, "new1", from = NULL)
+  expect_null(bare$mod[[view]]$add[[pid]]$near)
+  expect_identical(bare$mod[[view]]$add[[pid]]$side, "right")
+
+  # an origin that is not on this page cannot be a `near` anchor -- naming it
+  # would have the delta rejected outright
+  off <- blockr.dock::new_dock_board(
+    blocks = c(
+      d1 = blockr.core::new_dataset_block("iris"),
+      h1 = blockr.core::new_head_block()
+    ),
+    links = blockr.core::links(from = "d1", to = "h1"),
+    extensions = list(mini = new_minidag_extension()),
+    views = list(one = blockr.dock::dock_view(c("mini", "d1")))
+  )
+  elsewhere <- minidag_place_delta(off, "new1", from = "h1")
+  expect_null(elsewhere$mod[["one"]]$add[[pid]]$near)
+  expect_identical(elsewhere$mod[["one"]]$add[[pid]]$side, "right")
+})

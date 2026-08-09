@@ -233,6 +233,51 @@ minidag_reveal_delta <- function(board, block) {
   list(views = list(mod = stats::setNames(list(ops), view)))
 }
 
+# Where a block inserted from the deck should land.
+#
+# Without a hint, blockr.dock falls back to `determine_panel_pos()`, which
+# stacks the new panel into the last active group -- and the deck's own group
+# qualifies, because only panels named in the `visible_extensions` board
+# option are excluded and that option defaults to the DAG alone. So a block
+# added from the deck lands on top of the deck, hiding the tool that added it.
+#
+# Appending has a better answer than "not there" anyway: put it beside the
+# block it reads from, which is where you are looking. With no origin there is
+# nothing to sit beside, so it asks for `right` -- which dockview resolves
+# against the active group, in practice landing it among the other block
+# panels rather than splitting a fresh column. Either way it is not the deck.
+minidag_place_delta <- function(board, blk_id, from = NULL) {
+
+  views <- blockr.dock::board_views(board)
+  view <- blockr.dock::active_view(views)
+
+  if (is.null(view)) {
+    return(NULL)
+  }
+
+  pid <- as.character(blockr.dock::as_block_panel_id(blk_id))
+
+  hint <- list(side = "right")
+
+  if (length(from) == 1L && !is.na(from)) {
+
+    origin <- as.character(blockr.dock::as_block_panel_id(from))
+
+    # `near` must name a member of the view as it stands, or the delta is
+    # rejected; an origin that is not on this page falls back to the right.
+    if (origin %in% blockr.dock::view_members(views[[view]])) {
+      hint <- list(near = origin, side = "within")
+    }
+  }
+
+  list(
+    mod = stats::setNames(
+      list(list(add = stats::setNames(list(hint), pid), select = pid)),
+      view
+    )
+  )
+}
+
 minidag_ext_result <- function(board, extensions) {
   extensions[[
     blockr.dock::extension_ids(
