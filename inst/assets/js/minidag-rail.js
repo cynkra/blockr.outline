@@ -62,7 +62,13 @@
     // the right. Y is half of X because rows sit GAP (6px) apart, so a full
     // FRAME_PAD_X above the header would put the frame edge against the row
     // above it.
-    FRAME_PAD_X: 6, FRAME_PAD_Y: 3
+    FRAME_PAD_X: 6, FRAME_PAD_Y: 3,
+    // Two stacks in a row used to touch exactly: a frame ends FRAME_PAD_Y
+    // before the next row starts, and the next frame begins FRAME_PAD_Y
+    // before its own first row, so the arithmetic cancelled to nothing and
+    // they read as one box with a line through it. Taken off each frame's
+    // height, so this IS the space between them.
+    FRAME_GAP: 5
   };
   const LANE_COLORS = ['#9ca3af', '#2563eb', '#0d9488', '#7c3aed', '#b45309', '#be185d'];
   const STATUS_RANK = { failed: 3, waiting: 2, unset: 1 };
@@ -102,7 +108,7 @@
     }, adapter.opts || {});
     const M = Object.assign({}, DEFAULT_METRICS, opts.metrics || {});
     const { LANE_W, ROW_H, GAP, RAIL_L, RAIL_R, DOT_R } = M;
-    const { FRAME_PAD_X, FRAME_PAD_Y } = M;
+    const { FRAME_PAD_X, FRAME_PAD_Y, FRAME_GAP } = M;
     const PITCH = ROW_H + GAP;
 
     const slotsFor = adapter.slotsFor;
@@ -542,14 +548,18 @@
         const size = r.stack.blocks.length;
         const frame = document.createElement('div');
         frame.className = 'md-stackframe';
+        frame.dataset.stack = r.stack.id;
         if (r.stack.color) {
-          frame.style.borderColor = r.stack.color;
+          // a custom property rather than `style.borderColor`: the selected
+          // state needs to override this, and an inline value would win
+          frame.style.setProperty('--md-stack-color', r.stack.color);
           frame.style.background = hexA(r.stack.color, 0.06);
         }
         frame.style.left = (railW - FRAME_PAD_X) + 'px';
         frame.style.right = '0px';
         frame.style.top = (i * PITCH - FRAME_PAD_Y) + 'px';
-        frame.style.height = ((1 + size) * PITCH - GAP + 2 * FRAME_PAD_Y) + 'px';
+        frame.style.height =
+          ((1 + size) * PITCH - GAP + 2 * FRAME_PAD_Y - FRAME_GAP) + 'px';
         deckEl.appendChild(frame);
       });
 
@@ -1115,10 +1125,13 @@
         const s = stacks.find((x) => 'stack:' + x.id === el.dataset.id);
         el.classList.toggle('sel', !!s && wholeStackSelected(s));
       });
+      deckEl.querySelectorAll('.md-stackframe').forEach((el) => {
+        const s = stacks.find((x) => x.id === el.dataset.stack);
+        el.classList.toggle('sel', !!s && wholeStackSelected(s));
+      });
       deckEl.querySelectorAll('.md-stackhead').forEach((el) => {
         const s = stacks.find((x) => x.id === el.dataset.stack);
         const whole = !!s && wholeStackSelected(s);
-        el.classList.toggle('sel', whole);
         if (whole) {
           s.blocks.forEach((id) => {
             const row = deckEl.querySelector(

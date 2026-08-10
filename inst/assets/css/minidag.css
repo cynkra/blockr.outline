@@ -177,8 +177,7 @@
   background: var(--md-primary-bg);
 }
 .minidag .md-chip.drop-no { border-color: #fca5a5; }
-.minidag .md-chip.sel,
-.minidag .md-stackhead.sel {
+.minidag .md-chip.sel {
   border-color: var(--md-primary);
   box-shadow: 0 0 0 1px var(--md-primary);
 }
@@ -308,13 +307,21 @@
   color: var(--md-g600);
 }
 
+/* The frame IS the stack, so it is what carries the selection -- the same
+   blue ring a single block gets, drawn around the group instead. Ringing
+   the header row worked but read as a second object inside the first, and
+   the row already has an X of its own for dissolving. */
 .minidag .md-stackframe {
   position: absolute;
   z-index: 1;
-  border: 1px solid #dbe2ea;
+  border: 1px solid var(--md-stack-color, #dbe2ea);
   background: #f8fafc;
   border-radius: 9px;
   pointer-events: none;
+}
+.minidag .md-stackframe.sel {
+  border-color: var(--md-primary);
+  box-shadow: 0 0 0 1px var(--md-primary);
 }
 
 .minidag .md-chip.md-stackchip {

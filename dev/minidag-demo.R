@@ -84,11 +84,19 @@ board <- new_dock_board(
     to = c("f1", "h1", "m1", "m1", "r1", "r1"),
     input = c("data", "data", "x", "y", "", "")
   ),
+  # Two stacks that land on ADJACENT rows, so the space between frames is
+  # visible: without it they touch exactly and read as one box with a line
+  # through it.
   stacks = stacks(
     prep = new_dock_stack(
       c("d1", "f1"),
       name = "Data prep",
       color = "#2563eb"
+    ),
+    fan = new_dock_stack(
+      c("h1", "m1"),
+      name = "Fan out",
+      color = "#0d9488"
     )
   ),
   extensions = list(
