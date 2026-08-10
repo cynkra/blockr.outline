@@ -110,16 +110,25 @@
       return free;
     };
 
+    // The glyph comes from the catalogue, keyed by the block's type, because
+    // an icon belongs to a type and not to a board: it arrives once instead
+    // of riding every board change as a base64 data URI. The tile is tinted
+    // from the block's own colour and the SVG uses `currentColor`, so it
+    // renders white on the solid square -- the same pairing the picker rows
+    // use. A type the catalogue does not carry falls back to the letter.
+    const iconFor = (type) => {
+      const m = registry.byType && registry.byType.get(type);
+      return m && m.icon ? m.icon : null;
+    };
+
     const kindIcon = (b) => {
       const k = document.createElement('span');
       k.className = 'md-kind';
-      if (b.icon) {
-        const img = document.createElement('img');
-        img.src = b.icon;
-        img.alt = b.category || 'block';
-        k.appendChild(img);
+      k.style.background = b.color || '#999';
+      const svg = iconFor(b.type);
+      if (svg) {
+        k.innerHTML = svg;
       } else {
-        k.style.background = b.color || '#999';
         k.textContent = (b.name || '?').slice(0, 1).toUpperCase();
       }
       k.title = b.category || '';
@@ -756,8 +765,9 @@
 
     const setData = (msg) => {
       blocks = asArr(msg.blocks).map((b) => ({
-        id: b.id, name: b.name, category: b.category || '', color: b.color,
-        icon: b.icon || null, inputs: asArr(b.inputs), variadic: !!b.variadic
+        id: b.id, name: b.name, type: b.type || '',
+        category: b.category || '', color: b.color,
+        inputs: asArr(b.inputs), variadic: !!b.variadic
       }));
       links = asArr(msg.links).map((l) => ({
         id: l.id, from: l.from, to: l.to,
@@ -783,6 +793,11 @@
           inputs: asArr(m.inputs)
         }))
       };
+      registry.byType = new Map(registry.add.map((m) => [m.type, m]));
+      // The catalogue and the first board model race -- both are sent when
+      // the client announces itself -- so if the model won, the rows are
+      // already drawn with letter tiles. Redraw once the glyphs exist.
+      if (blocks.length) rail.render();
     };
 
     return {

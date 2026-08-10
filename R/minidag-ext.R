@@ -144,14 +144,22 @@ minidag_payload <- function(board) {
 
   meta <- if (length(blocks)) blockr.dock::blks_metadata(blocks)
 
+  # The block's TYPE rather than its rendered icon. An icon is a property of
+  # the type, not of the board, so it travels once with the catalogue and the
+  # client looks it up -- where it used to be a base64 data URI rebuilt and
+  # resent on every board change. On the CDEX board that was 93 KB of a
+  # 114 KB payload, and only 21 of the 93 strings were distinct. Shiny's
+  # websocket does not compress, so those were 93 KB on the wire each time a
+  # filter moved. A type the catalogue does not know falls back to the
+  # letter tile client-side.
   blk_entry <- function(i) {
     b <- blocks[[i]]
     list(
       id = names(blocks)[i],
       name = blockr.core::block_name(b),
+      type = class(b)[[1L]],
       category = meta$category[i],
       color = meta$color[i],
-      icon = minidag_icon(meta$icon[i], meta$color[i]),
       inputs = I(as.list(blockr.core::block_inputs(b))),
       variadic = is.na(blockr.core::block_arity(b))
     )
@@ -222,19 +230,6 @@ minidag_views <- function(board) {
   }
 
   lapply(names(views), vw_entry)
-}
-
-# `jsonlite::base64_enc()` line-wraps its output; browsers tolerate that in
-# an <img src> but stripping is free insurance (CSS url() would not).
-minidag_icon <- function(icon_svg, color) {
-  uri <- tryCatch(
-    blockr.dock::blk_icon_data_uri(icon_svg, color),
-    error = function(e) NULL
-  )
-  if (is.null(uri)) {
-    return(NULL)
-  }
-  gsub("[\r\n[:space:]]", "", uri)
 }
 
 # Reveal a block's panel in the *current* view: focus it if the view already
