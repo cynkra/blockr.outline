@@ -324,6 +324,70 @@
   box-shadow: 0 0 0 1px var(--md-primary);
 }
 
+/* Dropping a row into a group, or taking it out of the one it is in. The
+   frame answers, not the row: a group gaining a member is a change to the
+   group, and the pointer is over the frame when it happens. */
+.minidag .md-stackframe.drop-ok {
+  border-color: var(--md-primary);
+  border-style: dashed;
+  background: var(--md-primary-bg);
+}
+.minidag .md-stackframe.drop-no {
+  border-color: #dc2626;
+  border-style: dashed;
+}
+.minidag .md-stackframe.drop-out {
+  border-style: dashed;
+  opacity: 0.6;
+}
+/* The row being moved stays where it is (it has no position of its own to
+   drag) and says so by receding: the tip at the pointer carries the news. */
+.minidag .md-chip.md-moving {
+  opacity: 0.45;
+  cursor: grabbing;
+}
+
+/* Follows the pointer, so it is fixed to the viewport rather than to a deck
+   that scrolls under it. */
+.md-droptip {
+  position: fixed;
+  z-index: 1080;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: #111827;
+  color: #fff;
+  font-size: 11.5px;
+  line-height: 1.5;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+.md-droptip.no { background: #b91c1c; }
+
+/* A stack the flow leaves and comes back to. Amber rather than red: the
+   board is valid, the PICTURE is compromised -- and the button is the fix,
+   so it has to read as an offer, not as an error. */
+.minidag .md-warn {
+  flex: 0 0 auto;
+  height: 16px;
+  margin-left: 4px;
+  padding: 0 6px;
+  border: 1px solid #fcd34d;
+  border-radius: 999px;
+  background: #fffbeb;
+  color: #b45309;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 14px;
+  cursor: pointer;
+}
+.minidag .md-warn:hover:not(:disabled) {
+  background: #fef3c7;
+  border-color: #f59e0b;
+}
+.minidag .md-warn:disabled { cursor: default; opacity: 0.7; }
+
 .minidag .md-chip.md-stackchip {
   background: #f8fafc;
   border-style: solid;
@@ -592,21 +656,58 @@
 
 /* --- the view list ----------------------------------------------------
    A panel you open, not furniture: the deck often sits in a narrow dock
-   panel. Absolutely positioned rather than a flex column because the
-   renderer owns the skeleton (`.md-head` + `.md-deck` as siblings), and
-   auto-height because this box is deliberately not a scrollport. */
+   panel.
 
+   It STAYS PUT while the deck scrolls, which is the whole reason it is laid
+   out this way. It used to be `position: absolute; top: 0` -- pinned to the
+   top of a box that is not the scrollport (see `.minidag` above), so on the
+   CDEX board it scrolled off after eight rows and the remaining eighty-four
+   were browsed with no way to see or switch the view they were about. Sticky
+   fixes that, but only for a box in normal flow, and the renderer owns the
+   skeleton (`.md-head` + `.md-deck` as siblings, with the list inserted
+   before them). Grid places all three without a wrapper: the list takes
+   column 1 across both rows, so it has the deck's full height to stick
+   within. `align-self: start` is load-bearing -- a stretched grid item is as
+   tall as its area and can never stick. */
+
+.minidag.md-listopen {
+  display: grid;
+  grid-template-columns: 196px minmax(0, 1fr);
+  grid-template-rows: auto 1fr;
+}
 .minidag .md-viewlist {
-  position: absolute;
-  left: 0;
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  position: sticky;
+  /* The head anchors at -10px because it pulls itself over the container's
+     padding to hide the rows passing under it. This one has no such margin,
+     so it pins at the edge and its own 2px keeps the first row off it. */
   top: 0;
-  width: 186px;
+  align-self: start;
   z-index: 20;
+  /* The scrollport is the dock panel, which has no CSS unit of its own; the
+     viewport is its upper bound, so this is the safety valve for a board
+     with more views than fit, not the everyday case. */
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
   padding: 2px 6px 6px;
+  margin-right: 10px;
+  background: var(--md-bg);
   border-right: 1px solid var(--md-border);
 }
-.minidag.md-listopen .md-head,
-.minidag.md-listopen .md-deck { margin-left: 196px; }
+/* Column 2, and no negative left margin: the head pulls itself over the
+   container's padding so rows do not show at its edges, and on this side
+   that padding is now the list's border. */
+.minidag.md-listopen .md-head {
+  grid-column: 2;
+  grid-row: 1;
+  margin-left: 0;
+  padding-left: 0;
+}
+.minidag.md-listopen .md-deck {
+  grid-column: 2;
+  grid-row: 2;
+}
 
 .minidag .md-vhead {
   font-size: 10.5px;

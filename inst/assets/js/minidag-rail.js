@@ -466,9 +466,20 @@
         p.setAttribute('stroke-width', '1.6');
         p.setAttribute('stroke-dasharray', '3 3');
         p.setAttribute('marker-end', 'url(#' + arrowId + ')');
-        p.setAttribute('class', 'md-edge md-edge-back');
+        p.setAttribute('class', 'md-edge md-edge-back' + (e.up ? ' md-edge-up' : ''));
         p.dataset.from = e.from;
         p.dataset.to = e.to;
+        // `up` is not a loop: it is a plain dependency the ROW ORDER could
+        // not honour, and the only thing that forces that on a board is a
+        // stack whose frame has to jump over a block feeding it. Say so on
+        // the line itself -- the alternative is an arrow that reads as a
+        // cycle on a graph that cannot have one.
+        if (e.up) {
+          const t = svgEl('title');
+          t.textContent = 'Feeds a row above it: a stack in between keeps ' +
+            'its rows together, so this link has to climb.';
+          p.appendChild(t);
+        }
         svg.appendChild(p);
         const hit = svgEl('path');
         hit.setAttribute('d', p.getAttribute('d'));
@@ -691,6 +702,16 @@
         el.appendChild(rm);
       }
 
+      // Only where there is somewhere to drop: on a board with no stacks the
+      // gesture has no target, and swallowing mousedown would cost the row
+      // its text selection for nothing.
+      el.addEventListener('mousedown', (e) => {
+        if (e.button !== 0 || !opts.stacks || !stacks.length) return;
+        if (e.target.closest('button, input, select, textarea')) return;
+        if (e.target.isContentEditable) return;
+        startRowDrag(e, b, el);
+      });
+
       el.addEventListener('click', (e) => {
         if (e.target.closest('button, input, select, textarea')) return;
         if (name.isContentEditable) return;
@@ -883,6 +904,38 @@
       badge.className = 'md-badge';
       badge.textContent = String(stack.blocks.length);
       el.appendChild(badge);
+
+      // A stack the flow runs OUT of and back INTO cannot be drawn as one
+      // clean run of rows, and the symptom -- an arrow climbing the gutter,
+      // rows in an order that looks wrong -- gives no hint of the cause. So
+      // name it here, on the group responsible, with the fix one click away:
+      // the blocks in the way are exactly the ones that make it convex again.
+      const holes = G.stackHoles(model(), stack);
+      if (holes.length) {
+        const nameOfBlk = (id) => (blockOf(id) || { name: id }).name;
+        const free = holes.filter((id) => !stackOf(id));
+        const warn = document.createElement('button');
+        warn.className = 'md-warn';
+        warn.type = 'button';
+        warn.textContent = '⚠ ' + holes.length + ' between';
+        warn.title = holes.map(nameOfBlk).join(', ') +
+          (holes.length === 1 ? ' reads' : ' read') +
+          ' from this stack and feed' + (holes.length === 1 ? 's' : '') +
+          ' back into it, without being in it — so the rows cannot follow ' +
+          'the flow.' + (free.length
+            ? '\nClick to add ' + (free.length === holes.length
+              ? 'them' : free.map(nameOfBlk).join(', ')) + ' to the stack.'
+            : '\nThey are in another stack, so they cannot join this one.');
+        if (free.length) {
+          warn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            emit('stack_join', { blocks: free, stack: stack.id });
+          });
+        } else {
+          warn.disabled = true;
+        }
+        el.appendChild(warn);
+      }
 
       const spring = document.createElement('span');
       spring.className = 'md-spring';
@@ -1323,6 +1376,132 @@
       };
       setTimeout(() => document.addEventListener('mousedown', onDoc), 0);
       closePicker = close;
+    };
+
+    /* ---- move a row into (or out of) a stack ----
+     *
+     * Membership used to be editable only by dissolving the group and
+     * rebuilding it from a fresh selection -- on a twelve-block stack, twelve
+     * ⌘-clicks to add a thirteenth. The frames are on screen and they ARE
+     * what membership looks like, so dragging a row into one, or out of every
+     * one, is the gesture. Same shape as the port drag: a threshold, live
+     * verdict, drop feedback on the target.
+     */
+
+    const rowDragOk = (ids, stackId) => {
+      const trial = stacks.map((s) => Object.assign({}, s, {
+        blocks: s.id === stackId
+          ? s.blocks.concat(ids.filter((id) => !s.blocks.includes(id)))
+          : s.blocks.filter((id) => !ids.includes(id))
+      })).filter((s) => s.blocks.length);
+      // A board that is ALREADY tangled must not lock out its own repair:
+      // the question is whether this move makes it worse, not whether the
+      // result is perfect. Dropping the missing block into the stack it
+      // belongs to is the fix, and it has to be allowed to happen.
+      return !G.superOrder(model(), trial).hadCycle ||
+        G.superOrder(model(), stacks).hadCycle;
+    };
+
+    const startRowDrag = (ev, b, el) => {
+      // Dragging one row of a selection moves the selection; dragging a row
+      // outside it moves that row, and leaves the selection alone.
+      const ids = selection.has(b.id) && selection.size > 1
+        ? [...selection] : [b.id];
+      const home = stackOf(b.id);
+      const label = ids.length > 1 ? ids.length + ' blocks' : b.name;
+      const x0 = ev.clientX, y0 = ev.clientY;
+      let moved = false, frames = [], deckBox = null, tip = null, drop = null;
+
+      const unpaint = () => {
+        deckEl.querySelectorAll('.md-stackframe').forEach(
+          (f) => f.classList.remove('drop-ok', 'drop-no', 'drop-out')
+        );
+        if (tip) { tip.remove(); tip = null; }
+      };
+
+      // What the release will do, at the pointer. A drag with no verdict is
+      // a drag you have to release to find out about.
+      const say = (e, text, bad) => {
+        if (!tip) {
+          tip = document.createElement('div');
+          tip.className = 'md-droptip';
+          document.body.appendChild(tip);
+        }
+        tip.textContent = text;
+        tip.classList.toggle('no', !!bad);
+        tip.style.left = (e.clientX + 14) + 'px';
+        tip.style.top = (e.clientY + 16) + 'px';
+      };
+
+      const onMove = (e) => {
+        if (!moved) {
+          if (Math.abs(e.clientX - x0) + Math.abs(e.clientY - y0) < 6) return;
+          moved = true;
+          dragging = true;
+          clearFocus();
+          hideEdgeXNow();
+          if (closePicker) closePicker();
+          el.classList.add('md-moving');
+          deckBox = deckEl.getBoundingClientRect();
+          frames = [...deckEl.querySelectorAll('.md-stackframe')].map((f) => ({
+            el: f, id: f.dataset.stack, box: f.getBoundingClientRect()
+          }));
+        }
+        e.preventDefault();
+        unpaint();
+        drop = null;
+
+        const inBox = (r) => e.clientX >= r.left && e.clientX <= r.right &&
+          e.clientY >= r.top && e.clientY <= r.bottom;
+        const over = frames.find((f) => inBox(f.box));
+
+        if (over && (!home || over.id !== home.id)) {
+          const target = stacks.find((s) => s.id === over.id) || {};
+          if (rowDragOk(ids, over.id)) {
+            drop = { join: over.id };
+            over.el.classList.add('drop-ok');
+            say(e, 'Add ' + label + ' to ' + target.name);
+          } else {
+            over.el.classList.add('drop-no');
+            say(e, 'That grouping would tangle the flow', true);
+          }
+          return;
+        }
+        // Only within the deck: a release over the view list or off the panel
+        // is a cancelled drag, not an instruction to break the group up.
+        if (!over && home && deckBox && inBox(deckBox)) {
+          drop = { leave: true };
+          const f = frames.find((x) => x.id === home.id);
+          if (f) f.el.classList.add('drop-out');
+          say(e, 'Take ' + label + ' out of ' + home.name);
+        }
+      };
+
+      const onUp = () => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        unpaint();
+        el.classList.remove('md-moving');
+        if (!moved) {
+          return;                 // never crossed the threshold: a plain click
+        }
+        dragging = false;
+        // The click that follows this mouseup lands on whatever the row was
+        // dropped on, and would select it.
+        const kill = (e) => { e.stopPropagation(); e.preventDefault(); };
+        document.addEventListener('click', kill, true);
+        setTimeout(() => document.removeEventListener('click', kill, true), 0);
+
+        if (drop && drop.join) {
+          emit('stack_join', { blocks: ids, stack: drop.join });
+        } else if (drop && drop.leave) {
+          emit('stack_leave', { blocks: ids });
+        }
+        if (pendingRender) render();
+      };
+
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
     };
 
     /* ---- port drag ---- */

@@ -10,8 +10,9 @@
  * user gestures come back out of the renderer as `emit(name, payload)` and go
  * on as event-priority Shiny inputs (link_add, link_rm, block_rm,
  * block_rename, block_select, block_append, block_add, stack_add,
- * stack_rename, stack_rm). The client never mutates the model itself — every
- * edit round-trips through the board and comes back as a data push.
+ * stack_rename, stack_rm, stack_join, stack_leave). The client never mutates
+ * the model itself — every edit round-trips through the board and comes back
+ * as a data push.
  *
  * Model: blocks [{id, name, category, color, icon, inputs[], variadic}],
  * links [{id, from, to, input}], stacks [{id, name, color, blocks[]}].

@@ -231,6 +231,29 @@ minidag_ext_srv <- function(id, board, update, actions, ...) {
         ))))
       })
 
+      # Dragged into a frame (or the "⚠ n between" fix on a stack header):
+      # the blocks join that stack and leave whatever they were in.
+      shiny::observeEvent(input$stack_join, {
+        delta <- minidag_stack_delta(
+          board$board,
+          unlist(input$stack_join$blocks),
+          as.character(input$stack_join$stack)
+        )
+        if (!is.null(delta)) {
+          update(delta)
+        }
+      })
+
+      # Dragged out of every frame.
+      shiny::observeEvent(input$stack_leave, {
+        delta <- minidag_stack_delta(
+          board$board, unlist(input$stack_leave$blocks)
+        )
+        if (!is.null(delta)) {
+          update(delta)
+        }
+      })
+
       shiny::observeEvent(input$stack_rename, {
         msg <- input$stack_rename
         nm <- trimws(as.character(msg$name))

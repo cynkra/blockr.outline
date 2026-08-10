@@ -19,7 +19,12 @@
 #'   block with no origin and so no link,
 #' - click a row to reveal that block's panel, double-click to rename,
 #' - click a dot (or hover a rail edge) to inspect and remove connections,
-#' - board stacks show as named frames; collapse them to a single row,
+#' - board stacks show as named frames; collapse them to a single row, drag a
+#'   row into a frame to add that block to the stack and out of every frame to
+#'   take it out again (a selection moves together),
+#' - a stack the flow runs out of and back into cannot be drawn as one run of
+#'   rows: those links climb the right-hand gutter as dashed arrows and the
+#'   stack header offers to pull the blocks in the way into the group,
 #' - block eval status (waiting / unset / failed) shows as a coloured dot
 #'   per row, identical in meaning to the DAG node badge.
 #'
@@ -298,6 +303,58 @@ minidag_place_delta <- function(board, blk_id, from = NULL) {
       view
     )
   )
+}
+
+# Move blocks between stacks: into `stack`, or out of whichever stack holds
+# them when `stack` is NULL.
+#
+# A block belongs to at most one stack, so joining one means leaving another,
+# and both halves have to travel in ONE update -- an intermediate board where
+# a block sits in two stacks does not validate. `mod` deltas are partial
+# constructor arguments applied through `update_stack()`, so the reserved
+# `blocks` key carries the whole new membership rather than a diff (the same
+# shape blockr.dock's own stack editor commits).
+minidag_stack_delta <- function(board, ids, stack = NULL) {
+
+  stacks <- blockr.core::board_stacks(board)
+  ids <- intersect(ids, names(blockr.core::board_blocks(board)))
+
+  if (!length(ids) || (!is.null(stack) && !stack %in% names(stacks))) {
+    return(NULL)
+  }
+
+  mods <- list()
+
+  for (id in names(stacks)) {
+    cur <- blockr.core::stack_blocks(stacks[[id]])
+    new <- if (identical(id, stack)) union(cur, ids) else setdiff(cur, ids)
+    if (!setequal(new, cur)) {
+      mods[[id]] <- list(blocks = new)
+    }
+  }
+
+  if (!length(mods)) {
+    return(NULL)
+  }
+
+  # A stack the move empties goes with it rather than lingering as a husk on
+  # the board -- the same call cutting a whole stack makes. It leaves through
+  # `rm`, never `mod`: `validate_mod_deltas()` runs against the post-removal
+  # set, so naming an id in both is an error.
+  empty <- names(mods)[!lengths(lapply(mods, `[[`, "blocks"))]
+  keep <- setdiff(names(mods), empty)
+
+  upd <- list(stacks = list())
+
+  if (length(keep)) {
+    upd$stacks$mod <- mods[keep]
+  }
+
+  if (length(empty)) {
+    upd$stacks$rm <- empty
+  }
+
+  upd
 }
 
 minidag_ext_result <- function(board, extensions) {

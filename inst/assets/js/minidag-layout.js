@@ -47,7 +47,22 @@
     let hadCycle = false;
     while (pending.length) {
       let pick = pending.findIndex((u) => edgesOf(u).every((p) => placed.has(p)));
-      if (pick < 0) { pick = 0; hadCycle = true; }
+      if (pick < 0) {
+        // Stalled: every unit left is waiting on another one. Something has
+        // to be placed before a parent of it, so place whichever costs the
+        // FEWEST arrows pointing back up the list -- `edgesOf` yields one
+        // entry per dependency, so the unplaced count IS that number. It
+        // stalls on a board whenever a stack is not convex (a block outside
+        // it reads from one member and feeds another), which is a legal
+        // board and used to be settled by taking whatever came first.
+        hadCycle = true;
+        pick = 0;
+        let best = Infinity;
+        pending.forEach((u, i) => {
+          const cost = edgesOf(u).filter((p) => !placed.has(p)).length;
+          if (cost < best) { best = cost; pick = i; }
+        });
+      }
       const u = pending[pick];
       pending.splice(pick, 1);
       placed.add(u);
@@ -146,12 +161,16 @@
       const members = u.startsWith('s:')
         ? stks.find((s) => s.id === u.slice(2)).blocks
         : [u.slice(2)];
-      const ps = new Set();
+      // one entry per LINK, deliberately not deduplicated: `kahn` reads the
+      // length of the unplaced part as the cost of breaking a stall, and a
+      // unit that six links depend on should not be as cheap to displace as
+      // one that a single link does
+      const ps = [];
       members.forEach((m) => parentsOf(model, m).forEach((p) => {
         const pu = sOf(p);
-        if (pu !== u) ps.add(pu);
+        if (pu !== u) ps.push(pu);
       }));
-      return [...ps];
+      return ps;
     };
     return Object.assign({}, kahn(units, parentUnits, seqOf), { sOf });
   };
@@ -163,6 +182,42 @@
       ? model.lastPos.get('n:' + id)
       : 1000 + model.blocks.findIndex((b) => b.id === id)
   ).order;
+
+  // The blocks that sit inside a stack's stretch of the flow without being in
+  // it: reachable FROM a member and reaching one. They are what makes a stack
+  // non-convex, and a non-convex stack is the one shape the rail cannot draw
+  // cleanly -- the frame keeps its rows together, so such a block is pushed
+  // above or below the whole group and one of its links has to climb (see
+  // `railModel`). Naming them is what lets the deck offer the one-click fix:
+  // pulling them in is exactly what makes the stack convex again.
+  const stackHoles = (model, stack) => {
+    const members = new Set(stack.blocks || []);
+    if (!members.size) {
+      return [];
+    }
+    const links = (model.links || []).filter((l) => !isBack(model, l));
+    const reach = (down) => {
+      const nx = new Map();
+      links.forEach((l) => {
+        const a = down ? l.from : l.to, b = down ? l.to : l.from;
+        if (!nx.has(a)) nx.set(a, []);
+        nx.get(a).push(b);
+      });
+      const seen = new Set(), q = [...members];
+      while (q.length) {
+        (nx.get(q.shift()) || []).forEach((y) => {
+          if (seen.has(y)) return;
+          seen.add(y);
+          q.push(y);
+        });
+      }
+      return seen;
+    };
+    const below = reach(true), above = reach(false);
+    return (model.blocks || []).map((b) => b.id).filter(
+      (id) => !members.has(id) && below.has(id) && above.has(id)
+    );
+  };
 
   const displayRows = (model) => {
     const stacks = model.stacks || [];
@@ -206,7 +261,23 @@
       const key = f + '>' + t;
       if (seen.has(key)) return;
       seen.add(key);
-      (isBack(model, l) ? back : rl).push({ from: f, to: t });
+      const loop = isBack(model, l);
+      // A dependency the ORDER could not honour. It happens when a stack is
+      // not convex: its rows must stay together, so a block outside it that
+      // sits between two members ends up above or below both, and one of its
+      // links then runs the wrong way. Left among the forward edges it broke
+      // the lane assignment outright -- lanes are handed out in row order, so
+      // an edge arriving from below the row it feeds put a line through
+      // unrelated dots and drew the picture the stack was meant to clarify.
+      // The loop gutter already draws an arrow that climbs, so it goes there,
+      // flagged `up` for a renderer that wants to say WHY it climbs.
+      const rf = rowOf.get(f), rt = rowOf.get(t);
+      const up = rf !== undefined && rt !== undefined && rf >= rt;
+      if (loop || up) {
+        back.push({ from: f, to: t, up: !loop });
+      } else {
+        rl.push({ from: f, to: t });
+      }
     });
     return { entries, rowOf, rl, back };
   };
@@ -235,7 +306,7 @@
              spans[lane].some((s) => a < s.b && s.a < b)) lane++;
       if (lane === spans.length) spans.push([]);
       spans[lane].push({ a, b });
-      return { from: l.from, to: l.to, lane: from + lane };
+      return { from: l.from, to: l.to, lane: from + lane, up: l.up };
     });
   };
 
@@ -438,6 +509,7 @@
     kahn,
     backEdges,
     superOrder,
+    stackHoles,
     displayRows,
     innerOrder,
     railModel,

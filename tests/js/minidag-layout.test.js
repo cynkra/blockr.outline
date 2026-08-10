@@ -218,8 +218,10 @@ test('random stacks keep the invariants', () => {
     if (members.length < 2) continue;
     model.stacks = [{ id: 's', name: 'g', blocks: members }];
     if (rand() < 0.5) model.collapsed = new Set(['s']);
-    // a stack that would tangle the flow is refused in the UI, so skip it
-    if (G.superOrder(model, model.stacks).hadCycle) continue;
+    // NOT skipped when the grouping tangles the flow: the deck refuses to
+    // CREATE such a stack, but a board can arrive with one (dock's stack
+    // editor makes them, and a link added later can tangle a stack that was
+    // fine) and it still has to draw.
     const r = G.railFor(model);
     const bad = G.invariants(r.entries, r.rl, r.rowOf, r, r.back);
     assert.deepStrictEqual(
@@ -228,6 +230,84 @@ test('random stacks keep the invariants', () => {
       'stack seed ' + seed + ' violated its invariants'
     );
   }
+});
+
+/* ---- non-convex stacks: the shape that broke on the CDEX board ---- */
+
+// vs -> display -> filter -> {chart1, chart2}, with everything but `display`
+// stacked. The frame has to keep its rows together, so `display` cannot sit
+// between them: it lands outside the group and the link that feeds the stack
+// back has to climb.
+const interleaved = (collapsed) => mkModel(
+  ['vs', 'display', 'filter', 'chart1', 'chart2'],
+  [
+    { from: 'vs', to: 'display' },
+    { from: 'display', to: 'filter' },
+    { from: 'filter', to: 'chart1' },
+    { from: 'filter', to: 'chart2' }
+  ],
+  [{ id: 's', name: 'VS', blocks: ['vs', 'filter', 'chart1', 'chart2'] }],
+  collapsed
+);
+
+test('a non-convex stack still draws a legal rail', () => {
+  check(interleaved(), 'interleaved stack');
+  check(interleaved(['s']), 'interleaved stack, collapsed');
+});
+
+test('the link the order cannot honour climbs the loop gutter', () => {
+  const r = G.railFor(interleaved());
+  assert.strictEqual(r.back.length, 1);
+  assert.ok(r.back[0].up, 'flagged as an ordering casualty, not a loop');
+  // and the cheaper break is the one taken: one arrow, not two
+  assert.strictEqual(r.rl.length, 3);
+});
+
+test('the stall breaks on the cheaper side', () => {
+  // The CDEX shape: one block outside the stack feeds EIGHT of its members
+  // and reads from one. Placing the stack first would cost eight arrows
+  // climbing the gutter; placing the block first costs one.
+  const kids = Array.from({ length: 8 }, (_, i) => 'c' + i);
+  const m = mkModel(
+    ['vs', 'display'].concat(kids),
+    [{ from: 'vs', to: 'display' }].concat(
+      kids.map((k) => ({ from: 'display', to: k }))
+    ),
+    [{ id: 's', name: 'VS', blocks: ['vs'].concat(kids) }]
+  );
+  const r = check(m, 'fan-in interloper');
+  assert.strictEqual(r.back.length, 1);
+  const rowOf = (id) => r.rows.findIndex(
+    (x) => x.t === 'node' && x.node.id === id
+  );
+  assert.ok(rowOf('display') < rowOf('vs'), 'the interloper goes first');
+});
+
+test('the block in the way is named', () => {
+  const m = interleaved();
+  assert.deepStrictEqual(G.stackHoles(m, m.stacks[0]), ['display']);
+  // pulling it in is what makes the stack convex again
+  m.stacks[0].blocks.push('display');
+  assert.deepStrictEqual(G.stackHoles(m, m.stacks[0]), []);
+  assert.ok(!G.superOrder(m, m.stacks).hadCycle);
+  assert.strictEqual(G.railFor(m).back.length, 0);
+});
+
+test('a stack with nothing between its members has no holes', () => {
+  const m = mkModel(
+    ['a', 'b', 'c', 'd'],
+    [{ from: 'a', to: 'b' }, { from: 'b', to: 'c' }, { from: 'c', to: 'd' }],
+    [{ id: 's', name: 'g', blocks: ['b', 'c'] }]
+  );
+  assert.deepStrictEqual(G.stackHoles(m, m.stacks[0]), []);
+  // a sibling of a member is not in the way: it reads from the stack but
+  // nothing in the stack reads from it
+  const sib = mkModel(
+    ['a', 'b', 'c'],
+    [{ from: 'a', to: 'b' }, { from: 'a', to: 'c' }],
+    [{ id: 's', name: 'g', blocks: ['a', 'b'] }]
+  );
+  assert.deepStrictEqual(G.stackHoles(sib, sib.stacks[0]), []);
 });
 
 /* ---- loop-backs: the shapes a process makes and a board never does ---- */

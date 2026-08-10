@@ -35,7 +35,12 @@ The \code{+} on a row appends after it, the \code{+} in the search row adds a
 block with no origin and so no link,
 \item click a row to reveal that block's panel, double-click to rename,
 \item click a dot (or hover a rail edge) to inspect and remove connections,
-\item board stacks show as named frames; collapse them to a single row,
+\item board stacks show as named frames; collapse them to a single row, drag a
+row into a frame to add that block to the stack and out of every frame to
+take it out again (a selection moves together),
+\item a stack the flow runs out of and back into cannot be drawn as one run of
+rows: those links climb the right-hand gutter as dashed arrows and the
+stack header offers to pull the blocks in the way into the group,
 \item block eval status (waiting / unset / failed) shows as a coloured dot
 per row, identical in meaning to the DAG node badge.
 }

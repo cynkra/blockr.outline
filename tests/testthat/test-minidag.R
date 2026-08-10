@@ -59,7 +59,10 @@ test_that("minidag_payload carries arity for every block shape", {
   expect_true(blks$r1$variadic)
 
   expect_identical(blks$h1$name, "First rows")
-  expect_true(all(vapply(pay$blocks, function(b) is.character(b$icon), NA)))
+  # the TYPE travels with the block, not the rendered icon: the glyph belongs
+  # to the type, so it rides the catalogue once instead of every board change
+  expect_true(all(vapply(pay$blocks, function(b) is.character(b$type), NA)))
+  expect_true(all(vapply(pay$blocks, function(b) is.null(b$icon), NA)))
 
   lnk <- pay$links[[2L]]
   expect_named(lnk, c("id", "from", "to", "input"))
@@ -218,6 +221,59 @@ test_that("a block inserted from the deck lands beside its origin", {
   elsewhere <- minidag_place_delta(off, "new1", from = "h1")
   expect_null(elsewhere$mod[["one"]]$add[[pid]]$near)
   expect_identical(elsewhere$mod[["one"]]$add[[pid]]$side, "right")
+})
+
+test_that("a block dragged into a stack leaves the one it was in", {
+
+  board <- blockr.dock::new_dock_board(
+    blocks = c(
+      d1 = blockr.core::new_dataset_block("iris"),
+      h1 = blockr.core::new_head_block(),
+      t1 = blockr.core::new_head_block(),
+      t2 = blockr.core::new_head_block()
+    ),
+    links = blockr.core::links(
+      from = c("d1", "h1", "t1"),
+      to = c("h1", "t1", "t2")
+    ),
+    stacks = blockr.core::stacks(
+      a = blockr.dock::new_dock_stack(c("d1", "h1"), name = "A"),
+      b = blockr.dock::new_dock_stack(c("t1", "t2"), name = "B")
+    ),
+    extensions = list(mini = new_minidag_extension())
+  )
+
+  # joining B means leaving A, and both halves travel in one update: a board
+  # where h1 sits in two stacks does not validate
+  join <- minidag_stack_delta(board, "h1", "b")
+  expect_identical(join$stacks$mod$a$blocks, "d1")
+  expect_identical(join$stacks$mod$b$blocks, c("t1", "t2", "h1"))
+  expect_null(join$stacks$rm)
+  expect_no_error(
+    blockr.core::validate_board(
+      blockr.core::apply_board_update(board, join)
+    )
+  )
+
+  # dragged out of every frame: no target stack
+  leave <- minidag_stack_delta(board, c("t1", "t2"))
+  expect_null(leave$stacks$mod)
+  expect_identical(leave$stacks$rm, "b")
+  expect_no_error(
+    blockr.core::validate_board(
+      blockr.core::apply_board_update(board, leave)
+    )
+  )
+
+  # a stack the move empties goes with it, rather than staying as a husk
+  moved <- minidag_stack_delta(board, c("t1", "t2"), "a")
+  expect_identical(moved$stacks$mod$a$blocks, c("d1", "h1", "t1", "t2"))
+  expect_identical(moved$stacks$rm, "b")
+
+  # nothing to do, nothing sent
+  expect_null(minidag_stack_delta(board, "h1", "a"))
+  expect_null(minidag_stack_delta(board, "nosuchblock", "a"))
+  expect_null(minidag_stack_delta(board, "h1", "nosuchstack"))
 })
 
 test_that("the clipboard round-trips a selection with fresh ids", {

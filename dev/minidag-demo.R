@@ -77,12 +77,14 @@ board <- new_dock_board(
     ),
     h1 = new_head_block(n = 6L, block_name = "First rows"),
     m1 = new_merge_block(by = "Species", block_name = "Self merge"),
-    r1 = new_rbind_block(block_name = "Bind rows")
+    r1 = new_rbind_block(block_name = "Bind rows"),
+    t1 = new_head_block(n = 3L, block_name = "Trim"),
+    t2 = new_head_block(n = 2L, block_name = "Tail")
   ),
   links = links(
-    from = c("d1", "f1", "d1", "f1", "h1", "f1"),
-    to = c("f1", "h1", "m1", "m1", "r1", "r1"),
-    input = c("data", "data", "x", "y", "", "")
+    from = c("d1", "f1", "d1", "f1", "h1", "f1", "r1", "t1"),
+    to = c("f1", "h1", "m1", "m1", "r1", "r1", "t1", "t2"),
+    input = c("data", "data", "x", "y", "", "", "data", "data")
   ),
   # Two stacks that land on ADJACENT rows, so the space between frames is
   # visible: without it they touch exactly and read as one box with a line
@@ -97,6 +99,16 @@ board <- new_dock_board(
       c("h1", "m1"),
       name = "Fan out",
       color = "#0d9488"
+    ),
+    # Deliberately NOT convex: r1 -> t1 -> t2 with t1 left outside, which is
+    # the shape a CDEX stack had (a display block feeding most of its own
+    # group from outside it). The frame keeps its rows together, so t1 cannot
+    # sit between them and one link has to climb the gutter. The header says
+    # so and offers to pull t1 in; dragging t1 into the frame does the same.
+    tangle = new_dock_stack(
+      c("r1", "t2"),
+      name = "Interleaved",
+      color = "#b45309"
     )
   ),
   extensions = list(
