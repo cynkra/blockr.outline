@@ -1647,6 +1647,25 @@ exhibit_html <- function(exhibit) {
 # geometry (static_chart carries pptx_width / pptx_height in inches) capped to
 # a sensible on-screen width, so the preview keeps the deck's proportions
 # without rendering an 12in-wide canvas into a narrow panel.
+# blockr.viz decides how big type is on a printed plot (gg_type_scale(),
+# 0.2.63). Asked rather than assumed, like pptx_add_exhibit(): an older
+# blockr.viz beside this package keeps printing plots at the size they were
+# authored at.
+gg_html_type_scale <- function(p, width_in) {
+
+  f <- tryCatch(getExportedValue("blockr.viz", "gg_type_scale"),
+                error = function(e) NULL)
+
+  if (!is.function(f)) {
+    return(1)
+  }
+
+  s <- tryCatch(f(p, width_in = width_in, target = "html"),
+                error = function(e) 1)
+
+  if (!is.numeric(s) || length(s) != 1L || !is.finite(s) || s <= 0) 1 else s
+}
+
 gg_exhibit_img <- function(p, dpi = 96) {
 
   w <- coal(attr(p, "pptx_width"), 8)
@@ -1658,11 +1677,17 @@ gg_exhibit_img <- function(p, dpi = 96) {
   w <- w * scale
   h <- h * scale
 
+  # The type on an HTML slide is the medium's call, same as on a pptx one --
+  # blockr.viz answers it from the plot's authored base size. `res * type`
+  # is the no-ragg spelling of ragg's `scaling`: the pixel canvas is
+  # unchanged, every absolute unit on it comes out `type` times bigger.
+  type <- gg_html_type_scale(p, w)
+
   out <- tryCatch(
     {
       tmp <- tempfile(fileext = ".png")
       on.exit(unlink(tmp), add = TRUE)
-      grDevices::png(tmp, width = w * dpi, height = h * dpi, res = dpi)
+      grDevices::png(tmp, width = w * dpi, height = h * dpi, res = dpi * type)
       tryCatch(print(p), finally = grDevices::dev.off())
       uri <- base64enc::dataURI(file = tmp, mime = "image/png")
       tags$img(
