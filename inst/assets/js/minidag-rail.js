@@ -54,7 +54,12 @@
   'use strict';
 
   const DEFAULT_METRICS = {
-    LANE_W: 16, ROW_H: 28, GAP: 6, RAIL_L: 10, RAIL_R: 8, DOT_R: 4,
+    // GAP is what a stack frame has to live inside. A frame claims
+    // FRAME_PAD_Y above and below its rows, and whatever is left over is the
+    // air between two adjacent frames: GAP - 2 * FRAME_PAD_Y. At GAP 6 with
+    // 3px padding that was zero, which is why two stacks touched. 8 with 2px
+    // padding leaves 4px between them.
+    LANE_W: 16, ROW_H: 28, GAP: 8, RAIL_L: 10, RAIL_R: 8, DOT_R: 4,
     // Air between a stack frame and the rows it encloses. The frame is drawn
     // as an absolute box behind the rows, so this is the ONLY thing that
     // insets them -- and it has to be applied on all four sides by hand:
@@ -62,13 +67,7 @@
     // the right. Y is half of X because rows sit GAP (6px) apart, so a full
     // FRAME_PAD_X above the header would put the frame edge against the row
     // above it.
-    FRAME_PAD_X: 6, FRAME_PAD_Y: 3,
-    // Two stacks in a row used to touch exactly: a frame ends FRAME_PAD_Y
-    // before the next row starts, and the next frame begins FRAME_PAD_Y
-    // before its own first row, so the arithmetic cancelled to nothing and
-    // they read as one box with a line through it. Taken off each frame's
-    // height, so this IS the space between them.
-    FRAME_GAP: 5
+    FRAME_PAD_X: 6, FRAME_PAD_Y: 2
   };
   const LANE_COLORS = ['#9ca3af', '#2563eb', '#0d9488', '#7c3aed', '#b45309', '#be185d'];
   const STATUS_RANK = { failed: 3, waiting: 2, unset: 1 };
@@ -108,7 +107,7 @@
     }, adapter.opts || {});
     const M = Object.assign({}, DEFAULT_METRICS, opts.metrics || {});
     const { LANE_W, ROW_H, GAP, RAIL_L, RAIL_R, DOT_R } = M;
-    const { FRAME_PAD_X, FRAME_PAD_Y, FRAME_GAP } = M;
+    const { FRAME_PAD_X, FRAME_PAD_Y } = M;
     const PITCH = ROW_H + GAP;
 
     const slotsFor = adapter.slotsFor;
@@ -558,8 +557,14 @@
         frame.style.left = (railW - FRAME_PAD_X) + 'px';
         frame.style.right = '0px';
         frame.style.top = (i * PITCH - FRAME_PAD_Y) + 'px';
+        // Exactly the rows plus FRAME_PAD_Y above and below:
+        // (1 + size) * PITCH - GAP is the header plus members, since
+        // PITCH - GAP is ROW_H. The air BETWEEN two frames is not taken from
+        // here -- subtracting it drove the padding negative and the last row
+        // hung out of its own frame. It falls out of the row spacing instead,
+        // as GAP - 2 * FRAME_PAD_Y, which is why GAP is 8 and not 6.
         frame.style.height =
-          ((1 + size) * PITCH - GAP + 2 * FRAME_PAD_Y - FRAME_GAP) + 'px';
+          ((1 + size) * PITCH - GAP + 2 * FRAME_PAD_Y) + 'px';
         deckEl.appendChild(frame);
       });
 
@@ -1164,7 +1169,6 @@
     const updateBar = () => {
       if (!barEl) return;
       paintStackSel();
-      barEl.classList.toggle('on', selection.size >= 2);
       barEl.classList.remove('err');
 
       // Offering "Stack them" for blocks that are already stacked is an
@@ -1181,9 +1185,12 @@
         mkstackBtn.style.display = stacked.length ? 'none' : '';
       }
 
-      selcountEl.textContent = allOne
-        ? 'Stack "' + whole.name + '" selected'
-        : selection.size + ' blocks selected';
+      // A selected stack needs no bar: the frame's ring already says so, and
+      // the only thing the bar could offer -- "Stack them" -- is exactly what
+      // cannot apply. The bar is for a selection that has somewhere to go.
+      barEl.classList.toggle('on', selection.size >= 2 && !allOne);
+
+      selcountEl.textContent = selection.size + ' blocks selected';
     };
 
     /* ---- unlink: hover a rail edge for a ✕ at its midpoint ---- */
