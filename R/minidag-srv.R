@@ -287,9 +287,28 @@ minidag_ext_srv <- function(id, board, update, actions, ...) {
           names(blockr.core::board_blocks(board$board))
         )
 
-        if (length(ids)) {
-          update(list(blocks = list(rm = ids)))
+        if (!length(ids)) {
+          return()
         }
+
+        # A stack whose every member is going goes too. The core cascade
+        # prunes the members out of it but keeps the stack, which after
+        # cutting a whole stack leaves an empty husk on the board -- and the
+        # gesture plainly meant "remove this stack".
+        stacks <- blockr.core::board_stacks(board$board)
+        gone <- names(stacks)[vapply(
+          stacks,
+          function(s) all(blockr.core::stack_blocks(s) %in% ids),
+          logical(1)
+        )]
+
+        upd <- list(blocks = list(rm = ids))
+
+        if (length(gone)) {
+          upd$stacks <- list(rm = gone)
+        }
+
+        update(upd)
       })
 
       shiny::observeEvent(input$block_paste, {
