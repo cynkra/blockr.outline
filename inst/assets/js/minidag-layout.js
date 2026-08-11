@@ -79,7 +79,7 @@
   // topological sort give up and fall back to array order) and drawn in its
   // own gutter.
   //
-  // The rule is `tidybpmn::loop_deps()`, ported so R and the browser agree on
+  // The rule is `blockr.process:::loop_deps()`, ported so R and the browser agree on
   // which arrow is the loop: `from -> to` is a loop-back iff `from` is
   // reachable from `to` AND `from` sits no closer to the roots than `to`.
   // Plain reachability is not enough -- in a 2-cycle it holds both ways, and

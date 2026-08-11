@@ -15,7 +15,8 @@
  * adapter = {
  *   emit(name, payload)          gestures out: link_add, link_rm, block_rm,
  *                                block_rename, block_select, block_append,
- *                                block_add, stack_add, stack_rename, stack_rm
+ *                                block_add, stack_add, stack_rename, stack_rm,
+ *                                stack_join, stack_leave
  *   nodeLead(node) -> Element    row content before the name (icon, ports)
  *   nodeTrail(node) -> Element   row content after the name (chips, fields)
  *   nodeAside(node) -> Element   row content PAST the spring, so it right-
@@ -33,7 +34,12 @@
  *   slotPrompt(from, to)         caption of the slot picker
  *   showSlot(link) -> bool       whether that slot is worth naming
  *   opts { search, stacks, remove, status, allowCycles, nameEdit, edgeLabels,
- *          labelPad, searchPlaceholder, emptyText, emptyAddText, metrics }
+ *          labelPad, searchPlaceholder, emptyText, emptyAddText, metrics,
+ *          stackNoun, stackUnit, stackIcon, stackAddText, stackRmTitle }
+ *
+ * The stack wording is an option because a stack is only a stack on a board.
+ * The process editor pushes the same object through as a multi-instance
+ * sub-process, where the frame around a run of rows means "these repeat".
  *
  * Loop-backs (`opts.allowCycles`) and edge labels (`opts.edgeLabels`) are off
  * for a board, which has neither, and on for a process, which is defined by
@@ -103,7 +109,9 @@
       edgeLabels: false, labelPad: 34,
       searchPlaceholder: 'Search blocks…',
       emptyText: 'No blocks yet.',
-      emptyAddText: '+ Add a block'
+      emptyAddText: '+ Add a block',
+      stackNoun: 'Stack', stackUnit: 'blocks', stackIcon: STACK_ICON,
+      stackAddText: 'Stack them', stackRmTitle: 'Dissolve stack (blocks stay)'
     }, adapter.opts || {});
     const M = Object.assign({}, DEFAULT_METRICS, opts.metrics || {});
     const { LANE_W, ROW_H, GAP, RAIL_L, RAIL_R, DOT_R } = M;
@@ -171,7 +179,7 @@
       barEl.appendChild(selcountEl);
       mkstackBtn = document.createElement('button');
       mkstackBtn.className = 'md-go';
-      mkstackBtn.textContent = 'Stack them';
+      mkstackBtn.textContent = opts.stackAddText;
       barEl.appendChild(mkstackBtn);
       const clearselBtn = document.createElement('button');
       clearselBtn.className = 'md-no';
@@ -193,7 +201,8 @@
         if (already.length) {
           barEl.classList.add('err');
           selcountEl.textContent =
-            already.length + ' of them are already in a stack';
+            already.length + ' of them are already in a ' +
+            opts.stackNoun.toLowerCase();
           return;
         }
         const trial = [...stacks, { id: '_trial', name: '', blocks: members }];
@@ -810,9 +819,9 @@
 
       const k = document.createElement('span');
       k.className = 'md-kind';
-      k.innerHTML = STACK_ICON;
+      k.innerHTML = opts.stackIcon;
       if (stack.color) k.style.background = stack.color;
-      k.title = 'Stack';
+      k.title = opts.stackNoun;
       el.appendChild(k);
 
       // Same position as on a block row (see chip()): the collapsed stack's
@@ -829,7 +838,7 @@
 
       const badge = document.createElement('span');
       badge.className = 'md-badge';
-      badge.textContent = stack.blocks.length + ' blocks';
+      badge.textContent = stack.blocks.length + ' ' + opts.stackUnit;
       el.appendChild(badge);
 
       const spring = document.createElement('span');
@@ -842,7 +851,7 @@
       const chev = document.createElement('button');
       chev.className = 'md-chev';
       chev.innerHTML = CHEV_R;
-      chev.title = 'Expand stack';
+      chev.title = 'Expand ' + opts.stackNoun.toLowerCase();
       chev.addEventListener('click', (e) => {
         e.stopPropagation();
         collapsed.delete(stack.id);
@@ -870,7 +879,7 @@
 
       const cap = document.createElement('span');
       cap.className = 'md-cap';
-      cap.innerHTML = STACK_ICON;
+      cap.innerHTML = opts.stackIcon;
       if (stack.color) cap.style.color = stack.color;
       el.appendChild(cap);
 
@@ -955,14 +964,14 @@
       const rm = document.createElement('button');
       rm.className = 'md-rm';
       rm.textContent = '×';
-      rm.title = 'Dissolve stack (blocks stay)';
+      rm.title = opts.stackRmTitle;
       rm.addEventListener('click', () => emit('stack_rm', { id: stack.id }));
       el.appendChild(rm);
 
       const chev = document.createElement('button');
       chev.className = 'md-chev';
       chev.innerHTML = CHEV_D;
-      chev.title = 'Collapse stack';
+      chev.title = 'Collapse ' + opts.stackNoun.toLowerCase();
       chev.addEventListener('click', () => {
         collapsed.add(stack.id);
         render();
@@ -1144,7 +1153,7 @@
           bd.classList.toggle('hit', inner > 0);
           bd.textContent = inner > 0
             ? inner + ' of ' + s.blocks.length + ' match'
-            : s.blocks.length + ' blocks';
+            : s.blocks.length + ' ' + opts.stackUnit;
         } else {
           c.classList.toggle('dim', !hits.includes(id));
         }
@@ -1239,11 +1248,12 @@
       }
 
       // A selected stack needs no bar: the frame's ring already says so, and
-      // the only thing the bar could offer -- "Stack them" -- is exactly what
+      // the only thing the bar could offer -- grouping -- is exactly what
       // cannot apply. The bar is for a selection that has somewhere to go.
       barEl.classList.toggle('on', selection.size >= 2 && !allOne);
 
-      selcountEl.textContent = selection.size + ' blocks selected';
+      selcountEl.textContent =
+        selection.size + ' ' + opts.stackUnit + ' selected';
     };
 
     /* ---- unlink: hover a rail edge for a ✕ at its midpoint ---- */
