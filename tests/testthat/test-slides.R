@@ -243,47 +243,6 @@ test_that("the pick order steers evaluation wherever the DAG allows slack", {
 
 # ---- the extension server -------------------------------------------
 
-# The slide builder's board bundle, with every block expression rigged to
-# THROW. Anything the panel draws has to come off the board object itself
-# (block names, exhibit kinds), so a panel that renders against this bundle
-# is a panel that evaluates nothing -- which is the extension's central
-# performance claim, and the reason it needs no visibility gate.
-blind_board_args <- function() {
-  b <- otl_board_args()
-  isolate({
-    for (id in names(b$blocks)) {
-      b$blocks[[id]]$server$expr <- reactive(stop("expression evaluated"))
-    }
-  })
-  b
-}
-
-# Take a block off a dock board the way the app does: out of every view
-# first, then its links, then the block. A dock_board validates view
-# membership against its blocks, so removing the block first aborts.
-drop_block <- function(brd, id) {
-
-  views <- blockr.dock::board_views(brd)
-  pid <- as.character(blockr.dock::as_block_panel_id(id))
-
-  for (v in names(views)) {
-    views[[v]] <- blockr.dock::dock_view(
-      setdiff(blockr.dock::view_members(views[[v]]), pid),
-      name = blockr.dock::view_name(views[[v]])
-    )
-  }
-
-  blockr.dock::board_views(brd) <- views
-
-  lnks <- blockr.core::board_links(brd)
-  blockr.core::board_links(brd) <- lnks[lnks$from != id & lnks$to != id]
-
-  blks <- blockr.core::board_blocks(brd)
-  blockr.core::board_blocks(brd) <- blks[setdiff(names(blks), id)]
-
-  brd
-}
-
 test_that("picking, ordering and removing rewrite the one state field", {
   testServer(
     slides_ext_srv(character(), "Deck"),
@@ -601,6 +560,75 @@ test_that("downloading nothing is a warning, not a deck", {
 
       # Never entered the demand/wait cycle: there is nothing to render.
       expect_false(awaiting())
+    },
+    args = list(board = blind_board_args(), update = reactiveVal())
+  )
+})
+
+test_that("the deck is externally controllable, whole-vector", {
+  ext <- new_slides_extension(slides = "audit", title = "Iris topline")
+
+  expect_setequal(
+    blockr.dock:::external_ctrl_vars.dock_extension(ext),
+    c("slides", "title", "format")
+  )
+  expect_silent(blockr.dock::validate_extension(ext))
+
+  # The model-facing metadata documents exactly the controllable set --
+  # validate_ext_meta() rejects anything else, so this is the guard against
+  # documenting an argument the controller cannot reach.
+  expect_setequal(
+    names(blockr.dock::ext_args(ext)),
+    c("slides", "title", "format")
+  )
+  expect_true(nzchar(blockr.dock::ext_guidance(ext)))
+})
+
+test_that("a controller's write reaches the deck list and the fields", {
+  # The external-control contract from the panel's side: a value written into
+  # the state reactiveVal has to repaint the UI, or the panel shows one deck
+  # while the download carries another.
+  testServer(
+    slides_ext_srv("audit", "Deck"),
+    {
+      session$flushReact()
+
+      rv_slides(c("plot", "audit"))
+      rv_title("Topline deck")
+      rv_format("html")
+      session$flushReact()
+
+      expect_identical(session$getReturned()$state$slides(), c("plot", "audit"))
+      expect_identical(session$getReturned()$state$title(), "Topline deck")
+      expect_identical(session$getReturned()$state$format(), "html")
+
+      # The deck the download would build follows the written order.
+      expect_identical(sections()$slide_ids, c("plot", "audit"))
+    },
+    args = list(board = otl_board_args(), update = reactiveVal())
+  )
+})
+
+test_that("a controlled write does not echo back through the input", {
+  # updateTextInput -> input$sld_title -> rv_title() is a loop unless both
+  # legs guard on identical(). Simulate the round trip the browser makes.
+  testServer(
+    slides_ext_srv("audit", "Deck"),
+    {
+      session$flushReact()
+
+      rv_title("Topline deck")
+      session$flushReact()
+
+      session$setInputs(sld_title = "Topline deck")
+      session$flushReact()
+
+      expect_identical(rv_title(), "Topline deck")
+
+      # ...and the user still wins when they type something else.
+      session$setInputs(sld_title = "Renamed")
+      session$flushReact()
+      expect_identical(rv_title(), "Renamed")
     },
     args = list(board = blind_board_args(), update = reactiveVal())
   )

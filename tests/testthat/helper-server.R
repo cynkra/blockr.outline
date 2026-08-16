@@ -84,3 +84,44 @@ pending_plot_board <- function() {
   )
   b
 }
+
+# The slide builder's board bundle, with every block expression rigged to
+# THROW. Anything the panel draws has to come off the board object itself
+# (block names, exhibit kinds), so a panel that renders against this bundle
+# is a panel that evaluates nothing -- which is the extension's central
+# performance claim, and the reason it needs no visibility gate.
+blind_board_args <- function() {
+  b <- otl_board_args()
+  isolate({
+    for (id in names(b$blocks)) {
+      b$blocks[[id]]$server$expr <- reactive(stop("expression evaluated"))
+    }
+  })
+  b
+}
+
+# Take a block off a dock board the way the app does: out of every view
+# first, then its links, then the block. A dock_board validates view
+# membership against its blocks, so removing the block first aborts.
+drop_block <- function(brd, id) {
+
+  views <- blockr.dock::board_views(brd)
+  pid <- as.character(blockr.dock::as_block_panel_id(id))
+
+  for (v in names(views)) {
+    views[[v]] <- blockr.dock::dock_view(
+      setdiff(blockr.dock::view_members(views[[v]]), pid),
+      name = blockr.dock::view_name(views[[v]])
+    )
+  }
+
+  blockr.dock::board_views(brd) <- views
+
+  lnks <- blockr.core::board_links(brd)
+  blockr.core::board_links(brd) <- lnks[lnks$from != id & lnks$to != id]
+
+  blks <- blockr.core::board_blocks(brd)
+  blockr.core::board_blocks(brd) <- blks[setdiff(names(blks), id)]
+
+  brd
+}

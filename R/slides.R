@@ -89,12 +89,52 @@ new_slides_extension <- function(slides = character(),
     slides_ext_srv(slides, title, format),
     slides_ext_ui,
     name = "Slides",
+    description = slides_ext_meta(),
+    class = "slides_extension",
+    external_ctrl = c("slides", "title", "format"),
+    ...
+  )
+}
+
+# Model-facing documentation, read by blockr.dock's external-control tooling
+# (`list_extensions` reports the description, `describe_extension` the
+# arguments, examples and guidance) so a client driving the deck through
+# `modify_extension` is told the one thing it cannot infer: `slides` is the
+# WHOLE deck, not a queue to append to.
+slides_ext_meta <- function() {
+  blockr.dock::new_ext_meta(
     description = paste(
       "Deck builder: pick the blocks whose output becomes a slide, order",
       "them, download as PowerPoint or HTML."
     ),
-    class = "slides_extension",
-    ...
+    arguments = c(
+      slides = paste(
+        "Block ids, in slide order. A block is a slide iff it is named",
+        "here; one id, one slide, rendered from that block's output.",
+        "Ids naming blocks that are not on the board are dropped."
+      ),
+      title = paste(
+        "Deck title. Names the downloaded file, titles the HTML deck and",
+        "appears as its running footer."
+      ),
+      format = "Download format: \"pptx\" or \"html\"."
+    ),
+    examples = list(
+      list(slides = c("demographics", "response_rates", "safety_summary")),
+      list(slides = c("response_rates", "demographics"), title = "Interim")
+    ),
+    guidance = paste(
+      "`slides` is the whole deck, always. There is no add, move or remove",
+      "verb: read the current order from the `values` field of",
+      "list_extensions, then write back the full vector in the order you",
+      "want. Sending one id replaces the deck with a one-slide deck.",
+      "Only blocks with a visible output -- a table, a chart, an exhibit --",
+      "make sensible slides. The reads and transforms feeding them still",
+      "run at download time and must NOT be listed; picking a table is what",
+      "runs its chain. Slide order and evaluation order are independent, so",
+      "a deck may open on its conclusion. Deck styling is not set here: the",
+      "master template and the look come from the deployment's theme."
+    )
   )
 }
 
@@ -778,13 +818,25 @@ slides_ext_srv <- function(slides, title, format = "pptx") {
 
         # ---- settings ------------------------------------------------
 
+        # Both directions, for both fields. The reverse leg used to be a
+        # one-shot update call that seeded the field at server start, which is
+        # enough while the user is the only writer -- but `title` and `format`
+        # are externally controllable, and a value arriving from a controller
+        # has to reach the field too, or the panel goes on showing the old
+        # title while the download carries the new one. `slides` needs no
+        # equivalent: its list is repainted from a push observer already.
+        # The `identical` guards on both legs are what stops the echo.
         observeEvent(input$sld_title, {
           if (!identical(input$sld_title, rv_title())) {
             rv_title(input$sld_title)
           }
         }, ignoreInit = TRUE)
 
-        updateTextInput(session, "sld_title", value = isolate(rv_title()))
+        observeEvent(rv_title(), {
+          if (!identical(input$sld_title, rv_title())) {
+            updateTextInput(session, "sld_title", value = rv_title())
+          }
+        })
 
         observeEvent(input$sld_format, {
           if (!identical(input$sld_format, rv_format())) {
@@ -792,7 +844,11 @@ slides_ext_srv <- function(slides, title, format = "pptx") {
           }
         }, ignoreInit = TRUE)
 
-        updateSelectInput(session, "sld_format", selected = isolate(rv_format()))
+        observeEvent(rv_format(), {
+          if (!identical(input$sld_format, rv_format())) {
+            updateSelectInput(session, "sld_format", selected = rv_format())
+          }
+        })
 
         # ---- the projection, on demand -------------------------------
         #
