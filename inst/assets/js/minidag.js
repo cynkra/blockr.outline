@@ -432,21 +432,14 @@
      * already does this, for the same reason.
      */
 
-    // A preset is a STATE of the ticks below it, not a separate command, which
-    // is why the three read as radios: whichever one currently holds is lit, and
-    // ticking a box by hand lights none of them.
-    const presetOf = (ids, kind) => {
-      if (!ids.length || !views.length) return null;
-      const on = (v) => ids.every((id) => memberIds(v, kind).includes(id));
-      const none = (v) => !ids.some((id) => memberIds(v, kind).includes(id));
-      if (views.every(on)) return 'all';
-      if (views.every(none)) return 'none';
-      const act = activeView();
-      if (act && on(act) && views.every((v) => v === act || none(v))) {
-        return 'only';
-      }
-      return null;
-    };
+    // Whether every id is on every view / on none of them. What the two caption
+    // links act on, and what greys them out when they would be a no-op.
+    const onEvery = (ids, kind) =>
+      !!ids.length && !!views.length &&
+      views.every((v) => ids.every((id) => memberIds(v, kind).includes(id)));
+    const onNone = (ids, kind) =>
+      !!views.length &&
+      views.every((v) => !ids.some((id) => memberIds(v, kind).includes(id)));
 
     let menuEl = null, menuSpec = null, menuOpenedAt = 0;
 
@@ -505,36 +498,41 @@
       return b;
     };
 
-    // The segmented preset row. One row rather than three, so four views show at
-    // rest in the same height. It cannot carry the active view's NAME (a third of
-    // the menu's width will not hold it), so it says "Current" and the marked row
-    // in the list below is what names it.
-    const presetRow = (spec, current) => {
-      const seg = el('md-ctxseg', 'div');
-      const act = activeView();
+    // The two bulk edits, as words at the right of the caption that already
+    // labels what they act on. They used to be a segmented row of three
+    // button-weight presets, which read as commands of the same rank as
+    // "Remove block" when they are a shortcut for ticking -- and the third,
+    // "Current", restated a gesture the board already has: clicking the block
+    // is the easier way to say "here". "Only this view" went with it; None
+    // followed by one tick is the same result in two visible steps rather
+    // than one hidden one.
+    const capActions = (spec, ids, kind) => {
+      const wrap = el('md-ctxacts');
 
-      const one = (label, key, mode, view, title) => {
-        const b = el('md-ctxsegbtn' + (current === key ? ' on' : ''), 'button');
+      const one = (label, mode, off, title) => {
+        const b = el('md-ctxact', 'button');
         b.type = 'button';
         b.textContent = label;
         b.title = title;
-        b.addEventListener('click', (ev) => {
-          ev.stopPropagation();
-          closeMenu();
-          write(spec, mode, view);
-        });
+        b.disabled = off;
+        if (!off) {
+          b.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            closeMenu();
+            write(spec, mode, null);
+          });
+        }
         return b;
       };
 
-      seg.appendChild(one('All', 'all', 'all', null,
-        'Show on every view (' + views.length + ')'));
-      seg.appendChild(one('None', 'none', 'none', null,
+      wrap.appendChild(one('None', 'none', onNone(ids, kind),
         'Show on no view — it stays on the board'));
-      if (act) {
-        seg.appendChild(one('Current', 'only', 'only', act.id,
-          'Show on ' + act.name + ' only'));
-      }
-      return seg;
+      const dot = el('md-ctxactdot');
+      dot.textContent = '·';
+      wrap.appendChild(dot);
+      wrap.appendChild(one('All', 'all', onEvery(ids, kind),
+        'Show on every view (' + views.length + ')'));
+      return wrap;
     };
 
     const tickRow = (spec, v) => {
@@ -570,16 +568,10 @@
         row.appendChild(dot);
       }
 
-      // "send it to this one": the box adds, the word clears every other view
-      const only = el('md-ctxonly');
-      only.textContent = 'only';
-      only.title = 'Show on ' + v.name + ' and no other view';
-      only.addEventListener('click', (ev) => {
-        ev.stopPropagation();
-        closeMenu();
-        write(spec, 'only', v.id);
-      });
-      row.appendChild(only);
+      // No per-row "send it to this one" any more. It was a link that appeared
+      // only while the pointer was on the row that carried it, which is the
+      // least findable control a menu can have -- and "None, then tick one" is
+      // the same edit in two steps you can see and undo separately.
 
       row.addEventListener('click', (ev) => {
         ev.stopPropagation();
@@ -603,7 +595,6 @@
     const render = (spec) => {
       const ids = spec.blocks.concat(spec.extensions);
       const kind = spec.extensions.length ? 'extensions' : 'blocks';
-      const current = presetOf(ids, kind);
       const box = menuEl;
 
       box.innerHTML = '';
@@ -617,13 +608,12 @@
       head.appendChild(hn);
       box.appendChild(head);
 
-      box.appendChild(presetRow(spec, current));
-
       const cap = el('md-ctxcap', 'div');
       cap.textContent = 'Views';
       const cn = el('md-ctxcapn');
       cn.textContent = views.length;
       cap.appendChild(cn);
+      cap.appendChild(capActions(spec, ids, kind));
       box.appendChild(cap);
 
       const list = el('md-ctxticks', 'div');
@@ -813,8 +803,16 @@
     // for a few frames after the contextmenu -- so an unguarded listener closed
     // the menu the same gesture had just opened. Anything later than the settling
     // window is a real scroll and does dismiss it.
-    window.addEventListener('scroll', () => {
-      if (menuEl && performance.now() - menuOpenedAt > 260) closeMenu();
+    // ...and NOT the menu's own view list, either. The listener is in the
+    // CAPTURE phase (a scroll event does not bubble, so a bubbling listener on
+    // window would never see a panel scroll at all) -- which means it also sees
+    // the scroll of every element INSIDE the menu. On an 11-view board that made
+    // the tick list unscrollable: the first notch dismissed the menu it was
+    // scrolling.
+    window.addEventListener('scroll', (ev) => {
+      if (!menuEl) return;
+      if (ev.target instanceof Node && menuEl.contains(ev.target)) return;
+      if (performance.now() - menuOpenedAt > 260) closeMenu();
     }, true);
 
     // Chrome the adapter owns, as opposed to the rows the renderer draws. Only
