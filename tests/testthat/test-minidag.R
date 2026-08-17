@@ -3,7 +3,7 @@ test_that("minidag extension satisfies the dock extension contract", {
 
   expect_true(blockr.dock::is_dock_extension(ext))
   expect_identical(blockr.dock::extension_id(ext), "minidag_extension")
-  expect_identical(blockr.dock::extension_name(ext), "Mini deck")
+  expect_identical(blockr.dock::extension_name(ext), "Minidag")
   expect_no_error(blockr.dock::validate_extension(ext))
 
   # the type-derived key addresses the extension in views/grids
@@ -35,7 +35,7 @@ test_that("minidag_payload carries arity for every block shape", {
 
   pay <- minidag_payload(board)
 
-  expect_named(pay, c("blocks", "links", "stacks", "views"))
+  expect_named(pay, c("blocks", "links", "stacks", "views", "extensions"))
   expect_length(pay$blocks, 4L)
   expect_length(pay$links, 4L)
   expect_length(pay$stacks, 1L)
@@ -134,20 +134,182 @@ test_that("minidag_views states membership in block ids, not panel ids", {
   expect_identical(vw$one$name, "One")
   expect_identical(vw$two$name, "Two")
 
-  # the extension panel is a member of `one` but has no row in the deck, so
-  # it must not appear -- membership the deck cannot show, it must not offer
-  # to toggle
+  # blocks and extensions are reported in two lists, both in OBJECT ids: the
+  # minidag draws them in two places (the rail, and the extensions group at the foot)
+  # but the membership relation is one relation
   expect_identical(as.character(vw$one$blocks), "d1")
   expect_identical(as.character(vw$two$blocks), c("d1", "h1"))
+  expect_identical(as.character(vw$one$extensions), "mini")
+  expect_length(vw$two$extensions, 0L)
 
   # `active` is a property of the collection, reported per view
   expect_false(vw$one$active)
   expect_true(vw$two$active)
+
+  # the panel count the menu's checklist shows: everything the view holds, not
+  # just what the minidag has a row for
+  expect_identical(vw$one$n, 2L)
+  expect_identical(vw$two$n, 2L)
 })
 
-test_that("minidag_views is empty on a board that has no views", {
-  # the deck renders a plain core board too; views are a dock concept
-  expect_identical(minidag_views(blockr.core::new_board()), list())
+test_that("minidag_extensions gives every mounted extension a row, view or no view", {
+
+  board <- blockr.dock::new_dock_board(
+    blocks = c(d1 = blockr.core::new_dataset_block("iris")),
+    extensions = list(
+      minidag = new_minidag_extension(),
+      outline = new_outline_extension()
+    ),
+    views = list(one = blockr.dock::dock_view(c("minidag", "d1")))
+  )
+
+  extensions <- minidag_extensions(board)
+
+  # mount order, and the OUTLINE is here despite being on no view at all: the
+  # catalogue comes from the board, which is the whole reason a row can report
+  # "nowhere"
+  expect_identical(vapply(extensions, `[[`, "", "id"), c("minidag", "outline"))
+  expect_identical(extensions[[1L]]$name, "Minidag")
+
+  # `self` marks our own row, so the client can guard the one gesture that
+  # removes the panel being clicked in
+  expect_true(extensions[[1L]]$self)
+  expect_false(extensions[[2L]]$self)
+
+  # a plain core board carries no extensions and no views
+  expect_identical(minidag_extensions(blockr.core::new_board()), list())
+})
+
+test_that("minidag_membership_delta covers the whole mode vocabulary", {
+
+  board <- blockr.dock::new_dock_board(
+    blocks = c(
+      d1 = blockr.core::new_dataset_block("iris"),
+      h1 = blockr.core::new_head_block()
+    ),
+    links = blockr.core::links(from = "d1", to = "h1"),
+    extensions = list(
+      minidag = new_minidag_extension(),
+      outline = new_outline_extension()
+    ),
+    views = list(
+      one = blockr.dock::dock_view(c("minidag", "d1")),
+      two = blockr.dock::dock_view("d1"),
+      three = blockr.dock::dock_view("h1")
+    )
+  )
+
+  d1 <- "block_panel-d1"
+  mini <- "ext_panel-minidag"
+
+  # "all": blocks and extensions travel in the SAME call, and only the views that
+  # actually lack a panel are named
+  all <- minidag_membership_delta(
+    board, blocks = "d1", extensions = "minidag", mode = "all"
+  )
+  expect_named(all$views$mod, c("two", "three"))
+  expect_identical(names(all$views$mod$two$add), mini)
+  expect_setequal(names(all$views$mod$three$add), c(d1, mini))
+
+  # "none": every view that holds it loses it
+  none <- minidag_membership_delta(board, blocks = "d1", mode = "none")
+  expect_named(none$views$mod, c("one", "two"))
+  expect_identical(none$views$mod$one, list(rm = d1))
+
+  # "only": the named view gains, every other loses
+  only <- minidag_membership_delta(
+    board, blocks = "d1", mode = "only", view = "three"
+  )
+  expect_named(only$views$mod, c("one", "two", "three"))
+  expect_identical(only$views$mod$one, list(rm = d1))
+  expect_identical(names(only$views$mod$three$add), d1)
+
+  # "add" / "rm": ONE view, the others untouched -- which is what a single
+  # checkbox means, and why they are not expressed as a set over all views
+  add1 <- minidag_membership_delta(
+    board, blocks = "d1", mode = "add", view = "three"
+  )
+  expect_named(add1$views$mod, "three")
+
+  rm1 <- minidag_membership_delta(
+    board, extensions = "minidag", mode = "rm", view = "one"
+  )
+  expect_named(rm1$views$mod, "one")
+  expect_identical(rm1$views$mod$one, list(rm = mini))
+
+  # nothing to do is NULL, not an empty `mod`: a stale client clicking a box
+  # twice inside one round-trip must not reach `validate_view_mod()`
+  expect_null(minidag_membership_delta(
+    board, blocks = "d1", mode = "add", view = "one"
+  ))
+  expect_null(minidag_membership_delta(
+    board, extensions = "minidag", mode = "rm", view = "two"
+  ))
+
+  # unknown ids drop out; an empty set, a mode needing a view without one, and a
+  # plain core board are all NULL rather than an error
+  expect_null(minidag_membership_delta(board, blocks = "nope", mode = "all"))
+  expect_null(minidag_membership_delta(board, mode = "all"))
+  expect_null(minidag_membership_delta(board, blocks = "d1", mode = "only"))
+  expect_null(minidag_membership_delta(
+    board, blocks = "d1", mode = "add", view = "nope"
+  ))
+  expect_null(minidag_membership_delta(
+    blockr.core::new_board(), blocks = "d1", mode = "all"
+  ))
+})
+
+test_that("a membership delta round-trips through the update lifecycle", {
+
+  board <- blockr.dock::new_dock_board(
+    blocks = c(
+      d1 = blockr.core::new_dataset_block("iris"),
+      h1 = blockr.core::new_head_block()
+    ),
+    links = blockr.core::links(from = "d1", to = "h1"),
+    extensions = list(minidag = new_minidag_extension()),
+    views = list(
+      one = blockr.dock::dock_view(c("minidag", "d1")),
+      two = blockr.dock::dock_view("h1"),
+      three = blockr.dock::dock_view("h1")
+    )
+  )
+
+  commit <- function(x, upd) {
+    upd <- blockr.core::augment_board_update(upd, x)
+    blockr.core::validate_board_update(upd, x)
+    blockr.core::apply_board_update(x, upd)
+  }
+
+  members <- function(x, v) {
+    blockr.dock::view_members(blockr.dock::board_views(x)[[v]])
+  }
+
+  # one preset, a block and an extension, every view
+  grown <- commit(board, minidag_membership_delta(
+    board, blocks = "d1", extensions = "minidag", mode = "all"
+  ))
+  for (v in c("one", "two", "three")) {
+    expect_true(all(c("block_panel-d1", "ext_panel-minidag") %in%
+                      members(grown, v)))
+  }
+
+  # one checkbox cleared: that view only
+  ticked <- commit(grown, minidag_membership_delta(
+    grown, blocks = "d1", mode = "rm", view = "two"
+  ))
+  expect_false("block_panel-d1" %in% members(ticked, "two"))
+  expect_true("block_panel-d1" %in% members(ticked, "three"))
+
+  # and the other preset
+  gone <- commit(ticked, minidag_membership_delta(
+    ticked, blocks = "d1", mode = "none"
+  ))
+  for (v in c("one", "two", "three")) {
+    expect_false("block_panel-d1" %in% members(gone, v))
+  }
+  # the extension is untouched: "none" was stated about d1
+  expect_true("ext_panel-minidag" %in% members(gone, "one"))
 })
 
 test_that("the registry splits into add and append pools", {
@@ -178,7 +340,7 @@ test_that("the registry splits into add and append pools", {
   expect_true(nzchar(entry$package))
 })
 
-test_that("a block inserted from the deck lands beside its origin", {
+test_that("a block inserted from the minidag lands beside its origin", {
 
   board <- blockr.dock::new_dock_board(
     blocks = c(

@@ -1,7 +1,7 @@
 # Demo / e2e testbed for the minidag extension: a blockr.dock board that uses
-# minidag INSTEAD of the blockr.dag deck to configure the workflow.
+# minidag INSTEAD of the blockr.dag minidag to configure the workflow.
 #
-# The block set exercises every input arity the deck distinguishes:
+# The block set exercises every input arity the minidag distinguishes:
 #
 #   d1 (dataset, 0 inputs) --> f1 (filter, 1 input) --> h1 (head, 1 input)
 #   d1 + f1                --> m1 (merge, 2 named inputs x / y)
@@ -50,10 +50,10 @@ port <- local({
 
 options(
   blockr.tabular_display = blockr.ui::html_table_display,
-  # Nothing gets stacked onto the deck's tab strip. blockr.dock's
+  # Nothing gets stacked onto the minidag's tab strip. blockr.dock's
   # `determine_panel_pos()` drops a new panel into the last active group,
-  # and the deck's group is a candidate unless it is named here (the option
-  # defaults to the DAG alone). The deck places the blocks IT inserts, so
+  # and the minidag's group is a candidate unless it is named here (the option
+  # defaults to the DAG alone). The minidag places the blocks IT inserts, so
   # this covers the other paths: the navbar browser, the DAG canvas.
   # Keyed by MOUNT NAME, hence "minidag" below and in `extensions = `.
   blockr.visible_extensions = c("dag", "minidag"),
@@ -114,7 +114,7 @@ board <- new_dock_board(
   extensions = list(
     minidag = new_minidag_extension()
   ),
-  # Several views, so the deck's view list has something to organise: the
+  # Several views, so the minidag's view list has something to organise: the
   # same block deliberately appears on more than one (h1 on Overview and
   # Detail) and the two merge/bind blocks sit on none, which is the ordinary
   # case on a real board -- they feed something without being shown.

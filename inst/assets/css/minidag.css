@@ -32,6 +32,16 @@
 /* Negative horizontal margins pull it over the container's 12px padding, so
    rows scrolling underneath do not show at its edges; `top: -10px` cancels the
    container's padding-top the same way. */
+/* The sticky white band that the rows pass under. Its background must end at
+   the search row: it is there to hide what scrolls beneath, not to occupy space
+   of its own.
+   The 10px separating it from the flow therefore belongs to `.md-deck`, NOT to
+   the search row's margin-bottom. As the last in-flow child of a padded box
+   with no bottom padding, that margin used to collapse out of the band -- until
+   the view list opens, which makes this a GRID ITEM. A grid item establishes an
+   independent formatting context, margins stop collapsing through it, and the
+   band silently grew 10px taller and painted over the first row's top edge at
+   z-index 16. Owning the gap from below is true in both modes. */
 .minidag .md-head {
   position: sticky;
   top: -10px;
@@ -48,7 +58,8 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  margin: 0 0 10px;
+  /* no bottom margin: see `.md-head` */
+  margin: 0;
 }
 .minidag .md-search {
   flex: 1 1 auto;
@@ -98,9 +109,58 @@
   background: var(--md-primary-bg);
 }
 
-/* --- deck --- */
+/* --- minidag --- */
 
-.minidag .md-deck { position: relative; }
+.minidag .md-deck { position: relative; margin-top: 10px; }
+
+/* Add a block with no parent, the last row of the list. Deliberately NOT a
+   `.md-chip`: it borrows the row's height and rhythm so the list stays even, but
+   none of its parts, because it is not a block. No icon tile (an empty dashed
+   square where one would go), no status dot, no membership tag.
+
+   Its left margin AND width are set inline by the renderer, from the rail's
+   width -- which depends on how many lanes the board needs, so a stylesheet
+   cannot know it. A `<button>` is shrink-to-fit even as a flex container, so the
+   width cannot be left to `auto`; and `width: 100%` measures the container, which
+   hung the row exactly one rail-width past the rows.
+
+   No `margin-top`: `.md-rows` already ends with one row-gap of trailing space, so
+   adding another doubled the distance from the last block. */
+.minidag .md-addrow {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: var(--md-row-h, 28px);
+  padding: 0 6px;
+  font: inherit;
+  font-size: 11.5px;
+  color: var(--md-g500);
+  text-align: left;
+  background: none;
+  border: 1px dashed var(--md-border);
+  border-radius: 7px;
+  cursor: pointer;
+}
+.minidag .md-addrow:hover {
+  color: var(--md-primary);
+  background: var(--md-primary-bg);
+  border-color: var(--md-primary);
+}
+.minidag .md-addrow-tile {
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  border: 1.5px dashed var(--md-border);
+  border-radius: 5px;
+}
+.minidag .md-addrow:hover .md-addrow-tile { border-color: var(--md-primary); }
+.minidag .md-addrow-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .minidag .md-deck svg.md-rail {
   position: absolute;
   left: 0;
@@ -133,13 +193,13 @@
   align-items: center;
   gap: 7px;
   height: var(--md-row-h, 28px);
-  margin-bottom: var(--md-row-gap, 6px);
+  margin-bottom: var(--md-row-gap, 9px);
   padding: 0 6px;
   border-radius: 7px;
   transition: opacity 0.12s;
 }
 .minidag .md-chip {
-  /* Flush at rest. A border and a fill on every row made the deck a column
+  /* Flush at rest. A border and a fill on every row made the minidag a column
      of cards, which left the stack frame -- a box drawn BEHIND those rows --
      competing with 92 smaller boxes; it is now the only filled thing on
      screen and reads immediately. Hover still separates a row, and the
@@ -161,7 +221,7 @@
 .minidag .md-chip [contenteditable="true"] { user-select: text; }
 .minidag .md-chip.dim,
 .minidag .md-stackhead.dim { opacity: 0.25; }
-/* Lineage focus. The deck dims, the rows related to the hovered block keep
+/* Lineage focus. The minidag dims, the rows related to the hovered block keep
    their `md-rel`. Two classes rather than a write per row, so the fade is
    CSS's job and hovering a 92-row board costs a handful of DOM writes. */
 /* The fade lands on the RAIL, not on the rows. Tracing a chain is a rail
@@ -177,9 +237,15 @@
   background: var(--md-primary-bg);
 }
 .minidag .md-chip.drop-no { border-color: #fca5a5; }
+/* The ring is drawn INWARD. Same 2px weight (a 1px border plus a 1px shadow),
+   but an outward spread grew the row past its own border box, and inside a
+   stack the frame only leaves FRAME_PAD_Y (2px) around its rows -- so a
+   selected member's ring landed 1px from the frame's border and read as
+   touching it. Nothing outside the row's box means the frame's padding stays
+   the frame's padding. */
 .minidag .md-chip.sel {
   border-color: var(--md-primary);
-  box-shadow: 0 0 0 1px var(--md-primary);
+  box-shadow: inset 0 0 0 1px var(--md-primary);
 }
 /* A row inside a stack stays transparent too. It was white so it would read
    against the frame's tint back when every row carried a grey fill; now that
@@ -347,7 +413,7 @@
   cursor: grabbing;
 }
 
-/* Follows the pointer, so it is fixed to the viewport rather than to a deck
+/* Follows the pointer, so it is fixed to the viewport rather than to a minidag
    that scrolls under it. */
 .md-droptip {
   position: fixed;
@@ -604,7 +670,7 @@
 
 /* --- views: membership on a row, and the list that focuses one ---------
    Both live past the spring (`nodeAside` / `stackAside`), so they read as a
-   column down the deck rather than as ragged text after each name. */
+   column down the minidag rather than as ragged text after each name. */
 
 .minidag .md-views {
   margin-left: auto;
@@ -630,214 +696,6 @@
   border: 1px solid var(--md-border);
   color: var(--md-g500);
   cursor: help;
-}
-
-/* the toggle, shown only while a view is focused */
-.minidag .md-vtoggle {
-  width: 15px;
-  height: 15px;
-  border-radius: 50%;
-  border: 1.5px solid #d1d5db;
-  background: var(--md-bg);
-  cursor: pointer;
-  padding: 0;
-  flex: 0 0 15px;
-}
-.minidag .md-vtoggle:hover { border-color: var(--md-primary); }
-.minidag .md-vtoggle.on {
-  background: var(--md-primary);
-  border-color: var(--md-primary);
-}
-/* a stack whose members are only partly in the view */
-.minidag .md-vtoggle.some {
-  background: linear-gradient(to right, var(--md-primary) 50%, var(--md-bg) 50%);
-  border-color: var(--md-primary);
-}
-
-/* --- the view list ----------------------------------------------------
-   A panel you open, not furniture: the deck often sits in a narrow dock
-   panel.
-
-   It STAYS PUT while the deck scrolls, which is the whole reason it is laid
-   out this way. It used to be `position: absolute; top: 0` -- pinned to the
-   top of a box that is not the scrollport (see `.minidag` above), so on the
-   CDEX board it scrolled off after eight rows and the remaining eighty-four
-   were browsed with no way to see or switch the view they were about. Sticky
-   fixes that, but only for a box in normal flow, and the renderer owns the
-   skeleton (`.md-head` + `.md-deck` as siblings, with the list inserted
-   before them). Grid places all three without a wrapper: the list takes
-   column 1 across both rows, so it has the deck's full height to stick
-   within. `align-self: start` is load-bearing -- a stretched grid item is as
-   tall as its area and can never stick. */
-
-.minidag.md-listopen {
-  display: grid;
-  grid-template-columns: 196px minmax(0, 1fr);
-  grid-template-rows: auto 1fr;
-}
-.minidag .md-viewlist {
-  grid-column: 1;
-  grid-row: 1 / span 2;
-  position: sticky;
-  /* The head anchors at -10px because it pulls itself over the container's
-     padding to hide the rows passing under it. This one has no such margin,
-     so it pins at the edge and its own 2px keeps the first row off it. */
-  top: 0;
-  align-self: start;
-  z-index: 20;
-  /* The scrollport is the dock panel, which has no CSS unit of its own; the
-     viewport is its upper bound, so this is the safety valve for a board
-     with more views than fit, not the everyday case. */
-  max-height: calc(100vh - 24px);
-  overflow-y: auto;
-  padding: 2px 6px 6px;
-  margin-right: 10px;
-  background: var(--md-bg);
-  border-right: 1px solid var(--md-border);
-}
-/* Column 2, and no negative left margin: the head pulls itself over the
-   container's padding so rows do not show at its edges, and on this side
-   that padding is now the list's border. */
-.minidag.md-listopen .md-head {
-  grid-column: 2;
-  grid-row: 1;
-  margin-left: 0;
-  padding-left: 0;
-}
-.minidag.md-listopen .md-deck {
-  grid-column: 2;
-  grid-row: 2;
-}
-
-.minidag .md-vhead {
-  font-size: 10.5px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--md-g500);
-  padding: 6px 6px 6px;
-}
-.minidag .md-vrow {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 6px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 12px;
-}
-.minidag .md-vrow:hover { background: var(--md-bg-input); }
-.minidag .md-vrow.on { background: var(--md-primary-bg); }
-.minidag .md-vrow.on .md-vname {
-  color: var(--md-primary);
-  font-weight: 600;
-}
-.minidag .md-vall {
-  border-bottom: 1px solid var(--md-border);
-  border-radius: 6px 6px 0 0;
-  margin-bottom: 4px;
-  padding-bottom: 6px;
-}
-.minidag .md-vname {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.minidag .md-vname[contenteditable="true"] {
-  outline: 1px solid var(--md-primary);
-  border-radius: 3px;
-  text-overflow: clip;
-}
-.minidag .md-vcount {
-  font-size: 10.5px;
-  color: var(--md-g400);
-  font-variant-numeric: tabular-nums;
-}
-/* the board's ACTIVE view (where a revealed block lands) -- deliberately a
-   mark, not a selection, so it cannot be read as focus */
-.minidag .md-vactive {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--md-primary);
-  flex: 0 0 6px;
-}
-.minidag .md-vrm {
-  border: none;
-  background: none;
-  color: var(--md-g400);
-  cursor: pointer;
-  padding: 0 2px;
-  font-size: 13px;
-  line-height: 1;
-  opacity: 0;
-}
-.minidag .md-vrow:hover .md-vrm { opacity: 1; }
-.minidag .md-vrm:disabled { cursor: default; opacity: 0.25; }
-.minidag .md-vrm:hover:not(:disabled) { color: var(--md-g900); }
-.minidag .md-vadd {
-  margin-top: 8px;
-  width: 100%;
-  text-align: left;
-  font: inherit;
-  font-size: 11.5px;
-  padding: 4px 7px;
-  border: 1px dashed var(--md-border);
-  border-radius: 6px;
-  background: var(--md-bg);
-  color: var(--md-g500);
-  cursor: pointer;
-}
-.minidag .md-vadd:hover {
-  border-color: var(--md-primary);
-  color: var(--md-primary);
-}
-
-/* the trigger, in the renderer's own search row */
-.minidag .md-viewbtn {
-  flex: 0 0 auto;
-  width: 30px;
-  height: 30px;
-  border-radius: 7px;
-  border: 1px solid var(--md-border);
-  background: var(--md-bg);
-  color: var(--md-g500);
-  cursor: pointer;
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-.minidag .md-viewbtn svg { width: 15px; height: 15px; }
-.minidag .md-viewbtn:hover {
-  border-color: var(--md-primary);
-  color: var(--md-primary);
-}
-.minidag .md-viewbtn.on {
-  background: var(--md-primary-bg);
-  border-color: var(--md-primary);
-  color: var(--md-primary);
-}
-
-/* A focused view reads as a shape in the pipeline: rows that are not in it
-   fade, rows that are stay put. Driven off the toggle the row already
-   carries (`:has()`), so the renderer needs to know nothing about views.
-
-   Deliberately gentler than the rail's hover dim (0.28): that one is a
-   momentary answer to "what is connected to this?", where near-invisible is
-   fine. This one is the state you are working in for as long as a view is
-   focused, and you still have to read the names you are toggling. The two
-   never run together -- the board turns the hover dim off while a view is
-   focused (`setHoverFocus`). */
-
-.minidag.md-viewfocus .md-deck .md-chip:has(.md-vtoggle:not(.on)),
-.minidag.md-viewfocus .md-deck
-  .md-stackhead:has(.md-vtoggle:not(.on):not(.some)) {
-  opacity: 0.45;
-}
-.minidag.md-viewfocus .md-deck .md-chip:has(.md-vtoggle:not(.on)):hover {
-  opacity: 0.85;
 }
 
 /* While a drag is looking for empty canvas: the gutter is the drop zone that
@@ -920,7 +778,7 @@
 }
 .minidag .md-pick-group:first-child { margin-top: 2px; }
 
-/* The picker row IS the deck row: same height, gap, padding, radius and
+/* The picker row IS the minidag row: same height, gap, padding, radius and
    tile. A block is one object, so it should not be drawn one way in the
    list and another in the menu that adds it. The tile reuses `.md-kind`
    outright rather than restating its geometry, so the two cannot drift. */
@@ -987,4 +845,264 @@
   border-style: solid;
   border-color: var(--md-primary);
   color: var(--md-primary);
+}
+
+/* --- the extensions group ---------------------------------------------------
+   Extensions as rows, after the flow. Dashed rather than solid, and greyed:
+   a stack frame is part of the board's structure, this is not -- it is the
+   panels the board carries, listed where they cannot be mistaken for a step
+   in the pipeline. */
+.minidag .md-exts {
+  margin-top: 12px;
+  border-top: 1px solid var(--md-border);
+  padding-top: 6px;
+}
+.minidag .md-extshead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--md-g500);
+  padding: 2px 4px 4px;
+}
+.minidag .md-extscount {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--md-g400);
+}
+/* A round tile, where a block's is square: the one thing that says "not a
+   block" without a word spent on it. */
+.minidag .md-ext .md-extkind {
+  border-radius: 50%;
+  background: var(--md-g400);
+}
+/* --- the row menu ------------------------------------------------------
+   On `document.body`, fixed to the viewport, because the panel it belongs to
+   both scrolls and clips: a menu taller than the panel cannot live inside it.
+   `.md-droptip` is fixed for the same reason. Hence no `.minidag` ancestor in
+   these selectors -- the menu is not inside one. */
+.md-ctxmenu {
+  position: fixed;
+  z-index: 1200;
+  width: 232px;
+  padding: 4px;
+  background: #fff;
+  border: 1px solid var(--blockr-color-border, #e5e7eb);
+  /* --blockr-radius-lg: inputs, rows, DROPDOWNS */
+  border-radius: 8px;
+  /* the shadow the canonical portalled dropdown uses (blockr-select.css) */
+  box-shadow: 0 4px 12px rgb(0 0 0 / 10%);
+  /* NO font-family: the design system's first rule is that components never
+     hardcode one, and a body portal inherits the page font for free. The size
+     is `--blockr-font-size-xs`, one step below the 13px the minidag's own rows
+     run at, because a menu about a row must not be bigger than the row.
+     (This declaration used to be a `font:` shorthand ending in `inherit`, which
+     is not a legal family in the shorthand -- so the whole thing was dropped and
+     the menu rendered at the body's 14px, larger than the deck it belongs to.) */
+  font-size: var(--blockr-font-size-xs, 0.75rem);
+  line-height: 1.5;
+  color: var(--blockr-grey-700, #374151);
+}
+.md-ctxhead {
+  display: flex;
+  gap: 6px;
+  padding: 4px 8px 3px;
+  font-size: 10px;   /* the minidag's meta scale, as on `.md-vtag` */
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--blockr-grey-400, #9ca3af);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.md-ctxheadn {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/* the three presets, sharing one row. They are STATES of the ticks below --
+   whichever holds is lit -- so pressing one is not a command so much as a
+   jump. One row rather than three so four views show at rest in the same
+   height; the cost is that a third of 236px cannot hold a view name, which is
+   why the last one says "Current" and the marked row below names it. */
+.md-ctxseg {
+  display: flex;
+  gap: 3px;
+  margin: 3px 4px 5px;
+}
+.md-ctxsegbtn {
+  flex: 1 1 0;
+  padding: 4px 0;
+  font: inherit;
+  font-size: 11px;
+  color: var(--blockr-grey-600, #4b5563);
+  background: #fff;
+  border: 1px solid var(--blockr-color-border, #e5e7eb);
+  /* --blockr-radius-sm: pills and small buttons */
+  border-radius: 4px;
+  cursor: pointer;
+}
+.md-ctxsegbtn:hover {
+  border-color: var(--blockr-color-primary, #2563eb);
+  color: var(--blockr-color-primary, #2563eb);
+}
+.md-ctxsegbtn.on {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: var(--blockr-color-primary, #2563eb);
+  /* --blockr-font-weight-semibold */
+  font-weight: 600;
+}
+
+.md-ctxcap {
+  display: flex;
+  padding: 4px 8px 3px;
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #9ca3af;
+}
+.md-ctxcapn {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/* One tick per view. Capped and scrolling rather than growing the menu: ten
+   views is not a special board, and the row operations below must stay
+   reachable without scrolling the menu itself. */
+.md-ctxticks {
+  max-height: 152px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.md-ctxticks::-webkit-scrollbar { width: 7px; }
+.md-ctxticks::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 4px;
+}
+.md-ctxtick {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.md-ctxtick:hover { background: var(--blockr-grey-50, #f9fafb); }
+.md-ctxbox {
+  position: relative;
+  flex: 0 0 13px;
+  width: 13px;
+  height: 13px;
+  background: #fff;
+  border: 1.5px solid var(--blockr-grey-300, #d1d5db);
+  border-radius: 3px;
+}
+.md-ctxbox.on {
+  background: var(--blockr-color-primary, #2563eb);
+  border-color: var(--blockr-color-primary, #2563eb);
+}
+.md-ctxbox.on::after {
+  position: absolute;
+  top: 1px;
+  left: 3px;
+  width: 4px;
+  height: 7px;
+  border: 2px solid #fff;
+  border-top: 0;
+  border-left: 0;
+  content: '';
+  transform: rotate(40deg);
+}
+/* a selection or a stack whose members are only partly on the view */
+.md-ctxbox.some {
+  background: linear-gradient(to right, #2563eb 50%, #fff 50%);
+  border-color: #2563eb;
+}
+.md-ctxviewname {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.md-ctxviewn {
+  flex: 0 0 auto;
+  font-size: 10px;
+  color: var(--blockr-grey-400, #9ca3af);
+  font-variant-numeric: tabular-nums;
+}
+/* the current view, which the segmented row cannot name */
+.md-ctxactive {
+  flex: 0 0 5px;
+  width: 5px;
+  height: 5px;
+  background: var(--blockr-color-primary, #2563eb);
+  border-radius: 50%;
+}
+/* "send it to this one": the box adds, this clears every other view. Hidden
+   until the row is hovered, so the resting list is a list. */
+.md-ctxonly {
+  flex: 0 0 auto;
+  font-size: 10px;
+  color: var(--blockr-color-primary, #2563eb);
+  opacity: 0;
+}
+.md-ctxtick:hover .md-ctxonly { opacity: 1; }
+/* armed: the next click takes this panel off the view it is being clicked in */
+.md-ctxtick.md-armed .md-ctxviewname { color: #dc2626; font-weight: 600; }
+.md-ctxtick.md-armed .md-ctxbox {
+  background: #dc2626;
+  border-color: #dc2626;
+}
+
+.md-ctxsep {
+  margin: 4px 2px;
+  border-top: 1px solid var(--blockr-color-border, #e5e7eb);
+}
+.md-ctxitem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 8px;
+  font: inherit;
+  color: var(--blockr-grey-700, #374151);
+  text-align: left;
+  background: none;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.md-ctxitem:hover:not(:disabled) { background: var(--blockr-grey-50, #f9fafb); }
+.md-ctxitem:disabled { color: var(--blockr-grey-300, #d1d5db); cursor: default; }
+.md-ctxlabel {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* the gesture that already does this, named so the menu teaches it */
+.md-ctxkey {
+  flex: 0 0 auto;
+  font-size: 10px;
+  color: var(--blockr-grey-400, #9ca3af);
+}
+.md-ctxdanger { color: #dc2626; }
+.md-ctxdanger:hover:not(:disabled) { background: #fef2f2; }
+
+/* on every view: the one answer a list of names reads worse than a word */
+.minidag .md-vall-tag {
+  color: var(--md-primary);
+  background: var(--md-primary-bg);
+  border-color: #bfdbfe;
 }

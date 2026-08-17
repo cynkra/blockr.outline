@@ -31,8 +31,10 @@ slots, variadic blocks never fill up),
 \item release the drag on empty space (the left gutter works at any scroll
 position) to append a new block: a picker opens at the release point,
 browsing the catalogue by category at rest and filtering as you type.
-The \code{+} on a row appends after it, the \code{+} in the search row adds a
-block with no origin and so no link,
+The \code{+} on a row appends after it. A block with no input at all -- the
+start of a flow -- comes from the dashed \strong{Add a block} row at the foot of
+the list, where such a block sorts, or from right-clicking the empty space
+below it (which is also the only home for \strong{Paste}),
 \item click a row to reveal that block's panel, double-click to rename,
 \item click a dot (or hover a rail edge) to inspect and remove connections,
 \item board stacks show as named frames; collapse them to a single row, drag a
@@ -41,21 +43,84 @@ take it out again (a selection moves together),
 \item a stack the flow runs out of and back into cannot be drawn as one run of
 rows: those links climb the right-hand gutter as dashed arrows and the
 stack header offers to pull the blocks in the way into the group,
+\item each row names the views it is shown on (or reads \verb{all views} / \verb{no view});
+right-click a row to change that, and the board's extensions do the same
+from the \strong{Extensions} group at the foot,
 \item block eval status (waiting / unset / failed) shows as a coloured dot
 per row, identical in meaning to the DAG node badge.
 }
 }
-\section{Keeping the deck clear}{
+\section{Extensions}{
+ which extension goes on which view:
+A board's extensions are panels like any other, so each is a member of the
+views it is placed on and absent from the rest. They are not in the DAG
+though, so they have no lane on the rail and no place in an order derived
+from it. They get a \strong{Extensions} group after the last block instead, one
+ordinary row each, naming the views the extension is on exactly as a block
+row does, and reached by the same right-click menu.
 
-A block added from the deck is placed by the deck: appended blocks open
+The group is built from the board's extension set rather than from view
+membership, so an extension on \strong{no} view still has a row. That is the
+state per-view membership alone can never report, and the one a row is
+needed to get out of.
+}
+
+\section{Which view a panel goes on}{
+
+Every row -- a block, a stack of blocks, an extension in the
+\strong{Extensions} group
+-- names the views it is shown on, and right-click is where that is changed.
+The menu carries the whole answer:
+\itemize{
+\item \strong{All / None / Current}, three presets sharing one row. They are \emph{states}
+of the ticks below rather than separate commands, so whichever one
+currently holds is lit. \code{Current} is the board's active view; the marked
+row in the
+list names it.
+\item \strong{a tick per view}, with that view's panel count beside it, capped and
+scrolling because ten views is not a special board. Ticking keeps the menu
+open, since it is usually done more than once.
+\item \strong{\code{only}} on the view row you are pointing at, which clears every other
+view: "send it there" in one click.
+}
+
+The menu acts on the \strong{selection} rather than on the row under the pointer,
+the way a file manager does: right-clicking a selected row speaks for all of
+them, and right-clicking an unselected one collapses the selection to it
+first. On a collapsed stack header it speaks for the stack's members.
+
+Below the views it carries only the operations that have no discoverable
+gesture of their own -- rename, copy, cut, remove -- and deliberately \emph{not}
+connect or append: the rail dot and the row's \code{+} are better affordances than
+a menu entry, and naming them here would teach the wrong gesture for the
+thing the rail is best at.
+
+Clearing the minidag's own tick on the view it is shown in removes the panel
+you are clicking in, so that one box arms on the first click and commits on
+the second. It is not a one-way door -- blockr.dock's per-view \code{+} (Add
+panel) picker lists extensions alongside blocks.
+}
+
+\section{What the minidag does not do}{
+
+Creating, renaming, reordering and removing views belongs to the dock's own
+navbar, which has had all four since before this extension existed, and whose
+new-view flow lets you pick the blocks and extensions to seed a page with.
+The minidag says which panels go where, and nothing about the pages
+themselves.
+}
+
+\section{Keeping the minidag clear}{
+
+A block added from the minidag is placed by the minidag: appended blocks open
 beside the block they read from, and a block added with no origin opens
 among the other panels. Blocks added by other routes -- the navbar's block
 browser, the DAG canvas -- are placed by blockr.dock's
 \code{determine_panel_pos()}, which drops a new panel into the last active
-group. The deck's own group is a candidate for that unless it is named in
+group. The minidag's own group is a candidate for that unless it is named in
 the \code{blockr.visible_extensions} option, which defaults to the DAG alone.
 
-So an app that mounts the deck and wants nothing ever stacked onto it
+So an app that mounts the minidag and wants nothing ever stacked onto it
 names it there, using the \strong{mount name} it gave the extension:
 
 \if{html}{\out{<div class="sourceCode r">}}\preformatted{options(blockr.visible_extensions = c("dag", "minidag"))

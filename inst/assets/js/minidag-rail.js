@@ -20,7 +20,7 @@
  *   nodeLead(node) -> Element    row content before the name (icon, ports)
  *   nodeTrail(node) -> Element   row content after the name (chips, fields)
  *   nodeAside(node) -> Element   row content PAST the spring, so it right-
- *                                aligns into a column down the deck (the
+ *                                aligns into a column down the minidag (the
  *                                board paints view membership here)
  *   stackAside(stack) -> Element the same, for a stack header and for the
  *                                collapsed stack row. Stack rows are built
@@ -63,17 +63,26 @@
     // GAP is what a stack frame has to live inside. A frame claims
     // FRAME_PAD_Y above and below its rows, and whatever is left over is the
     // air between two adjacent frames: GAP - 2 * FRAME_PAD_Y. At GAP 6 with
-    // 3px padding that was zero, which is why two stacks touched. 8 with 2px
-    // padding leaves 4px between them.
-    LANE_W: 16, ROW_H: 28, GAP: 8, RAIL_L: 10, RAIL_R: 8, DOT_R: 4,
+    // 3px padding that was zero, which is why two stacks touched. 9 with 3px
+    // padding leaves 3px on both counts -- inside a frame and between two of
+    // them -- which is the one thing this arithmetic can be asked to keep
+    // equal.
+    LANE_W: 16, ROW_H: 28, GAP: 9, RAIL_L: 10, RAIL_R: 8, DOT_R: 4,
     // Air between a stack frame and the rows it encloses. The frame is drawn
     // as an absolute box behind the rows, so this is the ONLY thing that
     // insets them -- and it has to be applied on all four sides by hand:
     // FRAME_PAD_X is subtracted on the left and taken off the row width on
-    // the right. Y is half of X because rows sit GAP (6px) apart, so a full
-    // FRAME_PAD_X above the header would put the frame edge against the row
-    // above it.
-    FRAME_PAD_X: 6, FRAME_PAD_Y: 2
+    // the right. Y is a third of X because rows sit GAP apart and a frame has
+    // to fit its padding twice into that gap, where the sides have the whole
+    // gutter to play with.
+    //
+    // 2 was not enough: a selected member's ring sits at the edge of its own
+    // box, so it left 2px between two 1px borders -- and when the stack's
+    // colour is the blue the selection already uses (the default for the first
+    // lane), those two lines merged into one thick one. The ring is drawn
+    // inward now (see `.md-chip.sel`), and this is the air it needs to read as
+    // a separate mark.
+    FRAME_PAD_X: 6, FRAME_PAD_Y: 3
   };
   const LANE_COLORS = ['#9ca3af', '#2563eb', '#0d9488', '#7c3aed', '#b45309', '#be185d'];
   const STATUS_RANK = { failed: 3, waiting: 2, unset: 1 };
@@ -104,12 +113,15 @@
     const uid = 'md' + uidCounter++;
     const emit = (name, payload) => adapter.emit(name, payload);
     const opts = Object.assign({
-      search: true, stacks: true, remove: true, status: true,
+      search: true, addButton: true, addRow: false, stacks: true,
+      remove: true, status: true,
       allowCycles: false, nameEdit: 'dblclick',
       edgeLabels: false, labelPad: 34,
       searchPlaceholder: 'Search blocks…',
       emptyText: 'No blocks yet.',
       emptyAddText: '+ Add a block',
+      addRowText: 'Add a block',
+      addRowTitle: 'A block that reads from nothing',
       stackNoun: 'Stack', stackUnit: 'blocks', stackIcon: STACK_ICON,
       stackAddText: 'Stack them', stackRmTitle: 'Dissolve stack (blocks stay)'
     }, adapter.opts || {});
@@ -162,12 +174,14 @@
       hitsEl = document.createElement('span');
       hitsEl.className = 'md-hits';
       searchRow.appendChild(hitsEl);
-      const addBtn = document.createElement('button');
-      addBtn.className = 'md-add';
-      addBtn.textContent = '+';
-      addBtn.title = 'Add block';
-      addBtn.addEventListener('click', () => emit('block_add', true));
-      searchRow.appendChild(addBtn);
+      if (opts.addButton) {
+        const addBtn = document.createElement('button');
+        addBtn.className = 'md-add';
+        addBtn.textContent = '+';
+        addBtn.title = 'Add block';
+        addBtn.addEventListener('click', () => emit('block_add', true));
+        searchRow.appendChild(addBtn);
+      }
       headEl.appendChild(searchRow);
     }
 
@@ -598,6 +612,37 @@
       });
       deckEl.appendChild(list);
 
+      // "Add a block" as the last row of the list rather than as a button in the
+      // search row: every other add gesture is about a parent (drag a dot to a
+      // row, drag it to the gutter, the row's own `+`), and a block with no input
+      // sorts at the END of a topological list -- so it is offered where it will
+      // appear.
+      //
+      // Inside the deck, sharing the list's left margin (the rail is as wide as
+      // the board has lanes) and sitting BEFORE the tail spacer, so it is neither
+      // wider than the rows nor separated from them by the drop-zone slack. The
+      // empty state carries the same offer, so this is only drawn when there are
+      // rows.
+      if (opts.addRow) {
+        const addRow = document.createElement('button');
+        addRow.type = 'button';
+        addRow.className = 'md-addrow';
+        addRow.style.marginLeft = railW + 'px';
+        // A form control is shrink-to-fit even as a flex container, so unlike
+        // `.md-rows` (a div, which fills by default) the width has to be stated.
+        addRow.style.width = 'calc(100% - ' + railW + 'px)';
+        addRow.title = opts.addRowTitle;
+        const tile = document.createElement('span');
+        tile.className = 'md-addrow-tile';
+        addRow.appendChild(tile);
+        const lbl = document.createElement('span');
+        lbl.className = 'md-addrow-label';
+        lbl.textContent = opts.addRowText;
+        addRow.appendChild(lbl);
+        addRow.addEventListener('click', () => emit('block_add', true));
+        deckEl.appendChild(addRow);
+      }
+
       // One empty row's worth of canvas under the list. On a long board (the
       // CDEX one is 92 rows) the list fills the panel exactly, so scrolled to
       // the end there was nowhere left to release a drag for "append" -- and
@@ -617,7 +662,7 @@
 
       // Only if the row is still there: a block removed by the very update
       // that triggered this render would light nothing, leaving the whole
-      // deck dimmed with no explanation.
+      // minidag dimmed with no explanation.
       if (refocus && deckEl.querySelector(
         '.md-chip[data-id="' + CSS.escape(refocus) + '"], ' +
         '.md-stackhead[data-stack="' + CSS.escape(refocus.replace(/^stack:/, '')) + '"]'
@@ -658,7 +703,7 @@
       el.className = 'md-chip' + (inStack ? ' instack' : '') +
         (selection.has(b.id) ? ' sel' : '');
       el.dataset.id = b.id;
-      // the frame ends at the deck's right edge, so a framed row has to stop
+      // the frame ends at the minidag's right edge, so a framed row has to stop
       // short of it or the border is drawn ON the row -- padded on the left,
       // clipped on the right, which is how it read before
       if (inStack) el.style.marginRight = FRAME_PAD_X + 'px';
@@ -693,7 +738,7 @@
 
       // Past the spring, so it right-aligns: `nodeTrail` sits beside the name
       // and is the wrong place for anything that wants to read as a column
-      // down the deck. Kept as a separate hook rather than moving `nodeTrail`,
+      // down the minidag. Kept as a separate hook rather than moving `nodeTrail`,
       // which blockr.process's adapter uses for exactly the beside-the-name
       // job its name promises.
       const aside = nodeAside(b);
@@ -994,7 +1039,7 @@
     // past a row never paints it, it only paints where you settle.
     // A dwell, not a brush. `FOCUS_MOVE_MS` used to be 60, so once engaged
     // the lineage re-struck about sixteen times a second while the pointer
-    // travelled -- the deck answering a question on every row it passed.
+    // travelled -- the minidag answering a question on every row it passed.
     // Both thresholds now want the pointer to stop somewhere. Leaving stays
     // quick: releasing late would keep a stale chain lit after you have gone.
     const FOCUS_IN_MS = 320, FOCUS_MOVE_MS = 320, FOCUS_OUT_MS = 260;
@@ -1024,7 +1069,7 @@
       return keep;
     };
 
-    // The focus is two classes -- one on the deck, `md-rel` on the few rows
+    // The focus is two classes -- one on the minidag, `md-rel` on the few rows
     // that stay lit -- so CSS owns the fade and a hover costs a handful of DOM
     // writes instead of one per row and one per edge (184 of them on the CDEX
     // board, every time the pointer crossed a gap).
@@ -1477,7 +1522,7 @@
           }
           return;
         }
-        // Only within the deck: a release over the view list or off the panel
+        // Only within the minidag: a release over the view list or off the panel
         // is a cancelled drag, not an instruction to break the group up.
         if (!over && home && deckBox && inBox(deckBox)) {
           drop = { leave: true };
@@ -1692,6 +1737,37 @@
       setHoverFocus: (on) => {
         hoverFocus = !!on;
         if (!hoverFocus) clearFocus();
+      },
+      // The selection, and a way to replace it wholesale. A host adapter with a
+      // context menu needs both: the menu acts on the selection, and a
+      // right-click on a row OUTSIDE it has to collapse to that row first, or
+      // the menu would speak for rows carrying no mark.
+      selection: () => [...selection],
+      // Start the inline rename on a row, by block id or `stack:<id>`. The
+      // gesture is a double-click on the name; a host adapter with a menu needs
+      // to reach the same editor, and putting the caret in the row is the only
+      // consistent answer -- a modal would rename in a different place from
+      // where the double-click does.
+      editName: (id) => {
+        const sel = String(id).startsWith('stack:')
+          ? '.md-stackhead[data-stack="' + CSS.escape(String(id).slice(6))
+            + '"] .md-name'
+          : '.md-chip[data-id="' + CSS.escape(String(id)) + '"] .md-name';
+        const name = deckEl.querySelector(sel);
+        if (!name || name.tagName === 'INPUT') return false;
+        name.contentEditable = 'true';
+        name.focus();
+        document.getSelection().selectAllChildren(name);
+        return true;
+      },
+      selectOnly: (ids) => {
+        selection.clear();
+        (Array.isArray(ids) ? ids : [ids]).forEach((id) => selection.add(id));
+        selAnchor = [...selection].pop() || null;
+        deckEl.querySelectorAll('.md-chip[data-id]').forEach((el) => {
+          el.classList.toggle('sel', selection.has(el.dataset.id));
+        });
+        updateBar();
       },
       inspect: () => ({
         blocks, links, stacks,

@@ -15,8 +15,10 @@
 #' - release the drag on empty space (the left gutter works at any scroll
 #'   position) to append a new block: a picker opens at the release point,
 #'   browsing the catalogue by category at rest and filtering as you type.
-#'   The `+` on a row appends after it, the `+` in the search row adds a
-#'   block with no origin and so no link,
+#'   The `+` on a row appends after it. A block with no input at all -- the
+#'   start of a flow -- comes from the dashed **Add a block** row at the foot of
+#'   the list, where such a block sorts, or from right-clicking the empty space
+#'   below it (which is also the only home for **Paste**),
 #' - click a row to reveal that block's panel, double-click to rename,
 #' - click a dot (or hover a rail edge) to inspect and remove connections,
 #' - board stacks show as named frames; collapse them to a single row, drag a
@@ -25,19 +27,76 @@
 #' - a stack the flow runs out of and back into cannot be drawn as one run of
 #'   rows: those links climb the right-hand gutter as dashed arrows and the
 #'   stack header offers to pull the blocks in the way into the group,
+#' - each row names the views it is shown on (or reads `all views` / `no view`);
+#'   right-click a row to change that, and the board's extensions do the same
+#'   from the **Extensions** group at the foot,
 #' - block eval status (waiting / unset / failed) shows as a coloured dot
 #'   per row, identical in meaning to the DAG node badge.
 #'
-#' @section Keeping the deck clear:
-#' A block added from the deck is placed by the deck: appended blocks open
+#' @section Extensions: which extension goes on which view:
+#' A board's extensions are panels like any other, so each is a member of the
+#' views it is placed on and absent from the rest. They are not in the DAG
+#' though, so they have no lane on the rail and no place in an order derived
+#' from it. They get a **Extensions** group after the last block instead, one
+#' ordinary row each, naming the views the extension is on exactly as a block
+#' row does, and reached by the same right-click menu.
+#'
+#' The group is built from the board's extension set rather than from view
+#' membership, so an extension on **no** view still has a row. That is the
+#' state per-view membership alone can never report, and the one a row is
+#' needed to get out of.
+#'
+
+#' @section Which view a panel goes on:
+#' Every row -- a block, a stack of blocks, an extension in the
+#' **Extensions** group
+#' -- names the views it is shown on, and right-click is where that is changed.
+#' The menu carries the whole answer:
+#'
+#' - **All / None / Current**, three presets sharing one row. They are *states*
+#'   of the ticks below rather than separate commands, so whichever one
+#'   currently holds is lit. `Current` is the board's active view; the marked
+#'   row in the
+#'   list names it.
+#' - **a tick per view**, with that view's panel count beside it, capped and
+#'   scrolling because ten views is not a special board. Ticking keeps the menu
+#'   open, since it is usually done more than once.
+#' - **`only`** on the view row you are pointing at, which clears every other
+#'   view: "send it there" in one click.
+#'
+#' The menu acts on the **selection** rather than on the row under the pointer,
+#' the way a file manager does: right-clicking a selected row speaks for all of
+#' them, and right-clicking an unselected one collapses the selection to it
+#' first. On a collapsed stack header it speaks for the stack's members.
+#'
+#' Below the views it carries only the operations that have no discoverable
+#' gesture of their own -- rename, copy, cut, remove -- and deliberately *not*
+#' connect or append: the rail dot and the row's `+` are better affordances than
+#' a menu entry, and naming them here would teach the wrong gesture for the
+#' thing the rail is best at.
+#'
+#' Clearing the minidag's own tick on the view it is shown in removes the panel
+#' you are clicking in, so that one box arms on the first click and commits on
+#' the second. It is not a one-way door -- blockr.dock's per-view `+` (Add
+#' panel) picker lists extensions alongside blocks.
+#'
+#' @section What the minidag does not do:
+#' Creating, renaming, reordering and removing views belongs to the dock's own
+#' navbar, which has had all four since before this extension existed, and whose
+#' new-view flow lets you pick the blocks and extensions to seed a page with.
+#' The minidag says which panels go where, and nothing about the pages
+#' themselves.
+#'
+#' @section Keeping the minidag clear:
+#' A block added from the minidag is placed by the minidag: appended blocks open
 #' beside the block they read from, and a block added with no origin opens
 #' among the other panels. Blocks added by other routes -- the navbar's block
 #' browser, the DAG canvas -- are placed by blockr.dock's
 #' `determine_panel_pos()`, which drops a new panel into the last active
-#' group. The deck's own group is a candidate for that unless it is named in
+#' group. The minidag's own group is a candidate for that unless it is named in
 #' the `blockr.visible_extensions` option, which defaults to the DAG alone.
 #'
-#' So an app that mounts the deck and wants nothing ever stacked onto it
+#' So an app that mounts the minidag and wants nothing ever stacked onto it
 #' names it there, using the **mount name** it gave the extension:
 #'
 #' ```r
@@ -62,7 +121,7 @@ new_minidag_extension <- function(...) {
   blockr.dock::new_dock_extension(
     minidag_ext_srv,
     minidag_ext_ui,
-    name = "Mini deck",
+    name = "Minidag",
     description = paste(
       "Compact list-shaped workflow editor: blocks as rows in topological",
       "order with a commit-graph rail for the connections. Supports the",
@@ -80,7 +139,7 @@ minidag_ext_ui <- function(id, board, ...) {
   htmltools::tagList(
     minidag_js_dep(),
     htmltools::div(
-      id = ns("deck"),
+      id = ns("minidag"),
       class = "minidag",
       `data-ns` = ns("")
     )
@@ -138,7 +197,7 @@ minidag_css_dep <- memoise0(function() {
 })
 
 # The full board model as one JSON-ready payload. Pushed wholesale on every
-# board change: the deck is a stateless list (no user-owned positions to
+# board change: the minidag is a stateless list (no user-owned positions to
 # preserve), so a full re-render is both cheap and always consistent --
 # no delta bookkeeping as in blockr.dag's incremental g6 proxy.
 minidag_payload <- function(board) {
@@ -194,19 +253,23 @@ minidag_payload <- function(board) {
     blocks = lapply(seq_along(blocks), blk_entry),
     links = lapply(seq_along(links), lnk_entry),
     stacks = lapply(names(stacks), stk_entry),
-    views = minidag_views(board)
+    views = minidag_views(board),
+    extensions = minidag_extensions(board)
   )
 }
 
-# Views as the deck sees them: membership stated in BLOCK ids, not panel ids.
-# The deck's rows are blocks, so a panel id would have to be unwrapped on
-# every comparison; extension panels (the outline, the deck itself) are
-# dropped for the same reason -- they are view members the deck has no row
-# for, and it must not offer to toggle what it cannot show. Their membership
-# is untouched: the server only ever emits deltas for block panels.
+# Views as the minidag sees them: membership stated in OBJECT ids (block ids and
+# extension mount names), not panel ids. The minidag's rows are objects, so a
+# panel id would have to be unwrapped on every comparison.
+#
+# `blocks` and `extensions` are two lists rather than one because the minidag draws
+# them in two places -- blocks in the rail, in topological order, and extensions
+# in a group at the foot, since an extension is not in the DAG and has no place
+# in an order derived from it. The membership relation is the same for both, and
+# so is the control that edits it.
 minidag_views <- function(board) {
 
-  # Views are a dock concept. The deck renders a plain `blockr.core` board
+  # Views are a dock concept. The minidag renders a plain `blockr.core` board
   # too (its rail needs blocks and links, nothing else), and there the
   # answer is "no views" rather than an error -- the client then draws no
   # membership column and no trigger at all.
@@ -224,17 +287,157 @@ minidag_views <- function(board) {
   blk_ids <- names(blockr.core::board_blocks(board))
   panels <- as.character(blockr.dock::as_block_panel_id(blk_ids))
 
+  ext_ids <- blockr.dock::dock_ext_ids(board)
+  ext_panels <- as.character(blockr.dock::as_ext_panel_id(ext_ids))
+
   vw_entry <- function(id) {
     members <- blockr.dock::view_members(views[[id]])
     list(
       id = id,
       name = unname(labels[id]),
       active = identical(id, active),
-      blocks = I(as.list(blk_ids[panels %in% members]))
+      # Total panels on the view, which the menu's checklist shows beside each
+      # name. It counts everything the view holds, not just what the minidag has
+      # a row for: the question it answers is "how full is that page".
+      n = length(members),
+      blocks = I(as.list(blk_ids[panels %in% members])),
+      extensions = I(as.list(ext_ids[ext_panels %in% members]))
     )
   }
 
   lapply(names(views), vw_entry)
+}
+
+# The extension catalogue: one entry per extension mounted on the board, keyed
+# by mount name, in mount order. This is what gives an extension a ROW --
+# including one that is on no view at all, which per-view membership alone
+# could never report.
+#
+# `self` marks the minidag's own entry. It is not special-cased anywhere in the
+# membership logic (its row works exactly like the others); the client only uses
+# it to say "this one is the panel you are looking at" when taking it off the
+# view you are on.
+minidag_extensions <- function(board) {
+
+  if (!blockr.dock::is_dock_board(board)) {
+    return(list())
+  }
+
+  exts <- blockr.dock::dock_extensions(board)
+  me <- blockr.dock::extension_ids(board, "minidag_extension")
+
+  tool_entry <- function(id) {
+    list(
+      id = id,
+      name = blockr.dock::extension_name(exts[[id]]),
+      self = id %in% me
+    )
+  }
+
+  lapply(names(exts), tool_entry)
+}
+
+# Every membership write the row menu can make, as one delta.
+#
+# `mode` is the whole vocabulary:
+#
+#   "all"   every view gains the panels it lacks
+#   "none"  every view loses the panels it holds
+#   "only"  `view` gains them, every other view loses them
+#   "add"   `view` gains them
+#   "rm"    `view` loses them
+#
+# The first three are the menu's presets (drawn as radios, because they are
+# states of the checklist below them rather than separate commands); the last
+# two are one checkbox being ticked or cleared. Blocks and extensions travel in the
+# same call because membership does not distinguish them -- only the panel-id
+# prefix does, and that is settled here.
+#
+# Per view, membership is re-derived from the committed board and only the
+# difference is emitted, so a stale client cannot ask to add a member or remove
+# a non-member; both are `validate_view_mod()` errors rather than no-ops. A view
+# that needs no change is not named at all, and a delta that would change
+# nothing anywhere is NULL.
+minidag_membership_delta <- function(board, blocks = character(),
+                                    extensions = character(),
+                                    mode = c("all", "none", "only", "add", "rm"),
+                                    view = NULL) {
+
+  mode <- match.arg(mode)
+
+  if (!blockr.dock::is_dock_board(board)) {
+    return(NULL)
+  }
+
+  views <- blockr.dock::board_views(board)
+
+  blocks <- intersect(blocks, names(blockr.core::board_blocks(board)))
+  extensions <- intersect(extensions, blockr.dock::dock_ext_ids(board))
+
+  pids <- c(
+    as.character(blockr.dock::as_block_panel_id(blocks)),
+    as.character(blockr.dock::as_ext_panel_id(extensions))
+  )
+
+  if (!length(pids)) {
+    return(NULL)
+  }
+
+  # Every mode but "all" and "none" names one view, so it has to exist.
+  if (!mode %in% c("all", "none") && !isTRUE(view %in% names(views))) {
+    return(NULL)
+  }
+
+  # Which views this touches, and whether each of them ends up holding the
+  # panels. "add" and "rm" speak about one view and leave the others alone,
+  # which is why they are not expressed as a `keep` over all of them.
+  targets <- switch(
+    mode,
+    all = names(views),
+    none = names(views),
+    only = names(views),
+    view
+  )
+
+  holds <- function(v) {
+    switch(
+      mode,
+      all = TRUE,
+      none = FALSE,
+      only = identical(v, view),
+      add = TRUE,
+      rm = FALSE
+    )
+  }
+
+  ops <- list()
+
+  for (v in targets) {
+
+    members <- blockr.dock::view_members(views[[v]])
+
+    if (holds(v)) {
+      grow <- setdiff(pids, members)
+      if (length(grow)) {
+        # No placement hint: an un-landed member renders through the default
+        # grid and the client echo mirrors back wherever it is dropped.
+        ops[[v]] <- list(
+          add = stats::setNames(rep(list(list()), length(grow)), grow)
+        )
+      }
+    } else {
+      shrink <- intersect(pids, members)
+      if (length(shrink)) {
+        ops[[v]] <- list(rm = shrink)
+      }
+    }
+  }
+
+  if (!length(ops)) {
+    return(NULL)
+  }
+
+  list(views = list(mod = ops))
 }
 
 # Reveal a block's panel in the *current* view: focus it if the view already
@@ -260,19 +463,19 @@ minidag_reveal_delta <- function(board, block) {
   list(views = list(mod = stats::setNames(list(ops), view)))
 }
 
-# Where a block inserted from the deck should land.
+# Where a block inserted from the minidag should land.
 #
 # Without a hint, blockr.dock falls back to `determine_panel_pos()`, which
-# stacks the new panel into the last active group -- and the deck's own group
+# stacks the new panel into the last active group -- and the minidag's own group
 # qualifies, because only panels named in the `visible_extensions` board
 # option are excluded and that option defaults to the DAG alone. So a block
-# added from the deck lands on top of the deck, hiding the tool that added it.
+# added from the minidag lands on top of it, hiding the extension that added it.
 #
 # Appending has a better answer than "not there" anyway: put it beside the
 # block it reads from, which is where you are looking. With no origin there is
 # nothing to sit beside, so it asks for `right` -- which dockview resolves
 # against the active group, in practice landing it among the other block
-# panels rather than splitting a fresh column. Either way it is not the deck.
+# panels rather than splitting a fresh column. Either way it is not the minidag.
 minidag_place_delta <- function(board, blk_id, from = NULL) {
 
   views <- blockr.dock::board_views(board)

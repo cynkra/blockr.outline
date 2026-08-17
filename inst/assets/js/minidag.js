@@ -81,23 +81,14 @@
 
     // the renderer hands the model back on every query, so arity is always
     // read off the board as it stands, never off a stale copy
-    let blocks = [], links = [], views = [], stacks = [];
+    let blocks = [], links = [], views = [], stacks = [], extensions = [];
 
-    // Which view the deck is FOCUSED on, or null for "all views". This is
-    // pure client state and deliberately not board state: it says what you
-    // are looking at, not what the board is. It does not serialize, it does
-    // not travel to another session, and it is not the board's ACTIVE view
-    // (which decides where a revealed panel lands and does live on the
-    // board). Focusing a view here never switches the dock.
-    let focus = null;
-    let listOpen = false;
-
-    // Rename plumbing: `editingView` holds the view whose name is being
-    // typed, so a server push does not replace the element under the caret;
-    // `pendingList` remembers that a repaint was owed while that was true.
-    let editingView = null, pendingList = false;
-    let clickTimer = null;
-    const DBL_MS = 240;
+    // The one held gesture in the menu: clearing the minidag's OWN tick on the
+    // view you are looking at removes the panel the click happened in, and the
+    // way back is blockr.dock's per-view "+ Add panel" picker rather than
+    // anything in here. So that box arms on the first click and commits on the
+    // second. Everything else is one click.
+    let armedTick = null;             // '<extension id>@<view id>' while armed
 
     const blockOf = (id) => blocks.find((b) => b.id === id);
     const linksInto = (id) => links.filter((l) => l.to === id);
@@ -173,6 +164,15 @@
     };
 
     const rail = minidagRail.create(rootEl, {
+      // Renderer options go under `opts`; the rest of this object is the adapter
+      // contract (emit, nodeLead, ...).
+      //
+      // The parentless add lives at the END of the flow, not in the search row:
+      // every other add gesture is on the left and about a parent (drag a dot to
+      // a row, drag it to the gutter, the row's own `+`), and this is the one
+      // that is about no parent -- so it belongs where the block will appear,
+      // which is after the last row.
+      opts: { addButton: false, addRow: true },
       // Adding and appending are the same operation; only the origin
       // differs, so they open the same picker rather than two sidebars.
       // `block_append` carries the release coordinates, which is what the
@@ -185,8 +185,8 @@
           openPicker(payload.from, null, { x: payload.x, y: payload.y });
           return;
         }
-        if (name === 'block_add' && registry.add.length) {
-          openPicker(null, rootEl.querySelector('.md-add'), null);
+        if (name === 'block_add') {
+          requestAdd(rootEl.querySelector('.md-addrow'));
           return;
         }
         push(name, payload);
@@ -232,19 +232,24 @@
       stackAside: (s, collapsed) => membershipEl(s.blocks, collapsed)
     });
 
-    /* ---- view membership ------------------------------------------------
+    /* ---- the membership column ------------------------------------------
      *
-     * One control, two readings, decided by whether a view is focused.
-     * Unfocused it REPORTS ("this block is shown on Laboratory"); focused it
-     * EDITS (a toggle for that one view). Both live past the spring so they
-     * read as a column down the deck.
+     * Reporting, and only reporting: the slot past the spring names the views a
+     * row is shown on, or says "all views" when that is every one of them and
+     * "no view" when it is none. Editing is the row menu's job -- there is
+     * exactly one way to write this, which is what retired the focused-view
+     * toggles and the view list they lived in.
      *
-     * `ids` is a set because a stack row stands for its members: one block
-     * gives a plain toggle, several give a tri-state.
+     * `ids` is a set because a stack row stands for its members. `kind` is
+     * 'blocks' or 'extensions' and picks which membership list of the view the ids are
+     * looked up in; everything else is shared, because a extension row is a row.
      */
 
     const viewOf = (id) => views.find((v) => v.id === id);
-    const viewsOf = (blockId) => views.filter((v) => v.blocks.includes(blockId));
+    const memberIds = (v, kind) => v[kind === 'extensions' ? 'extensions' : 'blocks'];
+    const viewsOf = (id, kind) =>
+      views.filter((v) => memberIds(v, kind).includes(id));
+    const activeView = () => views.find((v) => v.active) || null;
 
     const el = (cls, tag) => {
       const e = document.createElement(tag || 'span');
@@ -252,241 +257,544 @@
       return e;
     };
 
-    const membershipEl = (ids, collapsed) => {
+    const membershipEl = (ids, collapsed, kind) => {
       if (!views.length) return null;
 
+      kind = kind || 'blocks';
       const wrap = el('md-views');
 
-      if (focus) {
-        const v = viewOf(focus);
-        if (!v) return null;
-        const inView = ids.filter((id) => v.blocks.includes(id)).length;
-        const state = inView === 0 ? 'none'
-          : inView === ids.length ? 'all' : 'some';
+      const mine = views.filter((v) =>
+        ids.some((id) => memberIds(v, kind).includes(id)));
 
-        const t = el('md-vtoggle' + (state === 'all' ? ' on'
-          : state === 'some' ? ' some' : ''), 'button');
-        t.type = 'button';
-        t.title = ids.length === 1
-          ? (state === 'all' ? 'Shown on ' + v.name + ' — click to remove'
-            : 'Not on ' + v.name + ' — click to add')
-          : inView + ' of ' + ids.length + ' shown on ' + v.name
-            + (state === 'all' ? ' — click to remove all'
-              : ' — click to add all');
-        t.addEventListener('click', (ev) => {
-          ev.stopPropagation();
-          // a partial or empty set fills, a full one clears
-          push('view_toggle', { view: v.id, blocks: ids, add: state !== 'all' });
-        });
+      // On every view, and on none, are the two answers a list of names reads
+      // worst: six names is not a fact anybody reads, and an empty slot is
+      // indistinguishable from a slot that failed to render.
+      const whole = ids.length && views.every((v) =>
+        ids.every((id) => memberIds(v, kind).includes(id)));
+
+      if (whole) {
+        const t = el('md-vtag md-vall-tag');
+        t.textContent = 'all views';
+        t.title = views.map((v) => v.name).join(', ');
         wrap.appendChild(t);
-
-        // a collapsed stack hides the rows that would have shown the split,
-        // so the count has to be on the stack row itself
-        if (state === 'some' && collapsed) {
-          const n = el('md-vtag md-vmore');
-          n.textContent = inView + '/' + ids.length;
-          wrap.appendChild(n);
-        }
         return wrap;
       }
 
-      const mine = ids.length === 1
-        ? viewsOf(ids[0])
-        : views.filter((v) => ids.some((id) => v.blocks.includes(id)));
-
-      if (!mine.length) return wrap;   // shown nowhere: an empty, silent slot
+      // Shown nowhere is the ORDINARY case, not a state calling for an action:
+      // on a real board half the rows are mutates, joins and reads that nobody
+      // ever puts on a page. So the slot stays empty and says nothing. Right-click
+      // is there if you want to place it.
+      if (!mine.length) {
+        return wrap;
+      }
 
       const tag = el('md-vtag');
-      tag.textContent = mine.length === 1 ? mine[0].name
-        : (ids.length === 1 ? mine[0].name : mine.length + ' views');
+      tag.textContent = mine[0].name;
       tag.title = mine.map((v) => v.name).join(', ');
-      tag.addEventListener('click', (ev) => {
-        ev.stopPropagation();
-        setFocus(mine[0].id);
-      });
       wrap.appendChild(tag);
 
-      if (ids.length === 1 && mine.length > 1) {
+      if (mine.length > 1) {
         const more = el('md-vtag md-vmore');
         more.textContent = '+' + (mine.length - 1);
         more.title = mine.slice(1).map((v) => v.name).join(', ');
         wrap.appendChild(more);
       }
+
+      // a collapsed stack hides the rows that would have shown the split
+      if (collapsed && ids.length > 1) {
+        const inAny = ids.filter((id) =>
+          views.some((v) => memberIds(v, kind).includes(id))).length;
+        if (inAny < ids.length) {
+          const n = el('md-vtag md-vmore');
+          n.textContent = inAny + '/' + ids.length;
+          wrap.appendChild(n);
+        }
+      }
+
       return wrap;
     };
 
-    /* ---- the view list --------------------------------------------------
-     *
-     * There is no mode switch: the mode IS which row of this list is
-     * selected. "All views" reports membership, a view focuses it. A second
-     * control that could disagree with the list would be one too many.
-     *
-     * The list is a panel you open, not furniture -- the deck often sits in
-     * a narrow dock panel, so it is off by default and its trigger lives in
-     * the renderer's own search row.
-     */
-
-    const PANEL_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="curren'
-      + 'tColor" stroke-width="1.9"><rect x="3" y="4" width="18" height="16"'
-      + ' rx="2"/><path d="M9 4v16"/></svg>';
-
-    const setFocus = (id) => {
-      focus = id;
-      if (id) listOpen = true;
-      // While a view is focused the deck is already using opacity to say
-      // "not in this view"; the rail's hover dim would say "not connected to
-      // the row under your pointer" in the same currency, over the same rows.
-      rail.setHoverFocus(!id);
-      rail.render();
-      paintChrome();
+    // The parentless add is drawn by the renderer as the last row of the list
+    // (`opts.addRow`); this is what it opens. Until the catalogue lands the
+    // picker cannot open, and swallowing the gesture would be worse than the old
+    // behaviour -- so fall through to the board's own browser instead.
+    const requestAdd = (anchor) => {
+      if (registry.add.length) {
+        openPicker(null, anchor || rootEl.querySelector('.md-addrow'), null);
+      } else {
+        push('block_add', true);
+      }
     };
 
-    const viewRow = (v) => {
-      const row = el('md-vrow' + (focus === v.id ? ' on' : ''), 'div');
-      row.dataset.view = v.id;
+    /* ---- the extensions group, at the foot of the flow ------------------------
+     *
+     * Extensions as rows. An extension is not in the DAG, so it has no place in
+     * an order derived from it and no lane on the rail; it gets a group after
+     * the last block instead, carrying the same membership column, which is the
+     * whole point -- "which view is this on?" gets one answer shape for every
+     * panel the board has.
+     *
+     * The catalogue comes from the board (`minidag_extensions()`), not from view
+     * membership, so an extension on NO view still has a row. That is the state
+     * per-view membership alone can never report, and the one you need a row to
+     * get out of.
+     */
+    const extRow = (t) => {
+      const row = el('md-chip md-ext', 'div');
+      row.dataset.ext = t.id;
 
-      const nm = el('md-vname');
-      nm.textContent = v.name;
-      nm.title = 'Click to focus · double-click to rename';
-      nm.addEventListener('dblclick', (ev) => {
-        ev.stopPropagation();
-        // the two clicks of this double-click each queued a focus toggle;
-        // let them go, or the list is rebuilt out from under the caret
-        clearTimeout(clickTimer);
-        editingView = v.id;
-        nm.contentEditable = 'true';
-        nm.focus();
-        document.getSelection().selectAllChildren(nm);
-      });
-      nm.addEventListener('blur', () => {
-        if (nm.contentEditable !== 'true') return;
-        nm.contentEditable = 'false';
-        editingView = null;
-        const val = nm.textContent.trim();
-        if (val && val !== v.name) push('view_rename', { id: v.id, name: val });
-        nm.textContent = v.name;
-        if (pendingList) paintList();
-      });
-      nm.addEventListener('keydown', (ev) => {
-        if (ev.key === 'Enter') { ev.preventDefault(); nm.blur(); }
-        if (ev.key === 'Escape') { nm.textContent = v.name; nm.blur(); }
-      });
+      const k = el('md-kind md-extkind');
+      k.textContent = (t.name || '?').slice(0, 1).toUpperCase();
+      row.appendChild(k);
+
+      const nm = el('md-name');
+      nm.textContent = t.name;
+      nm.title = t.name + (t.self ? ' \u00b7 this panel' : '');
       row.appendChild(nm);
 
-      const count = el('md-vcount');
-      count.textContent = String(v.blocks.length);
-      row.appendChild(count);
+      const mem = membershipEl([t.id], false, 'extensions');
+      if (mem) row.appendChild(mem);
 
-      // The board's active view decides where a revealed block lands, so it
-      // is worth seeing. It is not the same as focus and must not look like
-      // it: a dot, not a selection.
-      if (v.active) {
-        const dot = el('md-vactive');
-        dot.title = 'Active view — revealing a block puts it here';
-        row.appendChild(dot);
-      }
-
-      const rm = el('md-vrm', 'button');
-      rm.type = 'button';
-      rm.textContent = '×';
-      rm.title = views.length > 1 ? 'Remove view' : 'The last view cannot go';
-      rm.disabled = views.length < 2;
-      rm.addEventListener('click', (ev) => {
-        ev.stopPropagation();
-        push('view_rm', { id: v.id });
-      });
-      row.appendChild(rm);
-
-      // Focusing rebuilds this list, so it has to wait long enough to know
-      // this is not the first half of a double-click -- otherwise renaming is
-      // impossible: the caret lands in an element that has already been
-      // replaced. The renderer solves the same problem for block names by
-      // deferring renders while `editing()`; here the cheaper fix is to not
-      // start the rebuild until the gesture is known.
-      row.addEventListener('click', (ev) => {
-        if (ev.target.isContentEditable) return;
-        clearTimeout(clickTimer);
-        clickTimer = setTimeout(
-          () => setFocus(focus === v.id ? null : v.id), DBL_MS
-        );
-      });
       return row;
     };
 
-    const paintList = () => {
-      // A board push while a name is being typed would swap the element the
-      // caret sits in, ending the edit and losing the keystrokes. Defer.
-      if (editingView) {
-        pendingList = true;
+    const paintExts = () => {
+      let box = rootEl.querySelector('.md-exts');
+
+      // Nothing to say with no extensions, and nothing to say with no views:
+      // membership needs somewhere to be a member of.
+      if (!extensions.length || !views.length) {
+        if (box) box.remove();
         return;
       }
-      pendingList = false;
 
-      let panel = rootEl.querySelector('.md-viewlist');
-      if (!listOpen || !views.length) {
-        if (panel) panel.remove();
-        return;
+      if (!box) {
+        box = el('md-exts', 'div');
+        rootEl.appendChild(box);
       }
-      if (!panel) {
-        panel = el('md-viewlist', 'div');
-        rootEl.insertBefore(panel, rootEl.firstChild);
-      }
-      panel.innerHTML = '';
+      box.innerHTML = '';
 
-      const head = el('md-vhead', 'div');
-      head.textContent = 'Views';
-      panel.appendChild(head);
+      const head = el('md-extshead', 'div');
+      head.textContent = 'Extensions';
+      const n = el('md-extscount');
+      n.textContent = String(extensions.length);
+      head.appendChild(n);
+      box.appendChild(head);
 
-      const all = el('md-vrow md-vall' + (focus ? '' : ' on'), 'div');
-      const allNm = el('md-vname');
-      allNm.textContent = 'All views';
-      all.appendChild(allNm);
-      const allN = el('md-vcount');
-      allN.textContent = String(views.length);
-      all.appendChild(allN);
-      all.addEventListener('click', () => setFocus(null));
-      panel.appendChild(all);
-
-      views.forEach((v) => panel.appendChild(viewRow(v)));
-
-      const add = el('md-vadd', 'button');
-      add.type = 'button';
-      add.textContent = '+ New view';
-      add.addEventListener('click', () => push('view_add', { name: 'New view' }));
-      panel.appendChild(add);
+      extensions.forEach((t) => box.appendChild(extRow(t)));
     };
 
-    const paintTrigger = () => {
-      const row = rootEl.querySelector('.md-search-row');
-      if (!row) return;
-      let btn = row.querySelector('.md-viewbtn');
-      if (!views.length) {
-        if (btn) btn.remove();
+    /* ---- the row menu ----------------------------------------------------
+     *
+     * The one place membership is written. It carries the whole answer: three
+     * presets, then a tick per view, then the row operations that have no
+     * discoverable gesture. Connecting and appending are NOT here -- the rail
+     * dot and the row's `+` are better affordances than a dialog, and a menu
+     * entry would teach the wrong gesture for the thing the rail is best at.
+     *
+     * It acts on the SELECTION, the way a file manager does: right-clicking a
+     * selected row speaks for all of them, and right-clicking an unselected one
+     * collapses the selection to it first, so the menu never speaks for rows
+     * carrying no mark.
+     *
+     * It lives on `document.body`, fixed to the viewport. It cannot be a child
+     * of the container: `.dockview-panel` scrolls (`overflow: auto`) and
+     * `.blockr-view-container` clips (`overflow: hidden`), so a menu taller than
+     * the panel would be cut off or would make the panel scroll. `.md-droptip`
+     * already does this, for the same reason.
+     */
+
+    // A preset is a STATE of the ticks below it, not a separate command, which
+    // is why the three read as radios: whichever one currently holds is lit, and
+    // ticking a box by hand lights none of them.
+    const presetOf = (ids, kind) => {
+      if (!ids.length || !views.length) return null;
+      const on = (v) => ids.every((id) => memberIds(v, kind).includes(id));
+      const none = (v) => !ids.some((id) => memberIds(v, kind).includes(id));
+      if (views.every(on)) return 'all';
+      if (views.every(none)) return 'none';
+      const act = activeView();
+      if (act && on(act) && views.every((v) => v === act || none(v))) {
+        return 'only';
+      }
+      return null;
+    };
+
+    let menuEl = null, menuSpec = null, menuOpenedAt = 0;
+
+    const closeMenu = () => {
+      if (menuEl) {
+        menuEl.remove();
+        menuEl = null;
+      }
+      menuSpec = null;
+      armedTick = null;
+    };
+
+    // A tick round-trips through the board, so every tick provokes a push. If a
+    // push closed the menu, "ticking keeps it open" would be impossible -- so the
+    // push REPAINTS it, and the boxes, counts and lit preset follow the state
+    // that came back. It closes only when what it is about is gone: a block
+    // removed, an extension unmounted, the last view dropped.
+    const refreshMenu = () => {
+      if (!menuEl || !menuSpec) {
         return;
       }
-      if (!btn) {
-        btn = el('md-viewbtn', 'button');
-        btn.type = 'button';
-        btn.innerHTML = PANEL_ICON;
-        btn.addEventListener('click', () => {
-          listOpen = !listOpen;
-          if (!listOpen) focus = null;
-          rail.render();
-          paintChrome();
+      const alive = menuSpec.blocks.every((id) => !!blockOf(id)) &&
+        menuSpec.extensions.every((id) => extensions.some((t) => t.id === id));
+      if (!alive || views.length < 2 && menuSpec.kind === 'ext') {
+        closeMenu();
+        return;
+      }
+      render(menuSpec);
+    };
+
+    const write = (spec, mode, view) => {
+      push('membership', {
+        blocks: spec.blocks, extensions: spec.extensions, mode: mode, view: view || null
+      });
+    };
+
+    const menuBtn = (label, key, cls, fn) => {
+      const b = el('md-ctxitem' + (cls ? ' ' + cls : ''), 'button');
+      b.type = 'button';
+      const l = el('md-ctxlabel');
+      l.textContent = label;
+      b.appendChild(l);
+      if (key) {
+        const k = el('md-ctxkey');
+        k.textContent = key;
+        b.appendChild(k);
+      }
+      if (fn) {
+        b.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          fn();
         });
-        row.appendChild(btn);
+      } else {
+        b.disabled = true;
       }
-      btn.classList.toggle('on', listOpen);
-      btn.title = listOpen ? 'Hide views' : 'Views';
+      return b;
     };
 
+    // The segmented preset row. One row rather than three, so four views show at
+    // rest in the same height. It cannot carry the active view's NAME (a third of
+    // the menu's width will not hold it), so it says "Current" and the marked row
+    // in the list below is what names it.
+    const presetRow = (spec, current) => {
+      const seg = el('md-ctxseg', 'div');
+      const act = activeView();
+
+      const one = (label, key, mode, view, title) => {
+        const b = el('md-ctxsegbtn' + (current === key ? ' on' : ''), 'button');
+        b.type = 'button';
+        b.textContent = label;
+        b.title = title;
+        b.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          closeMenu();
+          write(spec, mode, view);
+        });
+        return b;
+      };
+
+      seg.appendChild(one('All', 'all', 'all', null,
+        'Show on every view (' + views.length + ')'));
+      seg.appendChild(one('None', 'none', 'none', null,
+        'Show on no view — it stays on the board'));
+      if (act) {
+        seg.appendChild(one('Current', 'only', 'only', act.id,
+          'Show on ' + act.name + ' only'));
+      }
+      return seg;
+    };
+
+    const tickRow = (spec, v) => {
+      const kind = spec.extensions.length ? 'extensions' : 'blocks';
+      const ids = spec.blocks.concat(spec.extensions);
+      const on = ids.filter((id) => memberIds(v, kind).includes(id)).length;
+      const state = on === 0 ? 'none' : on === ids.length ? 'all' : 'some';
+
+      // The one held gesture: clearing our own tick on the view we are shown in
+      // removes the panel the click happened in.
+      const mine = spec.extensions.length === 1 &&
+        (extensions.find((t) => t.id === spec.extensions[0]) || {}).self;
+      const armKey = spec.extensions[0] + '@' + v.id;
+      const armed = mine && armedTick === armKey;
+
+      const row = el('md-ctxtick' + (armed ? ' md-armed' : ''), 'div');
+
+      row.appendChild(el('md-ctxbox' + (state === 'all' ? ' on'
+        : state === 'some' ? ' some' : '')));
+
+      const nm = el('md-ctxviewname');
+      nm.textContent = armed ? 'Remove from ' + v.name + '?' : v.name;
+      row.appendChild(nm);
+
+      const n = el('md-ctxviewn');
+      n.textContent = v.n;
+      n.title = v.n + ' panels on ' + v.name;
+      row.appendChild(n);
+
+      if (v.active) {
+        const dot = el('md-ctxactive');
+        dot.title = 'The current view';
+        row.appendChild(dot);
+      }
+
+      // "send it to this one": the box adds, the word clears every other view
+      const only = el('md-ctxonly');
+      only.textContent = 'only';
+      only.title = 'Show on ' + v.name + ' and no other view';
+      only.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        closeMenu();
+        write(spec, 'only', v.id);
+      });
+      row.appendChild(only);
+
+      row.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        const clearing = state !== 'none';
+
+        if (mine && clearing && v.active && !armed) {
+          armedTick = armKey;
+          render(spec);          // repaint in place: the menu stays open
+          return;
+        }
+
+        armedTick = null;
+        write(spec, clearing ? 'rm' : 'add', v.id);
+        // ticking is usually done more than once, so the menu stays open and the
+        // board push repaints it; the presets and counts follow.
+      });
+
+      return row;
+    };
+
+    const render = (spec) => {
+      const ids = spec.blocks.concat(spec.extensions);
+      const kind = spec.extensions.length ? 'extensions' : 'blocks';
+      const current = presetOf(ids, kind);
+      const box = menuEl;
+
+      box.innerHTML = '';
+
+      const head = el('md-ctxhead', 'div');
+      head.textContent = spec.label;
+      const hn = el('md-ctxheadn');
+      hn.textContent = views.filter((v) =>
+        ids.some((id) => memberIds(v, kind).includes(id))).length
+        + '/' + views.length;
+      head.appendChild(hn);
+      box.appendChild(head);
+
+      box.appendChild(presetRow(spec, current));
+
+      const cap = el('md-ctxcap', 'div');
+      cap.textContent = 'Views';
+      const cn = el('md-ctxcapn');
+      cn.textContent = views.length;
+      cap.appendChild(cn);
+      box.appendChild(cap);
+
+      const list = el('md-ctxticks', 'div');
+      views.forEach((v) => list.appendChild(tickRow(spec, v)));
+      box.appendChild(list);
+
+      // The row operations, and only the ones with no gesture of their own.
+      if (spec.kind !== 'ext') {
+        box.appendChild(el('md-ctxsep', 'div'));
+
+        if (spec.kind === 'block' && spec.blocks.length === 1) {
+          box.appendChild(menuBtn('Rename', 'dbl-click', '', () => {
+            closeMenu();
+            rail.editName(spec.blocks[0]);
+          }));
+        }
+        if (spec.kind === 'stack') {
+          box.appendChild(menuBtn('Rename group', 'dbl-click', '', () => {
+            closeMenu();
+            rail.editName('stack:' + spec.stack);
+          }));
+        }
+
+        box.appendChild(menuBtn('Copy', CLIP_KEY + 'C', '', () => {
+          closeMenu();
+          document.execCommand('copy');
+        }));
+        box.appendChild(menuBtn('Cut', CLIP_KEY + 'X', '', () => {
+          closeMenu();
+          document.execCommand('cut');
+        }));
+
+        box.appendChild(el('md-ctxsep', 'div'));
+        box.appendChild(menuBtn(
+          spec.blocks.length > 1
+            ? 'Remove ' + spec.blocks.length + ' blocks'
+            : 'Remove block',
+          '', 'md-ctxdanger', () => {
+            closeMenu();
+            spec.blocks.forEach((id) => push('block_rm', { id: id }));
+          }
+        ));
+      }
+    };
+
+    const CLIP_KEY = /Mac|iP/.test(navigator.platform || '') ? '⌘' : 'Ctrl+';
+
+    // Reads the clipboard the way blockr.dag's Paste entry does. A menu cannot
+    // know in advance whether the clipboard holds a subboard (reading it is
+    // async and permissioned), so the item is always offered and a foreign
+    // clipboard is simply ignored -- the same contract as the paste keystroke.
+    const pasteFromClipboard = () => {
+      if (!navigator.clipboard || !navigator.clipboard.readText) return;
+      navigator.clipboard.readText().then((text) => {
+        if (!text) return;
+        let data = null;
+        try { data = JSON.parse(text); } catch (e) { return; }
+        if (!data || data.object !== 'subboard') return;
+        push('block_paste', { json: text });
+      }).catch(() => {});
+    };
+
+    const openBoardMenu = (ev) => {
+      closeMenu();
+
+      menuEl = el('md-ctxmenu md-ctxboard', 'div');
+      menuSpec = null;                  // nothing to repaint on a board push
+
+      const head = el('md-ctxhead', 'div');
+      head.textContent = 'Board';
+      menuEl.appendChild(head);
+
+      menuEl.appendChild(menuBtn('Add a block', '', '', () => {
+        closeMenu();
+        requestAdd(null);
+      }));
+      menuEl.appendChild(menuBtn('Paste', CLIP_KEY + 'V', '', () => {
+        closeMenu();
+        pasteFromClipboard();
+      }));
+
+      document.body.appendChild(menuEl);
+      placeMenu(ev);
+    };
+
+    // Fixed to the viewport, then clamped: flip up when it would run off the
+    // bottom, and pull left when it would run off the right.
+    const placeMenu = (ev) => {
+      const box = menuEl.getBoundingClientRect();
+      let left = ev.clientX;
+      let top = ev.clientY;
+      if (left + box.width > window.innerWidth - 6) {
+        left = Math.max(6, window.innerWidth - box.width - 6);
+      }
+      if (top + box.height > window.innerHeight - 6) {
+        top = Math.max(6, ev.clientY - box.height);
+      }
+      menuEl.style.left = left + 'px';
+      menuEl.style.top = top + 'px';
+      menuEl.style.visibility = '';
+      menuOpenedAt = performance.now();
+    };
+
+    const openMenu = (spec, ev) => {
+      closeMenu();
+
+      if (!spec.blocks.length && !spec.extensions.length) return;
+      // Nothing to say about placement on a board with one view, and for an extension
+      // row placement is all the menu has -- so it does not open at all there.
+      if (views.length < 2 && spec.kind === 'ext') return;
+
+      menuEl = el('md-ctxmenu', 'div');
+      menuSpec = spec;
+      menuEl.style.visibility = 'hidden';
+      document.body.appendChild(menuEl);
+      render(spec);
+
+      placeMenu(ev);
+    };
+
+    // One delegated listener for every row shape the minidag draws. The rail owns
+    // block rows and stack heads (inside `.md-deck`), this file owns extension rows;
+    // the menu does not care which, because membership does not.
+    rootEl.addEventListener('contextmenu', (ev) => {
+      const ext = ev.target.closest('.md-ext[data-ext]');
+      const head = ev.target.closest('.md-stackhead[data-stack]');
+      const row = ev.target.closest('.md-chip[data-id]');
+
+      ev.preventDefault();
+
+      // Empty space is a target of its own: the two operations that are about
+      // the BOARD rather than about a row. Paste has no other possible home --
+      // it is not about a row, so it cannot be in a row menu.
+      if (!ext && !head && !row) {
+        openBoardMenu(ev);
+        return;
+      }
+
+      if (ext) {
+        const t = extensions.find((x) => x.id === ext.dataset.ext);
+        openMenu({
+          kind: 'ext', blocks: [], extensions: [ext.dataset.ext],
+          label: (t || {}).name || ext.dataset.ext
+        }, ev);
+        return;
+      }
+
+      if (head) {
+        const stack = stacks.find((x) => x.id === head.dataset.stack);
+        const mem = stack ? asArr(stack.blocks) : [];
+        if (!mem.length) return;
+        rail.selectOnly(mem);
+        openMenu({
+          kind: 'stack', blocks: mem, extensions: [], stack: stack.id,
+          label: (stack.name || 'Group') + ' · ' + mem.length + ' blocks'
+        }, ev);
+        return;
+      }
+
+      const id = row.dataset.id;
+      let sel = rail.selection();
+
+      if (!sel.includes(id)) {
+        rail.selectOnly([id]);
+        sel = [id];
+      }
+
+      openMenu({
+        kind: 'block', blocks: sel, extensions: [],
+        label: sel.length > 1
+          ? sel.length + ' rows selected'
+          : (blockOf(id) || {}).name || id
+      }, ev);
+    });
+
+    // Dismissal: a click anywhere outside, Escape, or a scroll -- the menu is
+    // fixed to the viewport, so a panel scrolling under it would leave it
+    // pointing at a row that has moved.
+    document.addEventListener('click', (ev) => {
+      if (menuEl && !menuEl.contains(ev.target)) closeMenu();
+    });
+    document.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Escape') closeMenu();
+    });
+    // ...but NOT the scroll that opening it caused. Right-clicking a row near the
+    // panel's edge scrolls it into view first, and a smooth scroll keeps firing
+    // for a few frames after the contextmenu -- so an unguarded listener closed
+    // the menu the same gesture had just opened. Anything later than the settling
+    // window is a real scroll and does dismiss it.
+    window.addEventListener('scroll', () => {
+      if (menuEl && performance.now() - menuOpenedAt > 260) closeMenu();
+    }, true);
+
+    // Chrome the adapter owns, as opposed to the rows the renderer draws. Only
+    // the extensions group is left: the view list, its trigger and the focused-view
+    // dimming all went when the menu took over editing, and with them the grid
+    // layout mode the list needed.
     const paintChrome = () => {
-      paintTrigger();
-      paintList();
-      // NOT `md-focused` -- the renderer already owns that class for search
-      // dimming, and reusing it here would dim the deck on every view focus
-      rootEl.classList.toggle('md-listopen', listOpen && views.length > 0);
-      rootEl.classList.toggle('md-viewfocus', !!focus);
+      paintExts();
     };
 
     /* ---- the inline block picker ----------------------------------------
@@ -500,7 +808,7 @@
      *
      * Two states, one component. At REST it browses: every type, grouped by
      * category, with its description. That is the catalogue, which is why
-     * the deck needs no second copy of it in a pane. As soon as you type it
+     * the minidag needs no second copy of it in a pane. As soon as you type it
      * RECALLS: flat, ranked, keyboard-driven, uncapped -- a silent
      * truncation would hide types from the only place they are listed.
      *
@@ -697,7 +1005,7 @@
      * Wire-compatible with blockr.dag: the same `{object: "subboard"}`
      * envelope, so a selection copied on the canvas pastes here and back.
      *
-     * Scoped to the deck last clicked in, so a board mounting both this and
+     * Scoped to the minidag last clicked in, so a board mounting both this and
      * the DAG canvas does not act twice on one keystroke.
      */
 
@@ -776,13 +1084,19 @@
       }));
       stacks = asArr(msg.stacks);
       views = asArr(msg.views).map((v) => ({
-        id: v.id, name: v.name, active: !!v.active, blocks: asArr(v.blocks)
+        id: v.id, name: v.name, active: !!v.active, n: +v.n || 0,
+        blocks: asArr(v.blocks), extensions: asArr(v.extensions)
       }));
-      // A focused view that was just removed leaves focus dangling; fall
-      // back to the reporting mode rather than to a view nobody picked.
-      if (focus && !viewOf(focus)) focus = null;
+      extensions = asArr(msg.extensions).map((t) => ({
+        id: t.id, name: t.name || t.id, self: !!t.self
+      }));
+      // An armed tick is a held gesture: arming pushes nothing, so any push
+      // arriving between the two clicks came from somewhere else and the safe
+      // reading is to disarm.
+      armedTick = null;
       rail.setData({ blocks, links, stacks });
       paintChrome();
+      refreshMenu();
     };
 
     const setRegistry = (msg) => {

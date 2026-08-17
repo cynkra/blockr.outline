@@ -1,9 +1,9 @@
-# Copy and paste, for the deck.
+# Copy and paste, for the minidag.
 #
 # Wire-compatible with blockr.dag's clipboard on purpose: the same
 # `{object: "subboard", payload: {blocks, links, stacks}}` envelope, each part
 # serialised by blockr.core's own methods. A selection copied in the DAG
-# canvas pastes into the deck and back. The envelope is rebuilt here rather
+# canvas pastes into the minidag and back. The envelope is rebuilt here rather
 # than reusing `blockr.dag:::new_subboard()` -- that class and its extraction
 # helpers are internal to dag, and this package holds to exported API.
 #

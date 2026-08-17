@@ -10,7 +10,7 @@ minidag_ext_srv <- function(id, board, update, actions, ...) {
     function(input, output, session) {
 
       send <- function(type, payload) {
-        payload$el <- session$ns("deck")
+        payload$el <- session$ns("minidag")
         session$sendCustomMessage(paste0("minidag-", type), payload)
       }
 
@@ -136,9 +136,9 @@ minidag_ext_srv <- function(id, board, update, actions, ...) {
       })
 
       # Drag released on empty canvas: open the block browser, wired from
-      # the drag source (the deck's drop-on-canvas append, same flow the
+      # the drag source (the minidag's drop-on-canvas append, same flow the
       # DAG extension triggers for an edge dropped on the canvas).
-      # The deck's picker handles both gestures itself, so `block_append` and
+      # The minidag's picker handles both gestures itself, so `block_append` and
       # `block_add` only reach here when the catalogue never arrived (the
       # client falls back rather than swallowing the gesture). The board's
       # own browser is then the safety net.
@@ -150,7 +150,7 @@ minidag_ext_srv <- function(id, board, update, actions, ...) {
         actions[["add_block_action"]](input$block_add)
       })
 
-      # Insert a block chosen in the deck. Adding and appending are one
+      # Insert a block chosen in the minidag. Adding and appending are one
       # operation: the origin decides only whether a link is made, and which
       # of its free input slots receives it.
       shiny::observeEvent(input$block_insert, {
@@ -341,127 +341,36 @@ minidag_ext_srv <- function(id, board, update, actions, ...) {
         }
       })
 
-      # --- views -------------------------------------------------------
+      # --- membership ---------------------------------------------------
       #
-      # Membership is the only view property the deck writes per row. The
-      # client proposes a set of blocks and a direction; the server re-derives
-      # what is actually a member from the committed board and emits only the
-      # difference, so a stale client (a tri-state stack toggled twice before
-      # the round-trip lands) cannot ask to add a member or remove a
-      # non-member -- both of which `validate_view_mod()` rejects outright.
-      shiny::observeEvent(input$view_toggle, {
-        msg <- input$view_toggle
-        views <- blockr.dock::board_views(board$board)
-
-        if (!isTRUE(msg$view %in% names(views))) {
-          return()
-        }
-
-        ids <- intersect(
-          unlist(msg$blocks),
-          names(blockr.core::board_blocks(board$board))
+      # One message for every placement write the row menu can make: the three
+      # presets (all views / no view / this view only) and a single checkbox
+      # being ticked or cleared. The client proposes; the server re-derives what
+      # is actually a member from the committed board and emits only the
+      # difference, so a stale client (a box clicked twice before the round-trip
+      # lands) cannot ask to add a member or remove a non-member -- both of which
+      # `validate_view_mod()` rejects outright.
+      #
+      # There are no view CRUD handlers here on purpose. Creating, renaming,
+      # reordering and removing views belongs to the dock's own navbar, which has
+      # had all four since before the minidag existed; the minidag says which
+      # panels go where, and nothing about the pages themselves.
+      shiny::observeEvent(input$membership, {
+        msg <- input$membership
+        delta <- minidag_membership_delta(
+          board$board,
+          blocks = unlist(msg$blocks),
+          extensions = unlist(msg$extensions),
+          mode = if (isTRUE(msg$mode %in%
+                              c("all", "none", "only", "add", "rm"))) {
+            msg$mode
+          } else {
+            "add"
+          },
+          view = msg$view
         )
-
-        if (!length(ids)) {
-          return()
-        }
-
-        pids <- as.character(blockr.dock::as_block_panel_id(ids))
-        members <- blockr.dock::view_members(views[[msg$view]])
-
-        ops <- if (isTRUE(msg$add)) {
-          add <- setdiff(pids, members)
-          if (length(add)) {
-            # No placement hint: an un-landed member renders through the
-            # default grid and the client echo mirrors back wherever the
-            # user drops it. Pinning a side here would fight that.
-            list(add = stats::setNames(rep(list(list()), length(add)), add))
-          }
-        } else {
-          rm <- intersect(pids, members)
-          if (length(rm)) list(rm = rm)
-        }
-
-        if (is.null(ops)) {
-          return()
-        }
-
-        update(
-          list(views = list(mod = stats::setNames(list(ops), msg$view)))
-        )
-      })
-
-      shiny::observeEvent(input$view_rename, {
-        msg <- input$view_rename
-        nm <- trimws(as.character(msg$name))
-        if (!nzchar(nm) ||
-              !isTRUE(msg$id %in% names(blockr.dock::board_views(board$board)))) {
-          return()
-        }
-        update(list(views = list(rename = stats::setNames(list(nm), msg$id))))
-      })
-
-      shiny::observeEvent(input$view_add, {
-        nm <- trimws(as.character(input$view_add$name))
-        if (!nzchar(nm)) {
-          nm <- "New view"
-        }
-
-        # The new view carries THIS deck. A view created from the deck that
-        # does not contain the deck is a trap: it is empty by definition, so
-        # the moment you switch to it the one tool that could fill it is gone.
-        me <- blockr.dock::extension_ids(
-          shiny::isolate(board$board), "minidag_extension"
-        )
-
-        members <- if (length(me)) {
-          as.character(blockr.dock::as_ext_panel_id(me[[1L]]))
-        } else {
-          character()
-        }
-
-        # Deliberately NOT active. `views$add` accepts an `active` naming the
-        # add key, but switching there on create drops you into a page whose
-        # only panel is this one -- every block you were looking at is gone,
-        # and the view you were curating is no longer on screen. Creating a
-        # view and going to it are two decisions; the list marks the active
-        # one, and the board's own nav is where you travel.
-        update(
-          list(
-            views = list(
-              add = stats::setNames(
-                list(blockr.dock::dock_view(members)), nm
-              )
-            )
-          )
-        )
-      })
-
-      shiny::observeEvent(input$view_rm, {
-        id_rm <- input$view_rm$id
-        views <- blockr.dock::board_views(board$board)
-        # The last view cannot go (`dock_views_delta_remove_all`); refusing
-        # here keeps that an inert click rather than an error notification.
-        if (id_rm %in% names(views) && length(views) > 1L) {
-          update(list(views = list(rm = id_rm)))
-        }
-      })
-
-      shiny::observeEvent(input$view_order, {
-        order <- unlist(input$view_order$ids)
-        current <- names(blockr.dock::board_views(board$board))
-        # `views$order` must be a TOTAL permutation of the post-state ids.
-        if (setequal(order, current) && !anyDuplicated(order)) {
-          update(list(views = list(order = order)))
-        }
-      })
-
-      shiny::observeEvent(input$view_activate, {
-        id <- input$view_activate$id
-        views <- blockr.dock::board_views(board$board)
-        if (id %in% names(views) &&
-              !identical(id, blockr.dock::active_view(views))) {
-          update(list(views = list(active = id)))
+        if (!is.null(delta)) {
+          update(delta)
         }
       })
 
