@@ -1106,3 +1106,36 @@
   background: var(--md-primary-bg);
   border-color: #bfdbfe;
 }
+
+/* The tag naming the CURRENT view is the drop button: clicking a row adds it
+   here, clicking this takes it away. Tinted so it reads as the view you are in
+   rather than as one of a list, and the whole tag is the target -- the x is the
+   hover mark that says so, not a separate 10px button. */
+/* A view tag that drops the row from that view, marked by the class the adapter
+   only adds where it wired the handler -- a stack row's tag summarises members
+   and does nothing, so it must not take the pointer. The CURRENT view's tag is
+   tinted as well, because it is the one whose panel you can watch go. */
+.minidag .md-vdrop { cursor: pointer; }
+.minidag .md-vdrop:hover { border-color: var(--md-primary); }
+.minidag .md-vcur {
+  color: var(--md-primary);
+  background: var(--md-primary-bg);
+  border-color: #bfdbfe;
+  cursor: pointer;
+}
+.minidag .md-vcur:hover {
+  border-color: var(--md-primary);
+  background: #dbeafe;
+}
+/* the count is not a view, so it is not a button */
+.minidag .md-vmore { cursor: help; }
+.minidag .md-vx {
+  margin-left: 3px;
+  font-size: 11px;
+  line-height: 1;
+  opacity: 0;
+}
+/* revealed by hovering the ROW, so the affordance is findable without landing on
+   the tag first, and lit once the pointer is actually on it */
+.minidag .md-chip:hover .md-vx { opacity: 0.55; }
+.minidag .md-vcur:hover .md-vx { opacity: 1; }

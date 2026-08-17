@@ -229,7 +229,14 @@
         wrap.appendChild(plus);
         return wrap;
       },
-      stackAside: (s, collapsed) => membershipEl(s.blocks, collapsed)
+      // A stack has no view membership of its own: `dock_view` members are block
+      // panels, so anything shown here could only be a UNION over the members --
+      // "Overview +1" on a two-block stack meaning one member is on each. That
+      // reads as a fact about the stack and is not one. Expanded, the member rows
+      // already say it exactly; collapsed, the header's right-click menu shows
+      // the per-view checklist with a tri-state box, which is the honest form of
+      // the same summary.
+      stackAside: () => null
     });
 
     /* ---- the membership column ------------------------------------------
@@ -257,11 +264,12 @@
       return e;
     };
 
-    const membershipEl = (ids, collapsed, kind) => {
+    const membershipEl = (ids, kind) => {
       if (!views.length) return null;
 
       kind = kind || 'blocks';
       const wrap = el('md-views');
+      const cur = activeView();
 
       const mine = views.filter((v) =>
         ids.some((id) => memberIds(v, kind).includes(id)));
@@ -272,58 +280,78 @@
       const whole = ids.length && views.every((v) =>
         ids.every((id) => memberIds(v, kind).includes(id)));
 
+      // A view's tag IS the button that takes the row off that view. Clicking a
+      // row already adds it to the current view (`minidag_reveal_delta()` adds
+      // when the view does not hold it), so the current view's tag completes a
+      // pair whose undo is the gesture you just used -- and every other view's
+      // tag does the same thing to the view it names, because a tag that means
+      // "shown here" should mean the same wherever it points.
+      //
+      // The whole tag is the target; the little x is the hover mark saying so.
+      // The current view's tag is tinted as well, because that is the one whose
+      // effect you can see happen.
+      const dropTag = (t, view, isCur) => {
+        // the class carries the affordance, so the pointer follows the handler
+        t.classList.add('md-vdrop');
+        if (isCur) t.classList.add('md-vcur');
+        t.title = 'Shown on ' + view.name
+          + ' \u00b7 click to drop it from ' + (isCur ? 'here' : 'there');
+        const x = el('md-vx');
+        x.textContent = '\u00d7';
+        t.appendChild(x);
+        t.addEventListener('click', (ev) => {
+          ev.stopPropagation();          // not a reveal
+          push('membership', {
+            blocks: kind === 'blocks' ? ids : [],
+            extensions: kind === 'extensions' ? ids : [],
+            mode: 'rm', view: view.id
+          });
+        });
+        return t;
+      };
+
       if (whole) {
+        // "all views" names no single view, so it drops from the one you are on:
+        // the only view whose panel you can watch go.
         const t = el('md-vtag md-vall-tag');
-        t.textContent = 'all views';
+        t.appendChild(document.createTextNode('all views'));
         t.title = views.map((v) => v.name).join(', ');
-        wrap.appendChild(t);
+        wrap.appendChild(cur ? dropTag(t, cur, true) : t);
         return wrap;
       }
 
       // Shown nowhere is the ORDINARY case, not a state calling for an action:
       // on a real board half the rows are mutates, joins and reads that nobody
-      // ever puts on a page. So the slot stays empty and says nothing. Right-click
-      // is there if you want to place it.
+      // ever puts on a page. So the slot stays empty and says nothing. Clicking
+      // the row is what puts it on the view you are in.
       if (!mine.length) {
         return wrap;
       }
 
-      const tag = el('md-vtag');
-      tag.textContent = mine[0].name;
-      tag.title = mine.map((v) => v.name).join(', ');
-      wrap.appendChild(tag);
+      // The current view first when the row is on it: while you are looking at
+      // Detail, "Detail" is the fact you need, and "Overview +1" makes you count.
+      // It is also what gives the drop button something to be attached to.
+      const onCur = cur && mine.some((v) => v.id === cur.id);
+      const rest = mine.filter((v) => !onCur || v.id !== cur.id);
+      const first = onCur ? cur : mine[0];
+      const others = onCur ? rest : mine.slice(1);
 
-      if (mine.length > 1) {
+      const tag = el('md-vtag');
+      tag.appendChild(document.createTextNode(first.name));
+      wrap.appendChild(dropTag(tag, first, !!onCur));
+
+      // The views behind the count are not reachable here -- one tag is all the
+      // row's width affords -- and the menu's checklist is the complete surface
+      // for them. The count says how many are hidden, not which.
+      if (others.length) {
         const more = el('md-vtag md-vmore');
-        more.textContent = '+' + (mine.length - 1);
-        more.title = mine.slice(1).map((v) => v.name).join(', ');
+        more.textContent = '+' + others.length;
+        more.title = 'also on ' + others.map((v) => v.name).join(', ')
+          + ' \u00b7 right-click for all of them';
         wrap.appendChild(more);
       }
 
-      // a collapsed stack hides the rows that would have shown the split
-      if (collapsed && ids.length > 1) {
-        const inAny = ids.filter((id) =>
-          views.some((v) => memberIds(v, kind).includes(id))).length;
-        if (inAny < ids.length) {
-          const n = el('md-vtag md-vmore');
-          n.textContent = inAny + '/' + ids.length;
-          wrap.appendChild(n);
-        }
-      }
-
       return wrap;
-    };
-
-    // The parentless add is drawn by the renderer as the last row of the list
-    // (`opts.addRow`); this is what it opens. Until the catalogue lands the
-    // picker cannot open, and swallowing the gesture would be worse than the old
-    // behaviour -- so fall through to the board's own browser instead.
-    const requestAdd = (anchor) => {
-      if (registry.add.length) {
-        openPicker(null, anchor || rootEl.querySelector('.md-addrow'), null);
-      } else {
-        push('block_add', true);
-      }
     };
 
     /* ---- the extensions group, at the foot of the flow ------------------------
@@ -352,7 +380,7 @@
       nm.title = t.name + (t.self ? ' \u00b7 this panel' : '');
       row.appendChild(nm);
 
-      const mem = membershipEl([t.id], false, 'extensions');
+      const mem = membershipEl([t.id], 'extensions');
       if (mem) row.appendChild(mem);
 
       return row;
@@ -829,6 +857,18 @@
     const commitPick = (meta, originId) => {
       closePicker();
       push('block_insert', { type: meta.type, from: originId || null });
+    };
+
+    // What the renderer's "Add a block" row and the board menu's "Add a block"
+    // both call: a block with no origin, and so no link. Until the catalogue
+    // lands the picker cannot open, and swallowing the gesture would be worse
+    // than the old behaviour -- so fall through to the board's own browser.
+    const requestAdd = (anchor) => {
+      if (registry.add.length) {
+        openPicker(null, anchor || rootEl.querySelector('.md-addrow'), null);
+      } else {
+        push('block_add', true);
+      }
     };
 
     const openPicker = (originId, anchor, at) => {
