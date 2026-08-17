@@ -34,7 +34,7 @@
  *   slotPrompt(from, to)         caption of the slot picker
  *   showSlot(link) -> bool       whether that slot is worth naming
  *   opts { search, stacks, remove, status, allowCycles, nameEdit, edgeLabels,
- *          labelPad, searchPlaceholder, emptyText, emptyAddText, metrics,
+ *          labelPad, searchPlaceholder, searchEmptyText, emptyText, emptyAddText, metrics,
  *          stackNoun, stackUnit, stackIcon, stackAddText, stackRmTitle }
  *
  * The stack wording is an option because a stack is only a stack on a board.
@@ -118,6 +118,7 @@
       allowCycles: false, nameEdit: 'dblclick',
       edgeLabels: false, labelPad: 34,
       searchPlaceholder: 'Search blocks…',
+      searchEmptyText: 'No block matches.',
       emptyText: 'No blocks yet.',
       emptyAddText: '+ Add a block',
       addRowText: 'Add a block',
@@ -277,10 +278,51 @@
 
     const model = () => ({ blocks, links, stacks, collapsed, lastPos });
 
-    const displayRows = () => G.displayRows(model());
+    /* ---- search: the rows a query leaves standing ----------------------
+     *
+     * A search NARROWS the list rather than dimming it. Dimming is fine on a
+     * board you can see all of and useless on one you cannot: the CDEX board
+     * is 92 rows, so "19 / 92" used to leave you scrolling four screens of
+     * pale grey looking for the hits, none of which were on the first one.
+     *
+     * What survives is the hits AND everything upstream of them, because a
+     * block shown without the blocks feeding it is not a smaller picture of
+     * the board, it is a wrong one: the rail would draw a chain that starts
+     * nowhere. Ancestors only, never descendants -- on a board where one
+     * click-aggregator collects from every chart, pulling descendants in
+     * takes any query straight back to all 92 rows. Measured on CDEX:
+     * ancestors alone leave 17 to 49 rows depending on the query, which is
+     * the 3-4x that makes the list readable; with descendants, all of them.
+     *
+     * `searchKeep` is null when no query is active, and the drawing path is
+     * the ONLY thing that reads it -- `model()` stays whole, so the stack
+     * and cycle checks below still reason about the real board.
+     */
+    let searchKeep = null, searchHits = null;
+
+    const drawModel = () => {
+      if (!searchKeep) return model();
+      const keep = searchKeep;
+      return {
+        blocks: blocks.filter((b) => keep.has(b.id)),
+        links: links.filter((l) => keep.has(l.from) && keep.has(l.to)),
+        // a group keeps the members that survived; one with none left is not
+        // drawn, and `collapsed` can name a stack that is no longer there
+        // without harm
+        stacks: stacks
+          .map((s) => Object.assign({}, s, {
+            blocks: s.blocks.filter((id) => keep.has(id))
+          }))
+          .filter((s) => s.blocks.length),
+        collapsed: collapsed,
+        lastPos: lastPos
+      };
+    };
+
+    const displayRows = () => G.displayRows(drawModel());
     const innerOrder = (s) => G.innerOrder(model(), s);
     const railIdOf = (id) => G.railIdOf(model(), id);
-    const railModel = (rows) => G.railModel(model(), rows);
+    const railModel = (rows) => G.railModel(drawModel(), rows);
     const layout = (entries, rl, rowOf, back) => G.layout(entries, rl, rowOf, back);
 
     const laneX = (l) => RAIL_L + l * LANE_W;
@@ -362,6 +404,28 @@
       const refocus = focusId;
       clearFocus();
       deckEl.innerHTML = '';
+
+      // A query that matches nothing is not an empty board: offering "+ Add a
+      // block" there would answer a question nobody asked, and hide the one
+      // fact that matters -- the board still has 92 rows, this query reaches
+      // none of them.
+      if (searchKeep && !searchKeep.size) {
+        const empty = document.createElement('div');
+        empty.className = 'md-empty';
+        empty.innerHTML = '<p>' + escapeHtml(opts.searchEmptyText) + '</p>';
+        const b = document.createElement('button');
+        b.className = 'md-empty-add';
+        b.textContent = 'Clear the search';
+        b.addEventListener('click', () => {
+          searchEl.value = '';
+          applySearch();
+          searchEl.focus();
+        });
+        empty.appendChild(b);
+        deckEl.appendChild(empty);
+        updateBar();
+        return;
+      }
 
       if (!blocks.length) {
         const empty = document.createElement('div');
@@ -657,7 +721,7 @@
       deckEl.appendChild(wire);
 
       updateBar();
-      applySearch();
+      paintHits();
       renderBadges();
 
       // Only if the row is still there: a block removed by the very update
@@ -1164,53 +1228,60 @@
       return (n.value != null ? n.value : n.textContent) || '';
     };
 
+    // Read the query and work out what the list is allowed to show. Sets
+    // `searchKeep` / `searchHits` and rebuilds -- it does NOT touch the DOM
+    // itself, because a narrowed list is a different set of rows and a
+    // different rail, not the same one with classes on it.
     const applySearch = () => {
       if (!searchEl) return;
       const q = searchEl.value.trim().toLowerCase();
-      if (q) clearFocus();
-      const chips = deckEl.querySelectorAll('.md-chip');
-      const heads = deckEl.querySelectorAll('.md-stackhead');
       if (!q) {
-        chips.forEach((c) => c.classList.remove('dim'));
-        heads.forEach((h) => h.classList.remove('dim'));
-        // drop the inline value rather than pinning it to 1: the lineage
-        // focus dims edges from CSS, and an inline opacity would outrank it
-        deckEl.querySelectorAll('.md-edge').forEach((p) => {
-          p.style.removeProperty('opacity');
-        });
-        deckEl.querySelectorAll('.md-badge').forEach((b) => b.classList.remove('hit'));
+        searchKeep = null;
+        searchHits = null;
         hitsEl.textContent = '';
+        render();
         return;
       }
+      clearFocus();
+
       const match = (b) => (b.name || '').toLowerCase().includes(q);
       const hits = blocks.filter(match).map((b) => b.id);
-      chips.forEach((c) => {
+      // a group whose NAME matches brings its members in whole: the row you
+      // matched is the group, and half a group is not one
+      const named = stacks.filter((s) => (s.name || '').toLowerCase().includes(q));
+      const seed = hits.concat(named.flatMap((s) => s.blocks));
+
+      searchHits = new Set(seed);
+      const keep = new Set(seed);
+      seed.forEach((id) => upstream(id).forEach((p) => keep.add(p)));
+      searchKeep = keep;
+
+      hitsEl.textContent = searchHits.size + ' / ' + blocks.length;
+      render();
+    };
+
+    // Which of the drawn rows the query actually matched, as opposed to the
+    // ones that are here because something downstream needs them. Called from
+    // `render()` once the rows exist.
+    const paintHits = () => {
+      // The context rows are here to make the picture whole, not to be read,
+      // so the deck says which mode it is in and the stylesheet does the rest.
+      deckEl.classList.toggle('md-searching', !!searchHits);
+      if (!searchHits) return;
+      deckEl.querySelectorAll('.md-chip[data-id]').forEach((c) => {
         const id = c.dataset.id;
         if (id.startsWith('stack:')) {
           const s = stacks.find((x) => x.id === id.slice(6));
-          const inner = s.blocks.filter((m) => {
-            const b = blockOf(m);
-            return b && match(b);
-          }).length;
-          const lit = inner > 0 || s.name.toLowerCase().includes(q);
-          c.classList.toggle('dim', !lit);
-          const bd = c.querySelector('.md-badge');
-          bd.classList.toggle('hit', inner > 0);
-          bd.textContent = inner > 0
-            ? inner + ' of ' + s.blocks.length + ' match'
-            : s.blocks.length + ' ' + opts.stackUnit;
-        } else {
-          c.classList.toggle('dim', !hits.includes(id));
+          c.classList.toggle('md-hit',
+            !!s && s.blocks.some((m) => searchHits.has(m)));
+          return;
         }
+        c.classList.toggle('md-hit', searchHits.has(id));
       });
-      heads.forEach((h) => {
+      deckEl.querySelectorAll('.md-stackhead[data-stack]').forEach((h) => {
         const s = stacks.find((x) => x.id === h.dataset.stack);
-        const lit = s.name.toLowerCase().includes(q) ||
-          s.blocks.some((m) => { const b = blockOf(m); return b && match(b); });
-        h.classList.toggle('dim', !lit);
+        h.classList.toggle('md-hit', !!s && s.blocks.some((m) => searchHits.has(m)));
       });
-      deckEl.querySelectorAll('.md-edge').forEach((p) => { p.style.opacity = '0.15'; });
-      hitsEl.textContent = hits.length + ' / ' + blocks.length;
     };
 
     if (searchEl) {

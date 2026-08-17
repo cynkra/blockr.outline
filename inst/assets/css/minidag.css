@@ -221,6 +221,26 @@
 .minidag .md-chip [contenteditable="true"] { user-select: text; }
 .minidag .md-chip.dim,
 .minidag .md-stackhead.dim { opacity: 0.25; }
+
+/* While a search is on. The list is NARROWED, not dimmed -- what is here is
+   the hits plus the blocks upstream of them, because a hit drawn without what
+   feeds it is not a smaller picture of the board but a wrong one. So the two
+   states mean different things than they used to: a row is either something
+   you searched for, or something that is here to keep the chain whole.
+   0.55 and not the 0.25 above: the context rows are meant to be READ (that is
+   the whole reason they were kept), just not read first. */
+.minidag .md-deck.md-searching .md-chip,
+.minidag .md-deck.md-searching .md-stackhead { opacity: 0.55; }
+.minidag .md-deck.md-searching .md-chip.md-hit,
+.minidag .md-deck.md-searching .md-stackhead.md-hit { opacity: 1; }
+/* and nothing else. A highlight behind the name was the obvious addition and
+   the wrong one: on a query like "lab" nineteen of the twenty-three rows are
+   hits, so it painted the whole list yellow to mark the majority. The two
+   opacities already say which rows the query found, and they say it on the
+   rows where it matters -- the three-hit queries, where the context
+   outnumbers the answer. */
+.minidag .md-deck.md-searching .md-chip:hover,
+.minidag .md-deck.md-searching .md-stackhead:hover { opacity: 1; }
 /* Lineage focus. The minidag dims, the rows related to the hovered block keep
    their `md-rel`. Two classes rather than a write per row, so the fade is
    CSS's job and hovering a 92-row board costs a handful of DOM writes. */
@@ -926,60 +946,66 @@
   letter-spacing: 0;
 }
 
-/* the three presets, sharing one row. They are STATES of the ticks below --
-   whichever holds is lit -- so pressing one is not a command so much as a
-   jump. One row rather than three so four views show at rest in the same
-   height; the cost is that a third of 236px cannot hold a view name, which is
-   why the last one says "Current" and the marked row below names it. */
-.md-ctxseg {
-  display: flex;
-  gap: 3px;
-  margin: 3px 4px 5px;
-}
-.md-ctxsegbtn {
-  flex: 1 1 0;
-  padding: 4px 0;
-  font: inherit;
-  font-size: 11px;
-  color: var(--blockr-grey-600, #4b5563);
-  background: #fff;
-  border: 1px solid var(--blockr-color-border, #e5e7eb);
-  /* --blockr-radius-sm: pills and small buttons */
-  border-radius: 4px;
-  cursor: pointer;
-}
-.md-ctxsegbtn:hover {
-  border-color: var(--blockr-color-primary, #2563eb);
-  color: var(--blockr-color-primary, #2563eb);
-}
-.md-ctxsegbtn.on {
-  background: #eff6ff;
-  border-color: #bfdbfe;
-  color: var(--blockr-color-primary, #2563eb);
-  /* --blockr-font-weight-semibold */
-  font-weight: 600;
-}
-
 .md-ctxcap {
   display: flex;
+  align-items: center;
   padding: 4px 8px 3px;
   font-size: 9.5px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: #9ca3af;
 }
+/* beside the caption, not pushed to the far edge: the actions hold that end
+   of the row now */
 .md-ctxcapn {
-  margin-left: auto;
+  margin-left: 6px;
   font-variant-numeric: tabular-nums;
   text-transform: none;
   letter-spacing: 0;
 }
 
+/* "None · All", at the right of the caption row. Text, not buttons: they are a
+   shortcut for ticking, and a bordered control here read as a command of the
+   same rank as the ones below the separator. Their predecessor was a segmented
+   row of three -- All / None / Current -- whose height is now the list's. */
+.md-ctxacts {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+.md-ctxact {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 10px;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--blockr-grey-500, #6b7280);
+  cursor: pointer;
+}
+.md-ctxact:hover {
+  color: var(--blockr-color-primary, #2563eb);
+  text-decoration: underline;
+}
+/* the state it would write is the state it is in: says so rather than
+   offering a no-op */
+.md-ctxact:disabled {
+  color: var(--blockr-grey-300, #d1d5db);
+  cursor: default;
+  text-decoration: none;
+}
+.md-ctxactdot { color: var(--blockr-grey-300, #d1d5db); font-size: 10px; }
+
 /* One tick per view. Capped and scrolling rather than growing the menu: ten
    views is not a special board, and the row operations below must stay
-   reachable without scrolling the menu itself. */
+   reachable without scrolling the menu itself.
+   186 and not 152: the preset row above used to take 34px, and giving them to
+   the list keeps the menu exactly as tall as it was while showing one more
+   view at rest. */
 .md-ctxticks {
-  max-height: 152px;
+  max-height: 186px;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
@@ -1040,7 +1066,9 @@
   color: var(--blockr-grey-400, #9ca3af);
   font-variant-numeric: tabular-nums;
 }
-/* the current view, which the segmented row cannot name */
+/* the current view. It was here because the segmented row's "Current" button
+   could not name one; the button is gone and the dot is now the list's only
+   piece of orientation, which is what it was always doing anyway. */
 .md-ctxactive {
   flex: 0 0 5px;
   width: 5px;
@@ -1048,15 +1076,6 @@
   background: var(--blockr-color-primary, #2563eb);
   border-radius: 50%;
 }
-/* "send it to this one": the box adds, this clears every other view. Hidden
-   until the row is hovered, so the resting list is a list. */
-.md-ctxonly {
-  flex: 0 0 auto;
-  font-size: 10px;
-  color: var(--blockr-color-primary, #2563eb);
-  opacity: 0;
-}
-.md-ctxtick:hover .md-ctxonly { opacity: 1; }
 /* armed: the next click takes this panel off the view it is being clicked in */
 .md-ctxtick.md-armed .md-ctxviewname { color: #dc2626; font-weight: 600; }
 .md-ctxtick.md-armed .md-ctxbox {
