@@ -144,15 +144,11 @@ new_slide_block <- function(layout = "exhibit-full", title = "",
     },
 
     function(id) {
-      choices <- stats::setNames(
-        names(slide_layouts()),
-        chr_ply(slide_layouts(), `[[`, "name")
-      )
       htmltools::tagList(
-        shiny::selectInput(
-          shiny::NS(id, "layout"), "Layout",
-          choices = choices, selected = layout, width = "100%"
-        ),
+        # The layout picker: schematic tiles (the chart block's type-picker
+        # pattern), drawn from the layouts' own slot rects. Clicking a tile
+        # sets input$layout, same as the select it replaces.
+        slide_layout_picker(shiny::NS(id, "layout"), selected = layout),
         shiny::textInput(
           shiny::NS(id, "title"), "Title", value = title, width = "100%"
         ),
