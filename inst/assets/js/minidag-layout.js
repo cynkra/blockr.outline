@@ -505,6 +505,48 @@
     return Object.assign({ rows }, rm, res);
   };
 
+  // The board narrowed to ONE stack: its members in their frame, plus only
+  // what touches them -- a neighbouring stack with an edge in or out stays as
+  // a single collapsed row, a loose block with a direct edge stays as a row,
+  // everything else is gone. Links are cut to the stack's interface (at least
+  // one endpoint a member), so two neighbours never draw their own
+  // relationship into a view that is not about them.
+  //
+  // `memKeep`, when given, narrows the members further (the search inside a
+  // focused stack) WITHOUT narrowing the neighbours: the frame is what the
+  // query is scoped to, the doorways stay.
+  //
+  // Returns null when the stack does not exist -- the caller falls back to
+  // the whole board, which is what a focus on a deleted stack should read as.
+  const focusModel = (model, stackId, memKeep) => {
+    const stacks = model.stacks || [];
+    const s = stacks.find((x) => x.id === stackId);
+    if (!s) return null;
+    const mem = new Set(s.blocks || []);
+    const kept = (id) => mem.has(id) && (!memKeep || memKeep.has(id));
+    const links = model.links || [];
+    const touches = (id) => links.some((l) =>
+      (l.from === id && mem.has(l.to)) || (l.to === id && mem.has(l.from)));
+    const stacked = new Set(stacks.flatMap((x) => x.blocks || []));
+    const nb = stacks.filter((x) => x.id !== stackId &&
+      (x.blocks || []).some(touches));
+    const nbIds = new Set(nb.flatMap((x) => x.blocks || []));
+    const loose = (model.blocks || []).map((b) => b.id).filter((id) =>
+      !mem.has(id) && !stacked.has(id) && touches(id));
+    const keep = new Set(
+      (s.blocks || []).filter(kept).concat([...nbIds], loose)
+    );
+    return {
+      blocks: (model.blocks || []).filter((b) => keep.has(b.id)),
+      links: links.filter((l) => keep.has(l.from) && keep.has(l.to) &&
+        (kept(l.from) || kept(l.to))),
+      stacks: [Object.assign({}, s, { blocks: (s.blocks || []).filter(kept) })]
+        .concat(nb),
+      collapsed: new Set(nb.map((x) => x.id)),
+      lastPos: model.lastPos || new Map()
+    };
+  };
+
   return {
     kahn,
     backEdges,
@@ -516,6 +558,7 @@
     railIdOf,
     layout,
     invariants,
-    railFor
+    railFor,
+    focusModel
   };
 });

@@ -16,7 +16,9 @@
  *   emit(name, payload)          gestures out: link_add, link_rm, block_rm,
  *                                block_rename, block_select, block_append,
  *                                block_add, stack_add, stack_rename, stack_rm,
- *                                stack_join, stack_leave
+ *                                stack_join, stack_leave, stack_focus
+ *                                ({id} on entering, {id: null} on leaving --
+ *                                informational, the view change is internal)
  *   nodeLead(node) -> Element    row content before the name (icon, ports)
  *   nodeTrail(node) -> Element   row content after the name (chips, fields)
  *   nodeAside(node) -> Element   row content PAST the spring, so it right-
@@ -35,7 +37,8 @@
  *   showSlot(link) -> bool       whether that slot is worth naming
  *   opts { search, stacks, remove, status, allowCycles, nameEdit, edgeLabels,
  *          labelPad, searchPlaceholder, searchEmptyText, emptyText, emptyAddText, metrics,
- *          stackNoun, stackUnit, stackIcon, stackAddText, stackRmTitle }
+ *          stackNoun, stackUnit, stackIcon, stackAddText, stackRmTitle,
+ *          focusView, crumbRootText }
  *
  * The stack wording is an option because a stack is only a stack on a board.
  * The process editor pushes the same object through as a multi-instance
@@ -94,6 +97,7 @@
   const CHEV_R = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m9 6 6 6-6 6"/></svg>';
   const STACK_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m12 3 9 5-9 5-9-5 9-5z"/><path d="m3 13 9 5 9-5"/></svg>';
   const SEARCH_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>';
+  const FOCUS_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 8V5a2 2 0 0 1 2-2h3"/><path d="M16 3h3a2 2 0 0 1 2 2v3"/><path d="M21 16v3a2 2 0 0 1-2 2h-3"/><path d="M8 21H5a2 2 0 0 1-2-2v-3"/><circle cx="12" cy="12" r="2.6" fill="currentColor" stroke="none"/></svg>';
 
   const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
@@ -124,7 +128,12 @@
       addRowText: 'Add a block',
       addRowTitle: 'A block that reads from nothing',
       stackNoun: 'Stack', stackUnit: 'blocks', stackIcon: STACK_ICON,
-      stackAddText: 'Stack them', stackRmTitle: 'Dissolve stack (blocks stay)'
+      stackAddText: 'Stack them', stackRmTitle: 'Dissolve stack (blocks stay)',
+      // The stack-focus view: a focus button on every stack row, and the
+      // list narrowed to that stack plus whatever touches it. The whole
+      // board's name in the breadcrumb is an option because only a board
+      // calls itself one.
+      focusView: true, crumbRootText: 'Board'
     }, adapter.opts || {});
     const M = Object.assign({}, DEFAULT_METRICS, opts.metrics || {});
     const { LANE_W, ROW_H, GAP, RAIL_L, RAIL_R, DOT_R } = M;
@@ -162,6 +171,17 @@
     const headEl = document.createElement('div');
     headEl.className = 'md-head';
     rootEl.appendChild(headEl);
+
+    // "Board › <stack> ×" while a stack is focused; hidden otherwise. Above
+    // the search row, so the search reads as scoped BY it -- the placeholder
+    // says "Search within <stack>…" and this line says why.
+    let crumbEl = null;
+    if (opts.stacks && opts.focusView) {
+      crumbEl = document.createElement('div');
+      crumbEl.className = 'md-crumb';
+      crumbEl.hidden = true;
+      headEl.appendChild(crumbEl);
+    }
 
     let searchEl = null, hitsEl = null;
     if (opts.search) {
@@ -241,6 +261,7 @@
     let blocks = [], links = [], stacks = [];
     const statuses = new Map();   // node id -> {color, label, status} | null
     const collapsed = new Set();  // stack ids, client-side only
+    let stackFocus = null;        // stack id, client-side only (like collapsed)
     let selection = new Set();
     // the row a shift-click measures its range from: the last row clicked at
     // all, plain or cmd, which is what every list in every file manager does
@@ -301,6 +322,15 @@
     let searchKeep = null, searchHits = null;
 
     const drawModel = () => {
+      // Focus first: the focused view is a different narrowing with its own
+      // rules (neighbours stay as doorways), and the search inside it is
+      // handed over as the member filter. `focusModel` reads the model
+      // whole, so the stack and cycle checks below keep reasoning about the
+      // real board -- same contract as `searchKeep`.
+      if (stackFocus) {
+        const m = G.focusModel(model(), stackFocus, searchKeep);
+        if (m) return m;
+      }
       if (!searchKeep) return model();
       const keep = searchKeep;
       return {
@@ -317,6 +347,97 @@
         collapsed: collapsed,
         lastPos: lastPos
       };
+    };
+
+    /* ---- stack focus: the deck narrowed to one stack ------------------
+     *
+     * Client-side state like `collapsed`: a way of LOOKING at the board, not
+     * a fact about it. Entering clears the search (the query belonged to the
+     * view being left), and the search box then scopes to the focused
+     * stack's members. `stack_focus` is emitted on every change so a host
+     * can react (the board adapter uses it to expire its pending
+     * join-at-birth); it is not required to.
+     */
+
+    const focusedStack = () =>
+      stackFocus ? stacks.find((s) => s.id === stackFocus) || null : null;
+
+    const resetSearch = () => {
+      if (searchEl) searchEl.value = '';
+      searchKeep = null;
+      searchHits = null;
+      if (hitsEl) hitsEl.textContent = '';
+    };
+
+    const setStackFocus = (id) => {
+      if (stackFocus === id) return;
+      stackFocus = id;
+      resetSearch();
+      emit('stack_focus', { id: id });
+      render();
+    };
+
+    const clearStackFocus = () => {
+      if (!stackFocus) return;
+      stackFocus = null;
+      resetSearch();
+      emit('stack_focus', { id: null });
+      render();
+    };
+
+    const updateCrumb = () => {
+      const s = focusedStack();
+      rootEl.classList.toggle('md-focused', !!s);
+      if (searchEl) {
+        searchEl.placeholder = s
+          ? 'Search within ' + s.name + '…' : opts.searchPlaceholder;
+      }
+      if (!crumbEl) return;
+      crumbEl.hidden = !s;
+      crumbEl.innerHTML = '';
+      if (!s) return;
+      const root = document.createElement('button');
+      root.type = 'button';
+      root.className = 'md-crumb-root';
+      root.textContent = opts.crumbRootText;
+      root.title = 'Back to the whole ' + opts.crumbRootText.toLowerCase();
+      root.addEventListener('click', clearStackFocus);
+      crumbEl.appendChild(root);
+      const sep = document.createElement('span');
+      sep.className = 'md-crumb-sep';
+      sep.textContent = '›';
+      crumbEl.appendChild(sep);
+      const cur = document.createElement('span');
+      cur.className = 'md-crumb-cur';
+      if (s.color) {
+        cur.style.borderColor = hexA(s.color, 0.5);
+        cur.style.background = hexA(s.color, 0.06);
+      }
+      const cap = document.createElement('span');
+      cap.className = 'md-cap';
+      cap.innerHTML = opts.stackIcon;
+      if (s.color) cap.style.color = s.color;
+      cur.appendChild(cap);
+      const nm = document.createElement('span');
+      nm.className = 'md-crumb-name';
+      nm.textContent = s.name;
+      nm.title = s.name;   // readable even when ellipsized
+      cur.appendChild(nm);
+      crumbEl.appendChild(cur);
+      const badge = document.createElement('span');
+      badge.className = 'md-badge';
+      badge.textContent = s.blocks.length + ' ' + opts.stackUnit;
+      crumbEl.appendChild(badge);
+      const spring = document.createElement('span');
+      spring.className = 'md-spring';
+      crumbEl.appendChild(spring);
+      const x = document.createElement('button');
+      x.type = 'button';
+      x.className = 'md-crumb-x';
+      x.textContent = '×';
+      x.title = 'Back to the whole ' + opts.crumbRootText.toLowerCase();
+      x.addEventListener('click', clearStackFocus);
+      crumbEl.appendChild(x);
     };
 
     const displayRows = () => G.displayRows(drawModel());
@@ -404,6 +525,7 @@
       const refocus = focusId;
       clearFocus();
       deckEl.innerHTML = '';
+      updateCrumb();
 
       // A query that matches nothing is not an empty board: offering "+ Add a
       // block" there would answer a question nobody asked, and hide the one
@@ -701,7 +823,12 @@
         addRow.appendChild(tile);
         const lbl = document.createElement('span');
         lbl.className = 'md-addrow-label';
-        lbl.textContent = opts.addRowText;
+        // While focused, a new block joins the focused stack at creation
+        // (the host adapter enforces it) -- said here, where the block will
+        // appear, because a block that landed OUTSIDE the stack would vanish
+        // from this view the instant it landed.
+        const fs = focusedStack();
+        lbl.textContent = opts.addRowText + (fs ? ' · joins ' + fs.name : '');
         addRow.appendChild(lbl);
         addRow.addEventListener('click', () => emit('block_add', true));
         deckEl.appendChild(addRow);
@@ -957,19 +1084,51 @@
       const aside = stackAside(stack, true);
       if (aside) el.appendChild(aside);
 
+      // Inside a focused view every other stack's row is a DOORWAY: the
+      // collapse behind it is synthetic (drawModel folded it, `collapsed`
+      // was never touched), so expanding it in place would contradict the
+      // view. The whole row hops the focus there instead -- which is how a
+      // big board gets walked stack by stack.
+      const doorway = opts.focusView && stackFocus && stack.id !== stackFocus;
+
+      if (opts.focusView && !doorway) {
+        const fb = document.createElement('button');
+        fb.type = 'button';
+        fb.className = 'md-focusbtn';
+        fb.innerHTML = FOCUS_ICON;
+        fb.title = 'Focus: show only ' + stack.name;
+        fb.addEventListener('click', (e) => {
+          e.stopPropagation();
+          setStackFocus(stack.id);
+        });
+        el.appendChild(fb);
+      }
+
       const chev = document.createElement('button');
       chev.className = 'md-chev';
       chev.innerHTML = CHEV_R;
-      chev.title = 'Expand ' + opts.stackNoun.toLowerCase();
+      chev.title = doorway
+        ? 'Focus ' + stack.name
+        : 'Expand ' + opts.stackNoun.toLowerCase();
       chev.addEventListener('click', (e) => {
         e.stopPropagation();
+        if (doorway) { setStackFocus(stack.id); return; }
         collapsed.delete(stack.id);
         render();
       });
       el.appendChild(chev);
 
+      if (doorway) {
+        el.classList.add('md-hop');
+        el.title = 'Focus ' + stack.name;
+      }
+
       el.addEventListener('click', (e) => {
         if (e.target.closest('button')) return;
+        if (doorway) {
+          setStackFocus(stack.id);
+          return;
+        }
         if (!opts.stacks) {
           openConn(el, 'stack:' + stack.id);
           return;
@@ -1070,6 +1229,27 @@
         selectStack(stack, e.metaKey || e.ctrlKey || e.shiftKey);
       });
 
+      // The way INTO the focused view -- always visible, quiet until
+      // hovered. Not the header click: that means "select the group" and the
+      // action bar depends on it. Not hover-revealed like `md-rm`: an
+      // affordance nobody has seen is one nobody uses, and this is the one
+      // button on the row that changes what the whole list shows.
+      if (opts.focusView) {
+        const fb = document.createElement('button');
+        fb.type = 'button';
+        fb.className = 'md-focusbtn' + (stackFocus === stack.id ? ' active' : '');
+        fb.innerHTML = FOCUS_ICON;
+        fb.title = stackFocus === stack.id
+          ? 'Back to the whole ' + opts.crumbRootText.toLowerCase()
+          : 'Focus: show only ' + stack.name;
+        fb.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (stackFocus === stack.id) clearStackFocus();
+          else setStackFocus(stack.id);
+        });
+        el.appendChild(fb);
+      }
+
       const rm = document.createElement('button');
       rm.className = 'md-rm';
       rm.textContent = '×';
@@ -1077,15 +1257,18 @@
       rm.addEventListener('click', () => emit('stack_rm', { id: stack.id }));
       el.appendChild(rm);
 
-      const chev = document.createElement('button');
-      chev.className = 'md-chev';
-      chev.innerHTML = CHEV_D;
-      chev.title = 'Collapse ' + opts.stackNoun.toLowerCase();
-      chev.addEventListener('click', () => {
-        collapsed.add(stack.id);
-        render();
-      });
-      el.appendChild(chev);
+      // No collapse offer on the focused stack: its rows ARE the view.
+      if (stackFocus !== stack.id) {
+        const chev = document.createElement('button');
+        chev.className = 'md-chev';
+        chev.innerHTML = CHEV_D;
+        chev.title = 'Collapse ' + opts.stackNoun.toLowerCase();
+        chev.addEventListener('click', () => {
+          collapsed.add(stack.id);
+          render();
+        });
+        el.appendChild(chev);
+      }
 
       return el;
     };
@@ -1245,6 +1428,24 @@
       clearFocus();
 
       const match = (b) => (b.name || '').toLowerCase().includes(q);
+
+      // Inside a focused stack the query scopes to the MEMBERS: hits only,
+      // no ancestor pull-in -- the frame is the context, and the neighbour
+      // doorways stay regardless (drawModel applies this set to members
+      // alone). The counter's denominator says the same: n of the stack.
+      const fs = focusedStack();
+      if (fs) {
+        const hits = fs.blocks.filter((id) => {
+          const b = blockOf(id);
+          return b && match(b);
+        });
+        searchHits = new Set(hits);
+        searchKeep = new Set(hits);
+        hitsEl.textContent = hits.length + ' / ' + fs.blocks.length;
+        render();
+        return;
+      }
+
       const hits = blocks.filter(match).map((b) => b.id);
       // a group whose NAME matches brings its members in whole: the row you
       // matched is the group, and half a group is not one
@@ -1286,8 +1487,14 @@
 
     if (searchEl) {
       searchEl.addEventListener('input', applySearch);
+      // Esc peels one layer at a time: the query first, then the stack
+      // focus, then the input's own keyboard focus -- so backing all the way
+      // out is the same key pressed until there is nothing left to clear.
       searchEl.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') { searchEl.value = ''; applySearch(); searchEl.blur(); }
+        if (e.key !== 'Escape') return;
+        if (searchEl.value) { searchEl.value = ''; applySearch(); return; }
+        if (stackFocus) { clearStackFocus(); return; }
+        searchEl.blur();
       });
     }
 
@@ -1786,6 +1993,14 @@
       [...statuses.keys()].forEach((id) => {
         if (!ids.has(id)) statuses.delete(id);
       });
+      // A focus on a stack that no longer exists (dissolved, or its last
+      // member removed elsewhere) falls back to the whole board -- silently
+      // holding a dead filter would show everything while claiming one stack.
+      if (stackFocus && !stacks.some((s) => s.id === stackFocus)) {
+        stackFocus = null;
+        resetSearch();
+        emit('stack_focus', { id: null });
+      }
       render();
     };
 
@@ -1840,10 +2055,18 @@
         });
         updateBar();
       },
+      // The focused stack, and a way to set it from outside: the host
+      // adapter reads it to decide whether a freshly created block should
+      // join a stack at birth, and a future deep link would enter through
+      // the setter.
+      stackFocus: () => stackFocus,
+      focusStack: (id) => id == null
+        ? clearStackFocus() : setStackFocus(String(id)),
       inspect: () => ({
         blocks, links, stacks,
         statuses: Object.fromEntries(statuses),
         collapsed: [...collapsed],
+        stackFocus: stackFocus,
         selection: [...selection]
       })
     };

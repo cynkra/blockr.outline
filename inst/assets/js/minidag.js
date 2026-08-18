@@ -76,8 +76,33 @@
 
   function createInstance(rootEl) {
     const ns = rootEl.dataset.ns;
-    const push = (name, payload) =>
+    const pushRaw = (name, payload) =>
       Shiny.setInputValue(ns + name, payload, { priority: 'event' });
+
+    /* Join-at-birth: while the rail has a stack focused, a block created
+     * from that view joins the focused stack -- otherwise it would land
+     * outside the frame and vanish from the view the instant it landed
+     * (the board's own rule is that append never touches stacks; membership
+     * moves by dragging a row into the frame).
+     *
+     * All three creation messages pass through here, so this is the one
+     * choke point: arm on the way out, and when the next model arrives with
+     * blocks that were not there before, send the join. Armed state expires
+     * with the focus (see `stack_focus` in `emit`), on the first model that
+     * brings new blocks, or after 90s -- a block browser left open and
+     * abandoned should not tag along on tomorrow's add.
+     */
+    let pendingJoin = null;      // { stack, at } while an add is in flight
+    let lastBlockIds = null;     // ids of the previous model, for the diff
+
+    const push = (name, payload) => {
+      if (name === 'block_insert' || name === 'block_add' ||
+          name === 'block_append') {
+        const f = rail.stackFocus();
+        pendingJoin = f ? { stack: f, at: Date.now() } : null;
+      }
+      pushRaw(name, payload);
+    };
 
     // the renderer hands the model back on every query, so arity is always
     // read off the board as it stands, never off a stale copy
@@ -188,6 +213,12 @@
         if (name === 'block_add') {
           requestAdd(rootEl.querySelector('.md-addrow'));
           return;
+        }
+        // Leaving or moving the focus disarms join-at-birth: the add was
+        // meant for the view it was started in. Forwarded anyway -- R does
+        // not observe it today, but a deep link would enter here.
+        if (name === 'stack_focus') {
+          pendingJoin = null;
         }
         push(name, payload);
       },
@@ -1135,6 +1166,30 @@
       rail.setData({ blocks, links, stacks });
       paintChrome();
       refreshMenu();
+
+      // Join-at-birth lands here: the model that brings the created block is
+      // the first place its id exists. Joined only if it arrived loose --
+      // a paste of a whole stack brings its own membership and keeps it.
+      const ids = new Set(blocks.map((b) => b.id));
+      if (pendingJoin && lastBlockIds) {
+        if (Date.now() - pendingJoin.at > 90000) {
+          pendingJoin = null;
+        } else {
+          const fresh = blocks.map((b) => b.id)
+            .filter((id) => !lastBlockIds.has(id));
+          if (fresh.length) {
+            const stacked = new Set(stacks.flatMap((s) => asArr(s.blocks)));
+            const join = fresh.filter((id) => !stacked.has(id));
+            if (join.length && stacks.some((s) => s.id === pendingJoin.stack)) {
+              pushRaw('stack_join', {
+                blocks: join, stack: pendingJoin.stack
+              });
+            }
+            pendingJoin = null;
+          }
+        }
+      }
+      lastBlockIds = ids;
     };
 
     const setRegistry = (msg) => {
