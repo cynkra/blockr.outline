@@ -1141,8 +1141,32 @@ render_pptx_officer <- function(sects, file, title, template = NULL,
       next
     }
 
+    # A composed slide claims its WHOLE slide. Title, subtitle, footnote and
+    # layout are the block's own authored state, so the deck adds none of
+    # its usual chrome -- the block's name on the picker row is a label for
+    # the list, not this slide's title, and a note would double the slide's
+    # own text. The one-up wrapper below is for exhibits; this is a slide.
+    if (inherits(exhibit, "blockr_slide")) {
+      placed <- tryCatch(
+        slide_pptx_add(doc, exhibit, template = template),
+        error = function(e) {
+          cat("[deck] slide block '", lab(sects$ids[i], id_labels(sects)),
+              "' failed: ", conditionMessage(e), "\n", sep = "",
+              file = stderr())
+          NULL
+        }
+      )
+      if (!is.null(placed)) {
+        doc <- placed
+        n_slides <- n_slides + 1L
+      }
+      next
+    }
+
     nm <- sects$names[i]
     nm <- if (is.character(nm) && length(nm) == 1L && nzchar(nm)) nm
+
+    desc <- coal(sects$descriptions[i], "")
 
     # A table gets as many slides as it needs. blockr.viz owns that
     # arithmetic -- measured column widths, the font step-down, where to

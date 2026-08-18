@@ -7,6 +7,11 @@
 #   summ ──────────┘
 #   (no input) ────────> slide_txt    (bullets, zero inputs)
 #
+# ...plus the SLIDES EXTENSION over the same board, seeded with all three
+# slide blocks and the raw summary: composed slides pass through with their
+# own chrome, the plain pick gets the deck's classic one-up slide -- both
+# in one download.
+#
 # What to try:
 #   * Open a slide block: the settings fields sit above a live 16:9 preview
 #     painted from the SAME inch geometry the pptx download places.
@@ -108,6 +113,12 @@ board <- new_dock_board(
     list(from = "summ", to = "slide_one", input = "x"),
     list(from = "summ", to = "slide_two", input = "x"),
     list(from = "data", to = "slide_two", input = "y")
+  ),
+  extensions = list(
+    blockr.outline::new_slides_extension(
+      title = "Iris topline",
+      slides = c("slide_one", "slide_txt", "summ")
+    )
   )
 )
 

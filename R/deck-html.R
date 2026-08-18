@@ -82,6 +82,14 @@ render_deck_html <- function(sects, file, title) {
       next
     }
 
+    # A composed slide (a slide block's value) brings its own canvas --
+    # painted by the same geometry as its pptx -- so the deck's frame,
+    # title and footer chrome stay off it, exactly as on the officer side.
+    if (inherits(exhibit, "blockr_slide")) {
+      slides[[length(slides) + 1L]] <- list(full = slide_html(exhibit))
+      next
+    }
+
     slides[[length(slides) + 1L]] <- list(
       title = na_blank(sects$names[i]),
       body = deck_html_exhibit(exhibit)
@@ -216,6 +224,13 @@ deck_html_title_slide <- function(title) {
 }
 
 deck_html_slide <- function(slide, k, n, deck_title) {
+
+  # The composed slide IS the canvas: same 1280x720 logical size, scaled by
+  # the deck's own script like any other slide.
+  if (!is.null(slide$full)) {
+    return(div(class = "bd-slide", div(class = "bd-canvas", slide$full)))
+  }
+
   div(
     class = "bd-slide",
     div(
