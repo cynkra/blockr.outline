@@ -295,10 +295,19 @@ slides_js <- function(ns) {
         if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
       });
 
+      // The pointer's half of the row decides which gap the drop targets;
+      // the indicator and the drop share this one rule, so the line never
+      // promises a spot the drop will not use. (The lower half meaning
+      // after-the-row is also the only way to reach the last position.)
+      function dropAfter(e, row) {
+        var box = row.getBoundingClientRect();
+        return (e.clientY - box.top) > box.height / 2;
+      }
+
       document.addEventListener('dragend', function() {
         dragged = null;
         document.querySelectorAll('.blockr-sld-row').forEach(function(r) {
-          r.classList.remove('is-dragging', 'is-over');
+          r.classList.remove('is-dragging', 'is-over', 'is-over-top');
         });
       });
 
@@ -307,10 +316,11 @@ slides_js <- function(ns) {
         var row = e.target.closest ? e.target.closest('.blockr-sld-row') : null;
         if (!row) return;
         e.preventDefault();
+        var after = dropAfter(e, row);
         document.querySelectorAll('.blockr-sld-row').forEach(function(r) {
-          r.classList.remove('is-over');
+          r.classList.remove('is-over', 'is-over-top');
         });
-        row.classList.add('is-over');
+        row.classList.add(after ? 'is-over' : 'is-over-top');
       });
 
       document.addEventListener('drop', function(e) {
@@ -318,13 +328,9 @@ slides_js <- function(ns) {
         var row = e.target.closest ? e.target.closest('.blockr-sld-row') : null;
         if (!row) return;
         e.preventDefault();
-        // Drop on the lower half of a row means after it, which is the only
-        // way to reach the last position.
-        var box = row.getBoundingClientRect();
-        var after = (e.clientY - box.top) > box.height / 2;
         Shiny.setInputValue(
           MOVE,
-          {id: dragged, target: row.dataset.blk, after: after},
+          {id: dragged, target: row.dataset.blk, after: dropAfter(e, row)},
           {priority: 'event'}
         );
         dragged = null;
