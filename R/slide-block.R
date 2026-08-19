@@ -134,14 +134,21 @@ new_slide_block <- function(layout = "exhibit-full", title = "",
           )
         )
 
-        output$download <- shiny::downloadHandler(
-          filename = function() {
+        dl_name <- function(ext) {
+          function() {
             nm <- if (nzchar(tit())) tit() else "slide"
-            paste0(gsub("[^[:alnum:]]+", "-", tolower(nm)), ".pptx")
-          },
-          content = function(file) {
-            write_slide_pptx(cur_slide(), file)
+            paste0(gsub("[^[:alnum:]]+", "-", tolower(nm)), ".", ext)
           }
+        }
+
+        output$dl_pptx <- shiny::downloadHandler(
+          filename = dl_name("pptx"),
+          content = function(file) write_slide_pptx(cur_slide(), file)
+        )
+
+        output$dl_html <- shiny::downloadHandler(
+          filename = dl_name("html"),
+          content = function(file) write_slide_html(cur_slide(), file)
         )
 
         list(
@@ -188,12 +195,14 @@ new_slide_block <- function(layout = "exhibit-full", title = "",
         shiny::uiOutput(shiny::NS(id, "text_field")),
         shiny::uiOutput(shiny::NS(id, "paginate_field")),
         htmltools::div(
-          style = "font-size:12px;color:#6b7280;margin-bottom:8px;",
-          shiny::textOutput(shiny::NS(id, "capacity"), inline = TRUE)
-        ),
-        shiny::downloadButton(
-          shiny::NS(id, "download"), "Download",
-          class = "btn-sm"
+          style = paste0(
+            "display:flex;align-items:center;gap:10px;margin-bottom:8px;"
+          ),
+          htmltools::div(
+            style = "font-size:12px;color:#6b7280;flex:1 1 auto;",
+            shiny::textOutput(shiny::NS(id, "capacity"), inline = TRUE)
+          ),
+          slide_dl_menu(id)
         )
       )
     },
@@ -216,5 +225,89 @@ block_output.slide_block <- function(x, result, session) {
 block_ui.slide_block <- function(id, x, ...) {
   htmltools::tagList(
     shiny::uiOutput(shiny::NS(id, "result"))
+  )
+}
+
+
+# The download control: the table block's single toggle, verbatim in shape
+# -- one 30px icon button that is the <summary> of a <details> menu, no JS
+# (the open / close, keyboard handling and focus order are the browser's).
+# The chrome CSS is restated from blockr.viz R/html-table.R dl_chrome_css()
+# the way chart.css restates it: blockr.viz is a Suggests, and a block's
+# controls must not depend on which other blocks share the page.
+slide_dl_menu <- function(id) {
+
+  dl_icon <- htmltools::HTML(paste0(
+    '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" ',
+    'stroke="currentColor" stroke-width="1.6" stroke-linecap="round" ',
+    'stroke-linejoin="round">',
+    '<path d="M8 2.5 V10 M4.8 7 L8 10.2 L11.2 7"/>',
+    '<path d="M2.5 11.5 V12.8 A1.2 1.2 0 0 0 3.7 14 H12.3 ',
+    'A1.2 1.2 0 0 0 13.5 12.8 V11.5"/></svg>'
+  ))
+
+  item <- function(output_id, label) {
+    htmltools::tags$a(
+      id = shiny::NS(id, output_id),
+      class = "blockr-dl-item shiny-download-link",
+      href = "", target = "_blank", download = NA,
+      title = paste0("Download as ", label),
+      `aria-label` = paste0("Download as ", label),
+      label
+    )
+  }
+
+  htmltools::tagList(
+    htmltools::tags$style(htmltools::HTML("
+a.blockr-dl-xlsx, summary.blockr-dl-xlsx { appearance: none;
+  box-sizing: border-box; display: inline-flex; align-items: center;
+  justify-content: center; width: 30px; height: 30px; flex: 0 0 auto;
+  padding: 0; margin: 0;
+  border: 1px solid var(--blockr-color-border, #e5e7eb);
+  border-radius: 4px;
+  background-color: var(--blockr-color-bg-input, #f9fafb);
+  color: var(--blockr-grey-500, #6b7280); line-height: 1; cursor: pointer;
+  transition: border-color 0.12s, background-color 0.12s, color 0.12s; }
+a.blockr-dl-xlsx:hover, summary.blockr-dl-xlsx:hover {
+  background-color: #fff;
+  border-color: var(--blockr-grey-300, #d1d5db);
+  color: var(--blockr-color-text-primary, #374151);
+  text-decoration: none; }
+summary.blockr-dl-xlsx:focus-visible { outline: none;
+  border-color: var(--blockr-color-primary, #2563eb);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12); }
+a.blockr-dl-xlsx svg, summary.blockr-dl-xlsx svg { display: block; }
+details.blockr-dl-menu { position: relative; flex: 0 0 auto; }
+details.blockr-dl-menu > summary { list-style: none; user-select: none; }
+details.blockr-dl-menu > summary::-webkit-details-marker { display: none; }
+details.blockr-dl-menu > summary::marker { content: \"\"; }
+details.blockr-dl-menu[open] > summary { background-color: #fff;
+  border-color: var(--blockr-grey-300, #d1d5db);
+  color: var(--blockr-color-text-primary, #374151); }
+.blockr-dl-menu-list { position: absolute; top: calc(100% + 4px); right: 0;
+  z-index: 20; min-width: 172px; padding: 4px;
+  border: 1px solid var(--blockr-color-border, #e5e7eb); border-radius: 6px;
+  background-color: #fff; box-shadow: 0 6px 16px rgba(17, 24, 39, 0.12);
+  display: flex; flex-direction: column; gap: 1px; }
+a.blockr-dl-item { display: block; padding: 6px 10px; border-radius: 4px;
+  font-size: var(--blockr-font-size-sm, 0.8125rem);
+  color: var(--blockr-color-text-primary, #111827); text-decoration: none;
+  white-space: nowrap; cursor: pointer; }
+a.blockr-dl-item:hover {
+  background-color: var(--blockr-color-bg-hover, #f3f4f6); }
+    ")),
+    htmltools::tags$details(
+      class = "blockr-dl-menu",
+      htmltools::tags$summary(
+        class = "blockr-dl-xlsx",
+        title = "Download", `aria-label` = "Download",
+        dl_icon
+      ),
+      htmltools::tags$div(
+        class = "blockr-dl-menu-list", role = "menu",
+        item("dl_pptx", "PowerPoint (.pptx)"),
+        item("dl_html", "Web page (.html)")
+      )
+    )
   )
 }

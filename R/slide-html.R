@@ -230,3 +230,62 @@ slide_html_fit <- function(x) {
     ))
   )
 }
+
+
+#' Write a composed slide to a standalone HTML file
+#'
+#' The HTML sibling of [write_slide_pptx()]: the same canvas the block
+#' preview paints -- the same inch geometry at 96px per inch -- written as
+#' one self-contained file, scaled to the window like the HTML deck's
+#' slides. Something you can send.
+#'
+#' @param x A `blockr_slide`.
+#' @param file Path to write the `.html` to.
+#'
+#' @return `file`, invisibly.
+#'
+#' @export
+write_slide_html <- function(x, file) {
+
+  canvas <- htmltools::renderTags(slide_html(x))
+
+  writeLines(c(
+    "<!DOCTYPE html>",
+    "<html lang=\"en\">",
+    "<head>",
+    "<meta charset=\"utf-8\">",
+    "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">",
+    paste0("<title>", htmltools::htmlEscape(coal(x$title, "Slide")),
+           "</title>"),
+    "<style>",
+    "html, body { margin: 0; height: 100%; background: #eef0f3; }",
+    "body { display: flex; align-items: center; justify-content: center; }",
+    ".bslide-stage { overflow: hidden; border-radius: 6px;",
+    "  box-shadow: 0 1px 2px rgba(15,23,42,.06), 0 12px 32px rgba(15,23,42,.10); }",
+    "</style>",
+    "</head>",
+    "<body>",
+    "<div class=\"bslide-stage\">",
+    as.character(canvas$html),
+    "</div>",
+    "<script>",
+    "(function() {",
+    "  var st = document.querySelector('.bslide-stage');",
+    "  var c = st.querySelector('.bslide-canvas');",
+    "  function fit() {",
+    "    var s = Math.min((window.innerWidth - 48) / 1280,",
+    "                     (window.innerHeight - 48) / 720);",
+    "    c.style.transform = 'scale(' + s + ')';",
+    "    st.style.width = (1280 * s) + 'px';",
+    "    st.style.height = (720 * s) + 'px';",
+    "  }",
+    "  fit();",
+    "  window.addEventListener('resize', fit);",
+    "})();",
+    "</script>",
+    "</body>",
+    "</html>"
+  ), file)
+
+  invisible(file)
+}
