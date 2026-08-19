@@ -214,6 +214,29 @@ minidag_ext_srv <- function(id, board, update, actions, ...) {
 
         upd$views <- minidag_place_delta(board$board, blk_id, from)
 
+        # An insert made inside a focused stack view joins that stack in the
+        # SAME update: landing loose first and joining a roundtrip later left
+        # the block outside the focused view for a beat and cost a second
+        # full model push on a large board.
+        stk <- as.character(msg$stack)
+        stks <- blockr.core::board_stacks(board$board)
+
+        if (length(stk) == 1L && nzchar(stk) && stk %in% names(stks)) {
+          upd$stacks <- list(
+            mod = stats::setNames(
+              list(
+                list(
+                  blocks = union(
+                    blockr.core::stack_blocks(stks[[stk]]),
+                    blk_id
+                  )
+                )
+              ),
+              stk
+            )
+          )
+        }
+
         update(upd)
       })
 

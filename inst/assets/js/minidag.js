@@ -885,7 +885,17 @@
 
     const commitPick = (meta, originId) => {
       closePicker();
-      push('block_insert', { type: meta.type, from: originId || null });
+      // An insert from inside a focused stack view names the stack, so R
+      // can add the block AND its membership in one board update -- landing
+      // loose and joining a roundtrip later left the block outside the view
+      // for a beat and cost a second full model push on a large board. The
+      // adapter's pendingJoin (see `push`) stays as the fallback for add
+      // paths that cannot carry the hint.
+      push('block_insert', {
+        type: meta.type,
+        from: originId || null,
+        stack: rail.stackFocus() || null
+      });
     };
 
     // What the renderer's "Add a block" row and the board menu's "Add a block"

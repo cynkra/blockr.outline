@@ -183,7 +183,7 @@
       headEl.appendChild(crumbEl);
     }
 
-    let searchEl = null, hitsEl = null;
+    let searchEl = null, hitsEl = null, foldBtn = null;
     if (opts.search) {
       const searchRow = document.createElement('div');
       searchRow.className = 'md-search-row';
@@ -195,6 +195,25 @@
       hitsEl = document.createElement('span');
       hitsEl.className = 'md-hits';
       searchRow.appendChild(hitsEl);
+      // Fold or unfold EVERY stack at once: collapsed-all reads as a table
+      // of contents of the board. Lives beside the search because both are
+      // about the whole list; hidden inside a focused view, where the
+      // folding is the view's own doing. `updateFold` (called from render)
+      // keeps its title and pressed state honest.
+      if (opts.stacks) {
+        foldBtn = document.createElement('button');
+        foldBtn.type = 'button';
+        foldBtn.className = 'md-fold';
+        foldBtn.innerHTML = opts.stackIcon;
+        foldBtn.addEventListener('click', () => {
+          const all = stacks.length &&
+            stacks.every((s) => collapsed.has(s.id));
+          if (all) collapsed.clear();
+          else stacks.forEach((s) => collapsed.add(s.id));
+          render();
+        });
+        searchRow.appendChild(foldBtn);
+      }
       if (opts.addButton) {
         const addBtn = document.createElement('button');
         addBtn.className = 'md-add';
@@ -371,6 +390,22 @@
 
     const setStackFocus = (id) => {
       if (stackFocus === id) return;
+      // Folding EVERY stack is a one-time overview: it exists to pick a
+      // stack from the table of contents, so diving into one consumes it --
+      // leaving the focus lands on the full list, not back on the fold.
+      // Individually collapsed stacks (a deliberate chevron each) survive.
+      if (stacks.length && stacks.every((s) => collapsed.has(s.id))) {
+        collapsed.clear();
+      }
+      // A focus is a view change, not an action on a selection -- and the
+      // double-click that enters it BEGINS with a plain click, which on a
+      // stack header means "select the whole group". Without this you
+      // arrived in the focused view with every member ringed and the
+      // action bar up, which read as the view having done something.
+      if (selection.size) {
+        selection.clear();
+        selAnchor = null;
+      }
       stackFocus = id;
       resetSearch();
       emit('stack_focus', { id: id });
@@ -385,9 +420,18 @@
       render();
     };
 
+    const updateFold = () => {
+      if (!foldBtn) return;
+      foldBtn.hidden = !stacks.length || !!stackFocus;
+      const all = stacks.length && stacks.every((x) => collapsed.has(x.id));
+      foldBtn.classList.toggle('active', !!all);
+      foldBtn.title = all ? 'Expand all' : 'Collapse all';
+    };
+
     const updateCrumb = () => {
       const s = focusedStack();
       rootEl.classList.toggle('md-focused', !!s);
+      updateFold();
       if (searchEl) {
         searchEl.placeholder = s
           ? 'Search within ' + s.name + '…' : opts.searchPlaceholder;
@@ -396,17 +440,10 @@
       crumbEl.hidden = !s;
       crumbEl.innerHTML = '';
       if (!s) return;
-      const root = document.createElement('button');
-      root.type = 'button';
-      root.className = 'md-crumb-root';
-      root.textContent = opts.crumbRootText;
-      root.title = 'Back to the whole ' + opts.crumbRootText.toLowerCase();
-      root.addEventListener('click', clearStackFocus);
-      crumbEl.appendChild(root);
-      const sep = document.createElement('span');
-      sep.className = 'md-crumb-sep';
-      sep.textContent = '›';
-      crumbEl.appendChild(sep);
+      // One pill, one ×. This started life as a "Board › <stack>" breadcrumb,
+      // but nothing else in the app navigates by breadcrumb, so it read as a
+      // new idiom to learn. A filter pill is one the search row already
+      // taught: something is narrowing the list, and × takes it off.
       const cur = document.createElement('span');
       cur.className = 'md-crumb-cur';
       if (s.color) {
@@ -423,21 +460,18 @@
       nm.textContent = s.name;
       nm.title = s.name;   // readable even when ellipsized
       cur.appendChild(nm);
-      crumbEl.appendChild(cur);
-      const badge = document.createElement('span');
-      badge.className = 'md-badge';
-      badge.textContent = s.blocks.length + ' ' + opts.stackUnit;
-      crumbEl.appendChild(badge);
-      const spring = document.createElement('span');
-      spring.className = 'md-spring';
-      crumbEl.appendChild(spring);
+      const n = document.createElement('span');
+      n.className = 'md-crumb-n';
+      n.textContent = s.blocks.length + ' ' + opts.stackUnit;
+      cur.appendChild(n);
       const x = document.createElement('button');
       x.type = 'button';
       x.className = 'md-crumb-x';
       x.textContent = '×';
       x.title = 'Back to the whole ' + opts.crumbRootText.toLowerCase();
       x.addEventListener('click', clearStackFocus);
-      crumbEl.appendChild(x);
+      cur.appendChild(x);
+      crumbEl.appendChild(cur);
     };
 
     const displayRows = () => G.displayRows(drawModel());
@@ -1136,6 +1170,15 @@
         selectStack(stack, e.metaKey || e.ctrlKey || e.shiftKey);
       });
 
+      // Same drill-in double-click as the expanded header (the collapsed row
+      // has no rename, so the whole row carries it).
+      if (opts.focusView && !doorway) {
+        el.addEventListener('dblclick', (e) => {
+          if (e.target.closest('button')) return;
+          setStackFocus(stack.id);
+        });
+      }
+
       return el;
     };
 
@@ -1228,6 +1271,18 @@
         if (!opts.stacks) return;
         selectStack(stack, e.metaKey || e.ctrlKey || e.shiftKey);
       });
+
+      // Double-click on the header toggles the focus -- "double-click drills
+      // in" is muscle memory from every file manager, and the button alone
+      // was only discoverable, not intuitive. The NAME keeps its own
+      // double-click (rename), so the gesture lives on the rest of the row.
+      if (opts.focusView) {
+        el.addEventListener('dblclick', (e) => {
+          if (e.target.closest('button, .md-name') || e.target.isContentEditable) return;
+          if (stackFocus === stack.id) clearStackFocus();
+          else setStackFocus(stack.id);
+        });
+      }
 
       // The way INTO the focused view -- always visible, quiet until
       // hovered. Not the header click: that means "select the group" and the
@@ -1497,6 +1552,28 @@
         searchEl.blur();
       });
     }
+
+    // The same Esc from ANYWHERE in the page, not only inside the search
+    // box: the focus pill is list-level state, so the key that means "back
+    // out" cannot depend on where the keyboard focus happens to sit. Fields
+    // keep their own Esc (rename and the search input handle it locally and
+    // are skipped here), an open picker is the first layer, and a minidag on
+    // a hidden dock tab stays out of it (zero client rects).
+    // Capture phase, deliberately: a rename's own Esc handler blurs the
+    // field, and blurring flips `isContentEditable` off BEFORE the event
+    // bubbles up here -- so at bubble time the guard below would read the
+    // field as plain and peel a layer the user never aimed at. At capture
+    // time the target still is what the user saw.
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      const t = e.target;
+      if (t && (t.isContentEditable ||
+        /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName || ''))) return;
+      if (!rootEl.getClientRects().length) return;
+      if (closePicker) { closePicker(); return; }
+      if (searchEl && searchEl.value) { searchEl.value = ''; applySearch(); return; }
+      if (stackFocus) clearStackFocus();
+    }, true);
 
     /* ---- selection ---- */
 
