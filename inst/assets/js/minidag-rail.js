@@ -1559,27 +1559,15 @@
       });
     }
 
-    // The same Esc from ANYWHERE in the page, not only inside the search
-    // box: the focus pill is list-level state, so the key that means "back
-    // out" cannot depend on where the keyboard focus happens to sit. Fields
-    // keep their own Esc (rename and the search input handle it locally and
-    // are skipped here), an open picker is the first layer, and a minidag on
-    // a hidden dock tab stays out of it (zero client rects).
-    // Capture phase, deliberately: a rename's own Esc handler blurs the
-    // field, and blurring flips `isContentEditable` off BEFORE the event
-    // bubbles up here -- so at bubble time the guard below would read the
-    // field as plain and peel a layer the user never aimed at. At capture
-    // time the target still is what the user saw.
-    document.addEventListener('keydown', (e) => {
-      if (e.key !== 'Escape') return;
-      const t = e.target;
-      if (t && (t.isContentEditable ||
-        /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName || ''))) return;
-      if (!rootEl.getClientRects().length) return;
-      if (closePicker) { closePicker(); return; }
-      if (searchEl && searchEl.value) { searchEl.value = ''; applySearch(); return; }
-      if (stackFocus) clearStackFocus();
-    }, true);
+    // No document-level Esc: a global key hook was the one piece of this
+    // feature with app-wide reach, and the gain was minimal next to the
+    // exits that need no reach at all -- the pill's ×, the header's
+    // double-click toggle, and Esc inside the search box (above), which
+    // peels query first, then focus. If a page-wide Esc ever comes back,
+    // it must be registered in the CAPTURE phase: a rename's own Esc
+    // handler blurs the field, and blurring flips `isContentEditable` off
+    // before the event bubbles, so a bubble-phase guard misreads the field
+    // as plain and steals the key mid-rename.
 
     /* ---- selection ---- */
 

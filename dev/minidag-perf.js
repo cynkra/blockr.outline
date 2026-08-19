@@ -171,11 +171,8 @@ const pwPath = () => {
     page.click('.minidag .md-crumb-x'));
   await act('focus enter (dblclick header)', 1, () =>
     $head('Laboratory').dblclick({ position: { x: 8, y: 12 } }));
-  await act('focus exit (Esc on body)', 1, async () => {
-    await page.evaluate(() =>
-      document.activeElement && document.activeElement.blur());
-    await page.keyboard.press('Escape');
-  });
+  await act('focus exit (dblclick again)', 1, () =>
+    $head('Laboratory').dblclick({ position: { x: 8, y: 12 } }));
 
   // Fold.
   await act('fold all', 1, () => page.click('.minidag .md-fold'));
