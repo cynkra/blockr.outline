@@ -80,60 +80,12 @@ new_slide_block <- function(layout = "exhibit-full", title = "",
           dot_arg_refs(...args)
         )
 
-        # The Details field: ONE label whatever the layout, because it is
-        # one field -- the takeaway, the bullets, the kicker are the same
-        # words reshaped, and the constant name is what says so. Hidden
-        # only where no layout slot reads it.
-        output$text_field <- shiny::renderUI({
-          spec <- slide_layout_spec(lay())
-          if (is.null(spec$text)) {
-            return(NULL)
-          }
-          htmltools::tagList(
-            shiny::textAreaInput(
-              session$ns("text"), "Details",
-              value = shiny::isolate(txt()), rows = 3L, width = "100%"
-            ),
-            htmltools::div(
-              style = paste0("font-size:11px;color:#9ca3af;",
-                             "margin:-6px 0 10px;"),
-              "Kept across layouts \u00b7 \u201c- \u201d starts a bullet",
-              if (isTRUE(slide_layout_spec(lay())$build(
-                    rect(0, 0, 1, 1))[[1L]]$numbered)) " (numbered here)",
-              " \u00b7 **bold** *italic*"
-            )
-          )
-        })
-
-        # Compare's panel headings, only there.
-        output$labels_field <- shiny::renderUI({
-          if (!isTRUE(slide_layout_spec(lay())$labels)) {
-            return(NULL)
-          }
-          shiny::textInput(
-            session$ns("labels"), "Panel labels (left | right)",
-            value = shiny::isolate(lbl()), width = "100%"
-          )
-        })
-
-        # The pagination toggle exists only where pagination can: a layout
-        # whose sole content slot is the exhibit (no option, no control --
-        # the no-gear-when-no-options rule).
-        output$paginate_field <- shiny::renderUI({
-          spec <- slide_layout_spec(lay())
-          kinds <- chr_ply(
-            spec$build(rect(0, 0, 1, 1)),
-            function(s) s$kind
-          )
-          if (!identical(kinds, "exhibit")) {
-            return(NULL)
-          }
-          shiny::checkboxInput(
-            session$ns("paginate"),
-            "Page a long table over further slides",
-            value = shiny::isolate(pgn())
-          )
-        })
+        # The layout-dependent fields are STATIC -- rendered once in the
+        # UI function, shown / hidden client-side by the tile click (see
+        # slide_layout_picker). A layout switch must not rebuild the
+        # Details textarea: the field's whole story is that its words
+        # survive the switch, and a teardown-and-rebuild flashes exactly
+        # the opposite.
 
         # The capacity indicator (spec req. 12): the quiet meter -- one
         # cell per slot the layout expects, filled left to right, an amber
@@ -232,7 +184,8 @@ new_slide_block <- function(layout = "exhibit-full", title = "",
     },
 
     function(id) {
-      htmltools::tagList(
+      htmltools::div(
+        class = "slb-root",
         # The layout picker: schematic tiles (the chart block's type-picker
         # pattern), drawn from the layouts' own slot rects. Clicking a tile
         # sets input$layout, same as the select it replaces.
@@ -248,9 +201,40 @@ new_slide_block <- function(layout = "exhibit-full", title = "",
           shiny::NS(id, "footnote"), "Footnote", value = footnote,
           width = "100%"
         ),
-        shiny::uiOutput(shiny::NS(id, "text_field")),
-        shiny::uiOutput(shiny::NS(id, "labels_field")),
-        shiny::uiOutput(shiny::NS(id, "paginate_field")),
+        slide_layout_field(
+          "text", layout,
+          htmltools::tagList(
+            shiny::textAreaInput(
+              shiny::NS(id, "text"), "Details",
+              value = text, rows = 3L, width = "100%"
+            ),
+            htmltools::div(
+              style = "font-size:11px;color:#9ca3af;margin:-6px 0 10px;",
+              "Kept across layouts \u00b7 \u201c- \u201d starts a bullet",
+              slide_layout_field(
+                "numbered", layout,
+                htmltools::span(" (numbered here)"),
+                inline = TRUE
+              ),
+              " \u00b7 **bold** *italic*"
+            )
+          )
+        ),
+        slide_layout_field(
+          "labels", layout,
+          shiny::textInput(
+            shiny::NS(id, "labels"), "Panel labels (left | right)",
+            value = labels, width = "100%"
+          )
+        ),
+        slide_layout_field(
+          "paginate", layout,
+          shiny::checkboxInput(
+            shiny::NS(id, "paginate"),
+            "Page a long table over further slides",
+            value = isTRUE(paginate)
+          )
+        ),
         htmltools::div(
           style = paste0(
             "display:flex;align-items:center;gap:10px;margin-bottom:8px;"
@@ -285,6 +269,25 @@ block_ui.slide_block <- function(id, x, ...) {
   )
 }
 
+
+# A layout-dependent control, rendered ONCE: wrapped with the
+# space-separated list of layout ids it belongs to (data-layouts), initial
+# visibility resolved server-side from the ctor's layout, every later
+# switch toggled client-side by the picker. The wrapper is a plain div
+# (span when inline), so the control inside keeps its identity -- and its
+# value -- for the life of the block.
+slide_layout_field <- function(feature, layout, tag, inline = FALSE) {
+
+  ids <- slide_layout_features()[[feature]]
+  shown <- layout %in% strsplit(ids, " ", fixed = TRUE)[[1L]]
+
+  fn <- if (inline) htmltools::span else htmltools::div
+  fn(
+    `data-layouts` = ids,
+    style = if (!shown) "display:none;",
+    tag
+  )
+}
 
 # The download control: the table block's single toggle, verbatim in shape
 # -- one 30px icon button that is the <summary> of a <details> menu, no JS

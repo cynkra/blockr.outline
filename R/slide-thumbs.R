@@ -85,6 +85,16 @@ slide_layout_picker <- function(input_id, selected) {
         "g.querySelectorAll('.slb-tile').forEach(function(b){",
         "b.classList.remove('slb-tile-active')});",
         "this.classList.add('slb-tile-active');",
+        # Show / hide the layout-dependent controls CLIENT-SIDE: they are
+        # rendered once and only their visibility follows the layout, so a
+        # switch never rebuilds the fields (no flash, focus survives, and
+        # the Details value visibly stays -- which is the point of the
+        # shared field).
+        "var v=this.dataset.value,",
+        "r=this.closest('.slb-root')||document;",
+        "r.querySelectorAll('[data-layouts]').forEach(function(el){",
+        "el.style.display=el.dataset.layouts.split(' ').indexOf(v)>=0",
+        "?'':'none'});",
         "Shiny.setInputValue(g.dataset.input, this.dataset.value);"
       ),
       slide_layout_thumb(id),

@@ -276,3 +276,25 @@ slide_slots <- function(layout, has_subtitle = TRUE, frame = NULL) {
 
   c(chrome, spec$build(body))
 }
+
+
+# Which layouts show which optional controls -- computed from the registry,
+# so a new layout brings its visibility along. Space-separated id lists for
+# the picker's client-side show / hide (see slide_layout_picker()).
+slide_layout_features <- function() {
+  lays <- slide_layouts()
+  ids <- names(lays)
+  has <- function(p) paste(ids[vapply(ids, p, logical(1L))], collapse = " ")
+  list(
+    text = has(function(i) !is.null(lays[[i]]$text)),
+    labels = has(function(i) isTRUE(lays[[i]]$labels)),
+    paginate = has(function(i) {
+      kinds <- chr_ply(lays[[i]]$build(rect(0, 0, 1, 1)), `[[`, "kind")
+      identical(kinds, "exhibit")
+    }),
+    numbered = has(function(i) {
+      slots <- lays[[i]]$build(rect(0, 0, 1, 1))
+      any(vapply(slots, function(s) isTRUE(s$numbered), logical(1L)))
+    })
+  )
+}
