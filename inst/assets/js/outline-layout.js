@@ -1,8 +1,8 @@
-/* Minidag rail geometry: the pure part of the minidag.
+/* Outline rail geometry: the pure part of the outline.
  *
  * model -> display rows -> lanes and edges. No DOM, no Shiny, no side
  * effects, so it can be exercised by `node --test` (see tests/js/) as well as
- * by the browser. `minidag.js` owns everything that draws.
+ * by the browser. `outline.js` owns everything that draws.
  *
  * model = {
  *   blocks:    [{id, name, inputs[], variadic, ...}],
@@ -31,7 +31,7 @@
     module.exports = api;
   }
   if (root) {
-    root.minidagLayout = api;
+    root.outlineLayout = api;
   }
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
@@ -188,7 +188,7 @@
   // non-convex, and a non-convex stack is the one shape the rail cannot draw
   // cleanly -- the frame keeps its rows together, so such a block is pushed
   // above or below the whole group and one of its links has to climb (see
-  // `railModel`). Naming them is what lets the minidag offer the one-click fix:
+  // `railModel`). Naming them is what lets the outline offer the one-click fix:
   // pulling them in is exactly what makes the stack convex again.
   const stackHoles = (model, stack) => {
     const members = new Set(stack.blocks || []);

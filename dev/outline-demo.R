@@ -1,16 +1,16 @@
-# Demo / e2e testbed for the minidag extension: a blockr.dock board that uses
-# minidag INSTEAD of the blockr.dag minidag to configure the workflow.
+# Demo / e2e testbed for the outline extension: a blockr.dock board that uses
+# outline INSTEAD of the blockr.dag outline to configure the workflow.
 #
-# The block set exercises every input arity the minidag distinguishes:
+# The block set exercises every input arity the outline distinguishes:
 #
 #   d1 (dataset, 0 inputs) --> f1 (filter, 1 input) --> h1 (head, 1 input)
 #   d1 + f1                --> m1 (merge, 2 named inputs x / y)
 #   h1 + f1                --> r1 (rbind, variadic)
 #
 # From /workspace:
-#   Rscript blockr.outline/dev/minidag-demo.R        (first free port, 3838:3847)
-#   Rscript blockr.outline/dev/minidag-demo.R 3900   (or pin one, as an argument)
-#   PORT=3839 Rscript blockr.outline/dev/minidag-demo.R       (or as an env var)
+#   Rscript blockr.outline/dev/outline-demo.R        (first free port, 3838:3847)
+#   Rscript blockr.outline/dev/outline-demo.R 3900   (or pin one, as an argument)
+#   PORT=3839 Rscript blockr.outline/dev/outline-demo.R       (or as an env var)
 
 pkgload::load_all("blockr.ui", quiet = TRUE)
 pkgload::load_all("blockr.core", quiet = TRUE)
@@ -50,13 +50,13 @@ port <- local({
 
 options(
   blockr.tabular_display = blockr.ui::html_table_display,
-  # Nothing gets stacked onto the minidag's tab strip. blockr.dock's
+  # Nothing gets stacked onto the outline's tab strip. blockr.dock's
   # `determine_panel_pos()` drops a new panel into the last active group,
-  # and the minidag's group is a candidate unless it is named here (the option
-  # defaults to the DAG alone). The minidag places the blocks IT inserts, so
+  # and the outline's group is a candidate unless it is named here (the option
+  # defaults to the DAG alone). The outline places the blocks IT inserts, so
   # this covers the other paths: the navbar browser, the DAG canvas.
-  # Keyed by MOUNT NAME, hence "minidag" below and in `extensions = `.
-  blockr.visible_extensions = c("dag", "minidag"),
+  # Keyed by MOUNT NAME, hence "outline" below and in `extensions = `.
+  blockr.visible_extensions = c("dag", "outline"),
   shiny.port = port,
   shiny.host = "0.0.0.0"
 )
@@ -112,20 +112,20 @@ board <- new_dock_board(
     )
   ),
   extensions = list(
-    minidag = new_minidag_extension()
+    outline = new_outline_extension()
   ),
-  # Several views, so the minidag's view list has something to organise: the
+  # Several views, so the outline's view list has something to organise: the
   # same block deliberately appears on more than one (h1 on Overview and
   # Detail) and the two merge/bind blocks sit on none, which is the ordinary
   # case on a real board -- they feed something without being shown.
   views = list(
-    Overview = dock_view(c("minidag", "d1", "h1"), name = "Overview"),
-    Detail = dock_view(c("minidag", "f1", "h1", "m1"), name = "Detail"),
-    Wide = dock_view(c("minidag", "r1"), name = "Wide")
+    Overview = dock_view(c("outline", "d1", "h1"), name = "Overview"),
+    Detail = dock_view(c("outline", "f1", "h1", "m1"), name = "Detail"),
+    Wide = dock_view(c("outline", "r1"), name = "Wide")
   ),
   active = "Overview"
 )
 
-cat(sprintf("\nMinidag demo: http://127.0.0.1:%d/\n\n", port))
+cat(sprintf("\nOutline demo: http://127.0.0.1:%d/\n\n", port))
 
 serve(board)

@@ -1,4 +1,4 @@
-#' Minidag board extension
+#' Outline board extension
 #'
 #' A compact, list-shaped alternative to the blockr.dag workflow canvas
 #' (`blockr.dag::new_dag_extension()`): blocks appear as rows in topological
@@ -95,35 +95,35 @@
 #' a menu entry, and naming them here would teach the wrong gesture for the
 #' thing the rail is best at.
 #'
-#' Clearing the minidag's own tick on the view it is shown in removes the panel
+#' Clearing the outline's own tick on the view it is shown in removes the panel
 #' you are clicking in, so that one box arms on the first click and commits on
 #' the second. It is not a one-way door -- blockr.dock's per-view `+` (Add
 #' panel) picker lists extensions alongside blocks.
 #'
-#' @section What the minidag does not do:
+#' @section What the outline does not do:
 #' Creating, renaming, reordering and removing views belongs to the dock's own
 #' navbar, which has had all four since before this extension existed, and whose
 #' new-view flow lets you pick the blocks and extensions to seed a page with.
-#' The minidag says which panels go where, and nothing about the pages
+#' The outline says which panels go where, and nothing about the pages
 #' themselves.
 #'
-#' @section Keeping the minidag clear:
-#' A block added from the minidag is placed by the minidag: appended blocks open
+#' @section Keeping the outline clear:
+#' A block added from the outline is placed by the outline: appended blocks open
 #' beside the block they read from, and a block added with no origin opens
 #' among the other panels. Blocks added by other routes -- the navbar's block
 #' browser, the DAG canvas -- are placed by blockr.dock's
 #' `determine_panel_pos()`, which drops a new panel into the last active
-#' group. The minidag's own group is a candidate for that unless it is named in
+#' group. The outline's own group is a candidate for that unless it is named in
 #' the `blockr.visible_extensions` option, which defaults to the DAG alone.
 #'
-#' So an app that mounts the minidag and wants nothing ever stacked onto it
+#' So an app that mounts the outline and wants nothing ever stacked onto it
 #' names it there, using the **mount name** it gave the extension:
 #'
 #' ```r
-#' options(blockr.visible_extensions = c("dag", "minidag"))
+#' options(blockr.visible_extensions = c("dag", "outline"))
 #'
 #' new_dock_board(
-#'   extensions = list(minidag = new_minidag_extension()),
+#'   extensions = list(outline = new_outline_extension()),
 #'   ...
 #' )
 #' ```
@@ -133,15 +133,15 @@
 #'
 #' @param ... Forwarded to [blockr.dock::new_dock_extension()]
 #'
-#' @return A `minidag_extension` object as constructed by
+#' @return A `outline_extension` object as constructed by
 #' [blockr.dock::new_dock_extension()].
 #'
 #' @export
-new_minidag_extension <- function(...) {
+new_outline_extension <- function(...) {
   blockr.dock::new_dock_extension(
-    minidag_ext_srv,
-    minidag_ext_ui,
-    name = "Minidag",
+    outline_ext_srv,
+    outline_ext_ui,
+    name = "Outline",
     description = paste(
       "Compact list-shaped workflow editor: blocks as rows in topological",
       "order with a commit-graph rail for the connections. Supports the",
@@ -149,78 +149,78 @@ new_minidag_extension <- function(...) {
       "arity, append, remove, stacks, status indicators) in a fraction of",
       "the space."
     ),
-    class = "minidag_extension",
+    class = "outline_extension",
     ...
   )
 }
 
-minidag_ext_ui <- function(id, board, ...) {
+outline_ext_ui <- function(id, board, ...) {
   ns <- shiny::NS(id)
   htmltools::tagList(
-    minidag_js_dep(),
+    outline_js_dep(),
     htmltools::div(
-      id = ns("minidag"),
-      class = "minidag",
+      id = ns("outline"),
+      class = "outline",
       `data-ns` = ns("")
     )
   )
 }
 
-#' HTML dependency for the minidag rail renderer
+#' HTML dependency for the outline rail renderer
 #'
-#' The list+rail editor *without* the board adapter: `minidagRail.create(el,
+#' The list+rail editor *without* the board adapter: `outlineRail.create(el,
 #' adapter)` plus the stylesheet, for a host that drives it with an adapter of
 #' its own. blockr.process uses this to edit a process definition -- its nodes
 #' are steps and its edges are dependencies -- with the same rows, rail,
 #' dots and gestures the board editor uses.
 #'
-#' See the header of `inst/assets/js/minidag-rail.js` for the adapter
+#' See the header of `inst/assets/js/outline-rail.js` for the adapter
 #' contract.
 #'
 #' @return An [htmltools::htmlDependency()] list.
 #'
 #' @export
-minidag_rail_dep <- memoise0(function() {
+outline_rail_dep <- memoise0(function() {
   htmltools::tagList(
-    minidag_css_dep(),
+    outline_css_dep(),
     htmlDependency(
-      name = "minidag-rail",
+      name = "outline-rail",
       version = pkg_version(),
       src = pkg_file("assets", "js"),
-      # order is load-bearing: `minidag-rail.js` reads `minidagLayout` off
+      # order is load-bearing: `outline-rail.js` reads `outlineLayout` off
       # the global
-      script = c("minidag-layout.js", "minidag-rail.js")
+      script = c("outline-layout.js", "outline-rail.js")
     )
   )
 })
 
-minidag_js_dep <- memoise0(function() {
+outline_js_dep <- memoise0(function() {
   htmltools::tagList(
-    minidag_rail_dep(),
+    outline_rail_dep(),
     htmlDependency(
-      name = "minidag",
+      name = "outline",
       version = pkg_version(),
       src = pkg_file("assets", "js"),
-      # the board adapter, which reads `minidagRail` off the global
-      script = "minidag.js"
+      # the board adapter, which reads `outlineRail` off the global
+      script = "outline.js"
     )
   )
 })
 
-minidag_css_dep <- memoise0(function() {
+outline_css_dep <- memoise0(function() {
   htmlDependency(
-    name = "minidag-css",
+    name = "outline-css",
     version = pkg_version(),
     src = pkg_file("assets", "css"),
-    stylesheet = "minidag.css"
+    stylesheet = "outline.css"
   )
 })
 
 # The full board model as one JSON-ready payload. Pushed wholesale on every
-# board change: the minidag is a stateless list (no user-owned positions to
+# board change: the outline is a stateless list (no user-owned positions to
 # preserve), so a full re-render is both cheap and always consistent --
 # no delta bookkeeping as in blockr.dag's incremental g6 proxy.
-minidag_payload <- function(board) {
+outline_payload <- function(board) {
 
   blocks <- blockr.core::board_blocks(board)
   links <- blockr.core::board_links(board)
@@ -273,24 +273,24 @@ minidag_payload <- function(board) {
     blocks = lapply(seq_along(blocks), blk_entry),
     links = lapply(seq_along(links), lnk_entry),
     stacks = lapply(names(stacks), stk_entry),
-    views = minidag_views(board),
-    extensions = minidag_extensions(board)
+    views = outline_views(board),
+    extensions = outline_extensions(board)
   )
 }
 
-# Views as the minidag sees them: membership stated in OBJECT ids (block ids and
-# extension mount names), not panel ids. The minidag's rows are objects, so a
+# Views as the outline sees them: membership stated in OBJECT ids (block ids and
+# extension mount names), not panel ids. The outline's rows are objects, so a
 # panel id would have to be unwrapped on every comparison.
 #
-# `blocks` and `extensions` are two lists rather than one because the minidag
+# `blocks` and `extensions` are two lists rather than one because the outline
 # draws them in two places -- blocks in the rail, in topological order, and
 # extensions
 # in a group at the foot, since an extension is not in the DAG and has no place
 # in an order derived from it. The membership relation is the same for both, and
 # so is the control that edits it.
-minidag_views <- function(board) {
+outline_views <- function(board) {
 
-  # Views are a dock concept. The minidag renders a plain `blockr.core` board
+  # Views are a dock concept. The outline renders a plain `blockr.core` board
   # too (its rail needs blocks and links, nothing else), and there the
   # answer is "no views" rather than an error -- the client then draws no
   # membership column and no trigger at all.
@@ -318,7 +318,7 @@ minidag_views <- function(board) {
       name = unname(labels[id]),
       active = identical(id, active),
       # Total panels on the view, which the menu's checklist shows beside each
-      # name. It counts everything the view holds, not just what the minidag has
+      # name. It counts everything the view holds, not just what the outline has
       # a row for: the question it answers is "how full is that page".
       n = length(members),
       blocks = I(as.list(blk_ids[panels %in% members])),
@@ -334,18 +334,18 @@ minidag_views <- function(board) {
 # including one that is on no view at all, which per-view membership alone
 # could never report.
 #
-# `self` marks the minidag's own entry. It is not special-cased anywhere in the
+# `self` marks the outline's own entry. It is not special-cased anywhere in the
 # membership logic (its row works exactly like the others); the client only uses
 # it to say "this one is the panel you are looking at" when taking it off the
 # view you are on.
-minidag_extensions <- function(board) {
+outline_extensions <- function(board) {
 
   if (!blockr.dock::is_dock_board(board)) {
     return(list())
   }
 
   exts <- blockr.dock::dock_extensions(board)
-  me <- blockr.dock::extension_ids(board, "minidag_extension")
+  me <- blockr.dock::extension_ids(board, "outline_extension")
 
   tool_entry <- function(id) {
     list(
@@ -380,7 +380,7 @@ minidag_extensions <- function(board) {
 # a non-member; both are `validate_view_mod()` errors rather than no-ops. A view
 # that needs no change is not named at all, and a delta that would change
 # nothing anywhere is NULL.
-minidag_membership_delta <- function(board, blocks = character(),
+outline_membership_delta <- function(board, blocks = character(),
                                      extensions = character(),
                                      mode = c("all", "none", "only", "add",
                                               "rm"),
@@ -466,7 +466,7 @@ minidag_membership_delta <- function(board, blocks = character(),
 # Reveal a block's panel in the *current* view: focus it if the view already
 # holds it, otherwise add it there -- never switch to another view that
 # happens to hold it (same semantics as blockr.dag's node click).
-minidag_reveal_delta <- function(board, block) {
+outline_reveal_delta <- function(board, block) {
 
   views <- blockr.dock::board_views(board)
   view <- blockr.dock::active_view(views)
@@ -486,20 +486,20 @@ minidag_reveal_delta <- function(board, block) {
   list(views = list(mod = stats::setNames(list(ops), view)))
 }
 
-# Where a block inserted from the minidag should land.
+# Where a block inserted from the outline should land.
 #
 # Without a hint, blockr.dock falls back to `determine_panel_pos()`, which
-# stacks the new panel into the last active group -- and the minidag's own group
+# stacks the new panel into the last active group -- and the outline's own group
 # qualifies, because only panels named in the `visible_extensions` board
 # option are excluded and that option defaults to the DAG alone. So a block
-# added from the minidag lands on top of it, hiding the extension that added it.
+# added from the outline lands on top of it, hiding the extension that added it.
 #
 # Appending has a better answer than "not there" anyway: put it beside the
 # block it reads from, which is where you are looking. With no origin there is
 # nothing to sit beside, so it asks for `right` -- which dockview resolves
 # against the active group, in practice landing it among the other block
-# panels rather than splitting a fresh column. Either way it is not the minidag.
-minidag_place_delta <- function(board, blk_id, from = NULL) {
+# panels rather than splitting a fresh column. Either way it is not the outline.
+outline_place_delta <- function(board, blk_id, from = NULL) {
 
   views <- blockr.dock::board_views(board)
   view <- blockr.dock::active_view(views)
@@ -540,7 +540,7 @@ minidag_place_delta <- function(board, blk_id, from = NULL) {
 # constructor arguments applied through `update_stack()`, so the reserved
 # `blocks` key carries the whole new membership rather than a diff (the same
 # shape blockr.dock's own stack editor commits).
-minidag_stack_delta <- function(board, ids, stack = NULL) {
+outline_stack_delta <- function(board, ids, stack = NULL) {
 
   stacks <- blockr.core::board_stacks(board)
   ids <- intersect(ids, names(blockr.core::board_blocks(board)))
@@ -583,22 +583,22 @@ minidag_stack_delta <- function(board, ids, stack = NULL) {
   upd
 }
 
-minidag_ext_result <- function(board, extensions) {
+outline_ext_result <- function(board, extensions) {
   extensions[[
     blockr.dock::extension_ids(
       shiny::isolate(board$board),
-      "minidag_extension"
+      "outline_extension"
     )
   ]]
 }
 
 #' @importFrom blockr.dock extension_block_callback
 #' @export
-extension_block_callback.minidag_extension <- function(x, ...) {
+extension_block_callback.outline_extension <- function(x, ...) {
   function(id, board, update, conditions, extensions, ...,
            session = shiny::getDefaultReactiveDomain()) {
 
-    mini <- minidag_ext_result(board, extensions)
+    mini <- outline_ext_result(board, extensions)
 
     badge <- shiny::reactive({
       errors <- sum(lengths(conditions()$error))
@@ -644,9 +644,25 @@ extension_block_callback.minidag_extension <- function(x, ...) {
 
         drawn(spec)
       },
-      label = paste0("minidag_badge_", id)
+      label = paste0("outline_badge_", id)
     )
 
     NULL
   }
+}
+
+#' @rdname new_outline_extension
+#' @usage NULL
+#' @export
+new_minidag_extension <- function(...) {
+  .Deprecated("new_outline_extension")
+  new_outline_extension(...)
+}
+
+#' @rdname outline_rail_dep
+#' @usage NULL
+#' @export
+minidag_rail_dep <- function() {
+  .Deprecated("outline_rail_dep")
+  outline_rail_dep()
 }

@@ -1,12 +1,12 @@
-/* Minidag: the BOARD adapter for the list+rail editor (blockr.outline).
+/* Outline: the BOARD adapter for the list+rail editor (blockr.outline).
  *
- * The drawing and the gestures live in `minidag-rail.js`, which knows nothing
+ * The drawing and the gestures live in `outline-rail.js`, which knows nothing
  * about blockr. This file is everything that does: the Shiny channels, the
  * one-instance-per-container registry, block arity, and how a block paints
  * itself in a row.
  *
- * One instance per `.minidag[data-ns]` container. The R side pushes the full
- * board model ('minidag-data') and per-block status badges ('minidag-badge');
+ * One instance per `.outline[data-ns]` container. The R side pushes the full
+ * board model ('outline-data') and per-block status badges ('outline-badge');
  * user gestures come back out of the renderer as `emit(name, payload)` and go
  * on as event-priority Shiny inputs (link_add, link_rm, block_rm,
  * block_rename, block_select, block_append, block_add, stack_add,
@@ -37,7 +37,7 @@
   };
 
   const announceAll = () => {
-    document.querySelectorAll('.minidag[data-ns]').forEach((el) => {
+    document.querySelectorAll('.outline[data-ns]').forEach((el) => {
       const inst = getInst(el.id);
       if (inst && !inst.announced) {
         inst.announced = true;
@@ -48,28 +48,28 @@
 
   if (window.Shiny) {
     $(document).on('shiny:connected', announceAll);
-    Shiny.addCustomMessageHandler('minidag-data', (msg) => {
+    Shiny.addCustomMessageHandler('outline-data', (msg) => {
       const inst = getInst(msg.el);
       if (inst) inst.setData(msg);
     });
-    Shiny.addCustomMessageHandler('minidag-badge', (msg) => {
+    Shiny.addCustomMessageHandler('outline-badge', (msg) => {
       const inst = getInst(msg.el);
       if (inst) inst.setBadge(msg);
     });
     // The catalogue is a pure function of the registry, so it arrives once
     // when the client announces itself, not on every board change.
-    Shiny.addCustomMessageHandler('minidag-registry', (msg) => {
+    Shiny.addCustomMessageHandler('outline-registry', (msg) => {
       const inst = getInst(msg.el);
       if (inst) inst.setRegistry(msg);
     });
-    Shiny.addCustomMessageHandler('minidag-clipboard', (msg) => {
+    Shiny.addCustomMessageHandler('outline-clipboard', (msg) => {
       const inst = getInst(msg.el);
       if (inst) inst.setClipboard(msg.json);
     });
   }
 
   // test/inspection hook
-  window._minidag = (elId) => {
+  window._outline = (elId) => {
     const inst = elId ? registry.get(elId) : registry.values().next().value;
     return inst ? inst.inspect() : null;
   };
@@ -108,7 +108,7 @@
     // read off the board as it stands, never off a stale copy
     let blocks = [], links = [], views = [], stacks = [], extensions = [];
 
-    // The one held gesture in the menu: clearing the minidag's OWN tick on the
+    // The one held gesture in the menu: clearing the outline's OWN tick on the
     // view you are looking at removes the panel the click happened in, and the
     // way back is blockr.dock's per-view "+ Add panel" picker rather than
     // anything in here. So that box arms on the first click and commits on the
@@ -188,7 +188,7 @@
       return wrap;
     };
 
-    const rail = minidagRail.create(rootEl, {
+    const rail = outlineRail.create(rootEl, {
       // Renderer options go under `opts`; the rest of this object is the adapter
       // contract (emit, nodeLead, ...).
       //
@@ -312,7 +312,7 @@
         ids.every((id) => memberIds(v, kind).includes(id)));
 
       // A view's tag IS the button that takes the row off that view. Clicking a
-      // row already adds it to the current view (`minidag_reveal_delta()` adds
+      // row already adds it to the current view (`outline_reveal_delta()` adds
       // when the view does not hold it), so the current view's tag completes a
       // pair whose undo is the gesture you just used -- and every other view's
       // tag does the same thing to the view it names, because a tag that means
@@ -393,7 +393,7 @@
      * whole point -- "which view is this on?" gets one answer shape for every
      * panel the board has.
      *
-     * The catalogue comes from the board (`minidag_extensions()`), not from view
+     * The catalogue comes from the board (`outline_extensions()`), not from view
      * membership, so an extension on NO view still has a row. That is the state
      * per-view membership alone can never report, and the one you need a row to
      * get out of.
@@ -765,7 +765,7 @@
       placeMenu(ev);
     };
 
-    // One delegated listener for every row shape the minidag draws. The rail owns
+    // One delegated listener for every row shape the outline draws. The rail owns
     // block rows and stack heads (inside `.md-deck`), this file owns extension rows;
     // the menu does not care which, because membership does not.
     rootEl.addEventListener('contextmenu', (ev) => {
@@ -865,7 +865,7 @@
      *
      * Two states, one component. At REST it browses: every type, grouped by
      * category, with its description. That is the catalogue, which is why
-     * the minidag needs no second copy of it in a pane. As soon as you type it
+     * the outline needs no second copy of it in a pane. As soon as you type it
      * RECALLS: flat, ranked, keyboard-driven, uncapped -- a silent
      * truncation would hide types from the only place they are listed.
      *
@@ -1084,7 +1084,7 @@
      * Wire-compatible with blockr.dag: the same `{object: "subboard"}`
      * envelope, so a selection copied on the canvas pastes here and back.
      *
-     * Scoped to the minidag last clicked in, so a board mounting both this and
+     * Scoped to the outline last clicked in, so a board mounting both this and
      * the DAG canvas does not act twice on one keystroke.
      */
 

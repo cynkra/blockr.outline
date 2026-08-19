@@ -1,9 +1,9 @@
-# Copy and paste, for the minidag.
+# Copy and paste, for the outline.
 #
 # Wire-compatible with blockr.dag's clipboard on purpose: the same
 # `{object: "subboard", payload: {blocks, links, stacks}}` envelope, each part
 # serialised by blockr.core's own methods. A selection copied in the DAG
-# canvas pastes into the minidag and back. The envelope is rebuilt here rather
+# canvas pastes into the outline and back. The envelope is rebuilt here rather
 # than reusing `blockr.dag:::new_subboard()` -- that class and its extraction
 # helpers are internal to dag, and this package holds to exported API.
 #
@@ -16,7 +16,7 @@
 # The blocks, the links INTERNAL to them, and any stack the selection covers
 # entirely. A link with one end outside the selection is dropped: pasting it
 # would wire the copy to a block the user did not copy.
-minidag_subboard <- function(board, block_ids) {
+outline_subboard <- function(board, block_ids) {
 
   blocks <- blockr.core::board_blocks(board)
   ids <- intersect(block_ids, names(blocks))
@@ -46,7 +46,7 @@ minidag_subboard <- function(board, block_ids) {
 # a copy has to carry what the user configured. Values arrive as reactives
 # from the block servers, so they are forced here, inside the observer that
 # already has a reactive context.
-minidag_live_states <- function(board, block_ids) {
+outline_live_states <- function(board, block_ids) {
 
   running <- board$blocks
   ids <- intersect(block_ids, names(running))
@@ -65,9 +65,9 @@ minidag_live_states <- function(board, block_ids) {
   stats::setNames(out, ids)
 }
 
-minidag_clip_json <- function(board, block_ids, states) {
+outline_clip_json <- function(board, block_ids, states) {
 
-  sub <- minidag_subboard(board, block_ids)
+  sub <- outline_subboard(board, block_ids)
 
   if (is.null(sub)) {
     return(NULL)
@@ -91,7 +91,7 @@ minidag_clip_json <- function(board, block_ids, states) {
 # paste onto the board it was copied from cannot collide. Returns NULL when
 # the text is not one of our envelopes -- the client already screens for that,
 # but a paste is user input and this is the authoritative gate.
-minidag_paste_delta <- function(board, json) {
+outline_paste_delta <- function(board, json) {
 
   data <- tryCatch(
     jsonlite::fromJSON(json, simplifyDataFrame = FALSE, simplifyMatrix = FALSE),
@@ -151,7 +151,7 @@ minidag_paste_delta <- function(board, json) {
   )
 
   if (length(parts$stacks)) {
-    upd$stacks <- list(add = minidag_remap_stacks(parts$stacks, id_map))
+    upd$stacks <- list(add = outline_remap_stacks(parts$stacks, id_map))
   }
 
   Filter(Negate(is.null), upd)
@@ -161,7 +161,7 @@ minidag_paste_delta <- function(board, json) {
 # do not: a pasted group arrives selected and adjacent, so " (copy)" on every
 # member is noise, while on the group it is the one place the provenance is
 # worth stating. Same convention blockr.dag settled on.
-minidag_remap_stacks <- function(stacks, id_map) {
+outline_remap_stacks <- function(stacks, id_map) {
 
   out <- lapply(
     stacks,

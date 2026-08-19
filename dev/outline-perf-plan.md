@@ -1,16 +1,16 @@
-# Minidag interaction-performance plan
+# Outline interaction-performance plan
 
-`dev/minidag-perf.js` drives a live app with Playwright and holds every
+`dev/outline-perf.js` drives a live app with Playwright and holds every
 gesture to a **render budget**. Run it after any change to
-`inst/assets/js/minidag-rail.js`, `minidag.js` or `minidag-layout.js`:
+`inst/assets/js/outline-rail.js`, `outline.js` or `outline-layout.js`:
 
 ```sh
 # a board with stacks must be running; either of:
-Rscript blockr.outline/dev/minidag-demo.R 3843          # small, 3 stacks
-Rscript _scratch/minidag-focus/run-cdex-stacks.R 3843   # real 92-block CDEX
+Rscript blockr.outline/dev/outline-demo.R 3843          # small, 3 stacks
+Rscript _scratch/outline-focus/run-cdex-stacks.R 3843   # real 92-block CDEX
 
-node dev/minidag-perf.js http://127.0.0.1:3843           # mutation-free
-node dev/minidag-perf.js http://127.0.0.1:3843 --mutate  # + one real append
+node dev/outline-perf.js http://127.0.0.1:3843           # mutation-free
+node dev/outline-perf.js http://127.0.0.1:3843 --mutate  # + one real append
 ```
 
 Exit code 0 = all within budget. CI-able in principle; today it is a

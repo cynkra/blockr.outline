@@ -1,17 +1,17 @@
-# Minidag extension server. The JS side announces itself via the `ready`
+# Outline extension server. The JS side announces itself via the `ready`
 # input (the panel UI is moved into its dock panel after page load, so the
 # client, not the server, knows when it can render); from then on every
 # board change pushes the full model. User gestures come back as
 # event-priority inputs and are translated into blockr.core `update()`
 # deltas or blockr.dock action triggers.
-minidag_ext_srv <- function(id, board, update, actions, ...) {
+outline_ext_srv <- function(id, board, update, actions, ...) {
   shiny::moduleServer(
     id,
     function(input, output, session) {
 
       send <- function(type, payload) {
-        payload$el <- session$ns("minidag")
-        session$sendCustomMessage(paste0("minidag-", type), payload)
+        payload$el <- session$ns("outline")
+        session$sendCustomMessage(paste0("outline-", type), payload)
       }
 
       ready <- shiny::reactive(isTRUE(input$ready))
@@ -20,7 +20,7 @@ minidag_ext_srv <- function(id, board, update, actions, ...) {
         list(board$board, input$ready),
         {
           shiny::req(isTRUE(input$ready))
-          send("data", minidag_payload(board$board))
+          send("data", outline_payload(board$board))
         }
       )
 
@@ -30,7 +30,7 @@ minidag_ext_srv <- function(id, board, update, actions, ...) {
       # fall back to the board's own block browser.
       shiny::observeEvent(input$ready, {
         shiny::req(isTRUE(input$ready))
-        send("registry", minidag_registry())
+        send("registry", outline_registry())
       })
 
       # Connect: the client proposes an input slot (it knows the free
@@ -129,16 +129,16 @@ minidag_ext_srv <- function(id, board, update, actions, ...) {
       })
 
       shiny::observeEvent(input$block_select, {
-        delta <- minidag_reveal_delta(board$board, input$block_select$id)
+        delta <- outline_reveal_delta(board$board, input$block_select$id)
         if (!is.null(delta)) {
           update(delta)
         }
       })
 
       # Drag released on empty canvas: open the block browser, wired from
-      # the drag source (the minidag's drop-on-canvas append, same flow the
+      # the drag source (the outline's drop-on-canvas append, same flow the
       # DAG extension triggers for an edge dropped on the canvas).
-      # The minidag's picker handles both gestures itself, so `block_append` and
+      # The outline's picker handles both gestures itself, so `block_append` and
       # `block_add` only reach here when the catalogue never arrived (the
       # client falls back rather than swallowing the gesture). The board's
       # own browser is then the safety net.
@@ -150,7 +150,7 @@ minidag_ext_srv <- function(id, board, update, actions, ...) {
         actions[["add_block_action"]](input$block_add)
       })
 
-      # Insert a block chosen in the minidag. Adding and appending are one
+      # Insert a block chosen in the outline. Adding and appending are one
       # operation: the origin decides only whether a link is made, and which
       # of its free input slots receives it.
       shiny::observeEvent(input$block_insert, {
@@ -212,7 +212,7 @@ minidag_ext_srv <- function(id, board, update, actions, ...) {
           }
         }
 
-        upd$views <- minidag_place_delta(board$board, blk_id, from)
+        upd$views <- outline_place_delta(board$board, blk_id, from)
 
         # An insert made inside a focused stack view joins that stack in the
         # SAME update: landing loose first and joining a roundtrip later left
@@ -257,7 +257,7 @@ minidag_ext_srv <- function(id, board, update, actions, ...) {
       # Dragged into a frame (or the "⚠ n between" fix on a stack header):
       # the blocks join that stack and leave whatever they were in.
       shiny::observeEvent(input$stack_join, {
-        delta <- minidag_stack_delta(
+        delta <- outline_stack_delta(
           board$board,
           unlist(input$stack_join$blocks),
           as.character(input$stack_join$stack)
@@ -269,7 +269,7 @@ minidag_ext_srv <- function(id, board, update, actions, ...) {
 
       # Dragged out of every frame.
       shiny::observeEvent(input$stack_leave, {
-        delta <- minidag_stack_delta(
+        delta <- outline_stack_delta(
           board$board, unlist(input$stack_leave$blocks)
         )
         if (!is.null(delta)) {
@@ -314,8 +314,8 @@ minidag_ext_srv <- function(id, board, update, actions, ...) {
           return()
         }
 
-        json <- minidag_clip_json(
-          board$board, ids, minidag_live_states(board, ids)
+        json <- outline_clip_json(
+          board$board, ids, outline_live_states(board, ids)
         )
 
         if (!is.null(json)) {
@@ -358,7 +358,7 @@ minidag_ext_srv <- function(id, board, update, actions, ...) {
       })
 
       shiny::observeEvent(input$block_paste, {
-        delta <- minidag_paste_delta(board$board, input$block_paste$json)
+        delta <- outline_paste_delta(board$board, input$block_paste$json)
         if (!is.null(delta)) {
           update(delta)
         }
@@ -376,11 +376,11 @@ minidag_ext_srv <- function(id, board, update, actions, ...) {
       #
       # There are no view CRUD handlers here on purpose. Creating, renaming,
       # reordering and removing views belongs to the dock's own navbar, which has
-      # had all four since before the minidag existed; the minidag says which
+      # had all four since before the outline existed; the outline says which
       # panels go where, and nothing about the pages themselves.
       shiny::observeEvent(input$membership, {
         msg <- input$membership
-        delta <- minidag_membership_delta(
+        delta <- outline_membership_delta(
           board$board,
           blocks = unlist(msg$blocks),
           extensions = unlist(msg$extensions),

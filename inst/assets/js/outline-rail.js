@@ -1,13 +1,13 @@
-/* Minidag rail: the list+rail editor, with no idea what a board is.
+/* Outline rail: the list+rail editor, with no idea what a board is.
  *
- * The drawing, the gestures and the geometry that `minidag-layout.js` does
+ * The drawing, the gestures and the geometry that `outline-layout.js` does
  * not own. Everything that knows about blockr boards -- Shiny, the dock
  * extension protocol, block arity, block icons -- lives in an ADAPTER that
- * the host passes in. `minidag.js` is the board adapter; blockr.process has
+ * the host passes in. `outline.js` is the board adapter; blockr.process has
  * a second one whose nodes are process steps.
  *
  * Model (the adapter pushes it in via `setData`, same field names as
- * minidag-layout.js): nodes are `blocks` [{id, name, ...}], edges are `links`
+ * outline-layout.js): nodes are `blocks` [{id, name, ...}], edges are `links`
  * [{id, from, to, input}], `stacks` [{id, name, color, blocks[]}]. The
  * renderer never mutates it: a gesture calls `adapter.emit(name, payload)`
  * and the host is expected to push a new model back.
@@ -22,7 +22,7 @@
  *   nodeLead(node) -> Element    row content before the name (icon, ports)
  *   nodeTrail(node) -> Element   row content after the name (chips, fields)
  *   nodeAside(node) -> Element   row content PAST the spring, so it right-
- *                                aligns into a column down the minidag (the
+ *                                aligns into a column down the outline (the
  *                                board paints view membership here)
  *   stackAside(stack) -> Element the same, for a stack header and for the
  *                                collapsed stack row. Stack rows are built
@@ -57,7 +57,7 @@
     module.exports = api;
   }
   if (root) {
-    root.minidagRail = api;
+    root.outlineRail = api;
   }
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
@@ -153,10 +153,10 @@
     /* ---- skeleton ---- */
 
     rootEl.innerHTML = '';
-    // minidag.css is scoped to `.minidag`, and the renderer owns the skeleton
+    // outline.css is scoped to `.outline`, and the renderer owns the skeleton
     // that stylesheet describes -- so it puts the class on rather than making
     // every host remember to (the board's container already has it).
-    rootEl.classList.add('minidag');
+    rootEl.classList.add('outline');
     // The row height is a metric, so CSS reads it from here rather than
     // hard-coding 28px: a process step row is taller than a block row.
     rootEl.style.setProperty('--md-row-h', ROW_H + 'px');
@@ -316,11 +316,11 @@
       return seen;
     };
 
-    /* ---- ordering + lanes: the pure geometry lives in minidag-layout.js ---- */
+    /* ---- ordering + lanes: the pure geometry lives in outline-layout.js ---- */
 
-    // `minidag-layout.js` owns row order and lane assignment so `node --test`
+    // `outline-layout.js` owns row order and lane assignment so `node --test`
     // can hold it to its invariants (tests/js/). Everything below draws.
-    const G = (typeof globalThis !== 'undefined' ? globalThis : window).minidagLayout;
+    const G = (typeof globalThis !== 'undefined' ? globalThis : window).outlineLayout;
 
     const model = () => ({ blocks, links, stacks, collapsed, lastPos });
 
@@ -893,7 +893,7 @@
 
       // Only if the row is still there: a block removed by the very update
       // that triggered this render would light nothing, leaving the whole
-      // minidag dimmed with no explanation.
+      // outline dimmed with no explanation.
       if (refocus && deckEl.querySelector(
         '.md-chip[data-id="' + CSS.escape(refocus) + '"], ' +
         '.md-stackhead[data-stack="' + CSS.escape(refocus.replace(/^stack:/, '')) + '"]'
@@ -934,7 +934,7 @@
       el.className = 'md-chip' + (inStack ? ' instack' : '') +
         (selection.has(b.id) ? ' sel' : '');
       el.dataset.id = b.id;
-      // the frame ends at the minidag's right edge, so a framed row has to stop
+      // the frame ends at the outline's right edge, so a framed row has to stop
       // short of it or the border is drawn ON the row -- padded on the left,
       // clipped on the right, which is how it read before
       if (inStack) el.style.marginRight = FRAME_PAD_X + 'px';
@@ -969,7 +969,7 @@
 
       // Past the spring, so it right-aligns: `nodeTrail` sits beside the name
       // and is the wrong place for anything that wants to read as a column
-      // down the minidag. Kept as a separate hook rather than moving `nodeTrail`,
+      // down the outline. Kept as a separate hook rather than moving `nodeTrail`,
       // which blockr.process's adapter uses for exactly the beside-the-name
       // job its name promises.
       const aside = nodeAside(b);
@@ -1347,7 +1347,7 @@
     // past a row never paints it, it only paints where you settle.
     // A dwell, not a brush. `FOCUS_MOVE_MS` used to be 60, so once engaged
     // the lineage re-struck about sixteen times a second while the pointer
-    // travelled -- the minidag answering a question on every row it passed.
+    // travelled -- the outline answering a question on every row it passed.
     // Both thresholds now want the pointer to stop somewhere. Leaving stays
     // quick: releasing late would keep a stale chain lit after you have gone.
     const FOCUS_IN_MS = 320, FOCUS_MOVE_MS = 320, FOCUS_OUT_MS = 260;
@@ -1377,7 +1377,7 @@
       return keep;
     };
 
-    // The focus is two classes -- one on the minidag, `md-rel` on the few rows
+    // The focus is two classes -- one on the outline, `md-rel` on the few rows
     // that stay lit -- so CSS owns the fade and a hover costs a handful of DOM
     // writes instead of one per row and one per edge (184 of them on the CDEX
     // board, every time the pointer crossed a gap).
@@ -1871,7 +1871,7 @@
           }
           return;
         }
-        // Only within the minidag: a release over the view list or off the panel
+        // Only within the outline: a release over the view list or off the panel
         // is a cancelled drag, not an instruction to break the group up.
         if (!over && home && deckBox && inBox(deckBox)) {
           drop = { leave: true };

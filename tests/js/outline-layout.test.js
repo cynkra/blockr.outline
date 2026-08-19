@@ -18,7 +18,7 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const G = require('../../inst/assets/js/minidag-layout.js');
+const G = require('../../inst/assets/js/outline-layout.js');
 
 /* ---- helpers ---- */
 
@@ -218,7 +218,7 @@ test('random stacks keep the invariants', () => {
     if (members.length < 2) continue;
     model.stacks = [{ id: 's', name: 'g', blocks: members }];
     if (rand() < 0.5) model.collapsed = new Set(['s']);
-    // NOT skipped when the grouping tangles the flow: the minidag refuses to
+    // NOT skipped when the grouping tangles the flow: the outline refuses to
     // CREATE such a stack, but a board can arrive with one (dock's stack
     // editor makes them, and a link added later can tangle a stack that was
     // fine) and it still has to draw.

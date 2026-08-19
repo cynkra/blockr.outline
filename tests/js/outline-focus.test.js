@@ -15,7 +15,7 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const G = require('../../inst/assets/js/minidag-layout.js');
+const G = require('../../inst/assets/js/outline-layout.js');
 
 const mkModel = (blocks, links, stacks, collapsed) => ({
   blocks: blocks.map((b) => typeof b === 'string'

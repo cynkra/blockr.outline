@@ -1,6 +1,6 @@
-/* Minidag: compact list-shaped workflow editor (blockr.outline). */
+/* Outline: compact list-shaped workflow editor (blockr.outline). */
 
-.minidag {
+.outline {
   --md-border: #e5e7eb;
   --md-bg-input: #f9fafb;
   --md-primary: #2563eb;
@@ -42,7 +42,7 @@
    independent formatting context, margins stop collapsing through it, and the
    band silently grew 10px taller and painted over the first row's top edge at
    z-index 16. Owning the gap from below is true in both modes. */
-.minidag .md-head {
+.outline .md-head {
   position: sticky;
   top: -10px;
   z-index: 16;
@@ -57,14 +57,14 @@
    NAME is the single flexible element -- it ellipsizes when the panel is
    narrow. Without this a squeezed pill broke "Data prep" onto two lines,
    which doubled the sticky header's height and pushed the list down. */
-.minidag .md-crumb {
+.outline .md-crumb {
   display: flex;
   align-items: center;
   min-width: 0;
   margin: 0 0 6px;
   font-size: 12.5px;
 }
-.minidag .md-crumb-cur {
+.outline .md-crumb-cur {
   display: inline-flex;
   align-items: center;
   flex: 0 1 auto;
@@ -77,22 +77,22 @@
   font-weight: 600;
   color: var(--md-g900);
 }
-.minidag .md-crumb-cur .md-cap { flex: none; width: 13px; height: 13px; }
-.minidag .md-crumb-cur .md-cap svg { width: 13px; height: 13px; display: block; }
-.minidag .md-crumb-name {
+.outline .md-crumb-cur .md-cap { flex: none; width: 13px; height: 13px; }
+.outline .md-crumb-cur .md-cap svg { width: 13px; height: 13px; display: block; }
+.outline .md-crumb-name {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.minidag .md-crumb-n {
+.outline .md-crumb-n {
   flex: none;
   white-space: nowrap;
   font-weight: 400;
   font-size: 11px;
   color: var(--md-g500);
 }
-.minidag .md-crumb-x {
+.outline .md-crumb-x {
   flex: none;
   border: none;
   background: none;
@@ -103,11 +103,11 @@
   line-height: 1.3;
   cursor: pointer;
 }
-.minidag .md-crumb-x:hover { color: #dc2626; background: #fef2f2; }
+.outline .md-crumb-x:hover { color: #dc2626; background: #fef2f2; }
 
 /* --- search row --- */
 
-.minidag .md-search-row {
+.outline .md-search-row {
   position: relative;
   display: flex;
   align-items: center;
@@ -115,7 +115,7 @@
   /* no bottom margin: see `.md-head` */
   margin: 0;
 }
-.minidag .md-search {
+.outline .md-search {
   flex: 1 1 auto;
   height: 30px;
   min-width: 0;
@@ -127,8 +127,8 @@
   padding: 0 44px 0 30px;
   outline: none;
 }
-.minidag .md-search:focus { border-color: var(--md-primary); background: #fff; }
-.minidag .md-search-icon {
+.outline .md-search:focus { border-color: var(--md-primary); background: #fff; }
+.outline .md-search-icon {
   position: absolute;
   left: 9px;
   top: 7px;
@@ -137,8 +137,8 @@
   color: var(--md-g400);
   pointer-events: none;
 }
-.minidag .md-search-icon svg { width: 15px; height: 15px; display: block; }
-.minidag .md-hits {
+.outline .md-search-icon svg { width: 15px; height: 15px; display: block; }
+.outline .md-hits {
   position: absolute;
   right: 44px;
   top: 7px;
@@ -146,7 +146,7 @@
   color: var(--md-g400);
   pointer-events: none;
 }
-.minidag .md-add {
+.outline .md-add {
   flex: 0 0 30px;
   height: 30px;
   border-radius: 7px;
@@ -159,7 +159,7 @@
 }
 
 /* Fold/unfold every stack at once; pressed = everything is collapsed. */
-.minidag .md-fold {
+.outline .md-fold {
   flex: 0 0 30px;
   height: 30px;
   border-radius: 7px;
@@ -172,23 +172,23 @@
   justify-content: center;
   padding: 0;
 }
-.minidag .md-fold[hidden] { display: none; }
-.minidag .md-fold svg { width: 15px; height: 15px; }
-.minidag .md-fold:hover { color: var(--md-primary); border-color: var(--md-primary); }
-.minidag .md-fold.active {
+.outline .md-fold[hidden] { display: none; }
+.outline .md-fold svg { width: 15px; height: 15px; }
+.outline .md-fold:hover { color: var(--md-primary); border-color: var(--md-primary); }
+.outline .md-fold.active {
   color: var(--md-primary);
   background: var(--md-primary-bg);
   border-color: var(--md-primary);
 }
-.minidag .md-add:hover {
+.outline .md-add:hover {
   border-color: var(--md-primary);
   color: var(--md-primary);
   background: var(--md-primary-bg);
 }
 
-/* --- minidag --- */
+/* --- outline --- */
 
-.minidag .md-deck { position: relative; margin-top: 10px; }
+.outline .md-deck { position: relative; margin-top: 10px; }
 
 /* Add a block with no parent, the last row of the list. Deliberately NOT a
    `.md-chip`: it borrows the row's height and rhythm so the list stays even, but
@@ -203,7 +203,7 @@
 
    No `margin-top`: `.md-rows` already ends with one row-gap of trailing space, so
    adding another doubled the distance from the last block. */
-.minidag .md-addrow {
+.outline .md-addrow {
   display: flex;
   align-items: center;
   gap: 7px;
@@ -218,34 +218,34 @@
   border-radius: 7px;
   cursor: pointer;
 }
-.minidag .md-addrow:hover {
+.outline .md-addrow:hover {
   color: var(--md-primary);
   background: var(--md-primary-bg);
   border-color: var(--md-primary);
 }
-.minidag .md-addrow-tile {
+.outline .md-addrow-tile {
   flex: 0 0 18px;
   width: 18px;
   height: 18px;
   border: 1.5px dashed var(--md-border);
   border-radius: 5px;
 }
-.minidag .md-addrow:hover .md-addrow-tile { border-color: var(--md-primary); }
-.minidag .md-addrow-label {
+.outline .md-addrow:hover .md-addrow-tile { border-color: var(--md-primary); }
+.outline .md-addrow-label {
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.minidag .md-deck svg.md-rail {
+.outline .md-deck svg.md-rail {
   position: absolute;
   left: 0;
   top: 0;
   pointer-events: none;
   z-index: 2;
 }
-.minidag .md-deck svg.md-wire {
+.outline .md-deck svg.md-wire {
   position: absolute;
   left: 0;
   top: 0;
@@ -254,7 +254,7 @@
   pointer-events: none;
   z-index: 8;
 }
-.minidag .md-rows {
+.outline .md-rows {
   display: flex;
   flex-direction: column;
   position: relative;
@@ -263,8 +263,8 @@
 
 /* --- rows --- */
 
-.minidag .md-chip,
-.minidag .md-stackhead {
+.outline .md-chip,
+.outline .md-stackhead {
   position: relative;
   display: flex;
   align-items: center;
@@ -275,8 +275,8 @@
   border-radius: 7px;
   transition: opacity 0.12s;
 }
-.minidag .md-chip {
-  /* Flush at rest. A border and a fill on every row made the minidag a column
+.outline .md-chip {
+  /* Flush at rest. A border and a fill on every row made the outline a column
      of cards, which left the stack frame -- a box drawn BEHIND those rows --
      competing with 92 smaller boxes; it is now the only filled thing on
      screen and reads immediately. Hover still separates a row, and the
@@ -290,14 +290,14 @@
      the exception -- there the text IS the point. */
   user-select: none;
 }
-.minidag .md-chip:hover {
+.outline .md-chip:hover {
   background: var(--md-bg-input);
   border-color: var(--md-border);
 }
-.minidag .md-chip input,
-.minidag .md-chip [contenteditable="true"] { user-select: text; }
-.minidag .md-chip.dim,
-.minidag .md-stackhead.dim { opacity: 0.25; }
+.outline .md-chip input,
+.outline .md-chip [contenteditable="true"] { user-select: text; }
+.outline .md-chip.dim,
+.outline .md-stackhead.dim { opacity: 0.25; }
 
 /* While a search is on. The list is NARROWED, not dimmed -- what is here is
    the hits plus the blocks upstream of them, because a hit drawn without what
@@ -306,19 +306,19 @@
    you searched for, or something that is here to keep the chain whole.
    0.55 and not the 0.25 above: the context rows are meant to be READ (that is
    the whole reason they were kept), just not read first. */
-.minidag .md-deck.md-searching .md-chip,
-.minidag .md-deck.md-searching .md-stackhead { opacity: 0.55; }
-.minidag .md-deck.md-searching .md-chip.md-hit,
-.minidag .md-deck.md-searching .md-stackhead.md-hit { opacity: 1; }
+.outline .md-deck.md-searching .md-chip,
+.outline .md-deck.md-searching .md-stackhead { opacity: 0.55; }
+.outline .md-deck.md-searching .md-chip.md-hit,
+.outline .md-deck.md-searching .md-stackhead.md-hit { opacity: 1; }
 /* and nothing else. A highlight behind the name was the obvious addition and
    the wrong one: on a query like "lab" nineteen of the twenty-three rows are
    hits, so it painted the whole list yellow to mark the majority. The two
    opacities already say which rows the query found, and they say it on the
    rows where it matters -- the three-hit queries, where the context
    outnumbers the answer. */
-.minidag .md-deck.md-searching .md-chip:hover,
-.minidag .md-deck.md-searching .md-stackhead:hover { opacity: 1; }
-/* Lineage focus. The minidag dims, the rows related to the hovered block keep
+.outline .md-deck.md-searching .md-chip:hover,
+.outline .md-deck.md-searching .md-stackhead:hover { opacity: 1; }
+/* Lineage focus. The outline dims, the rows related to the hovered block keep
    their `md-rel`. Two classes rather than a write per row, so the fade is
    CSS's job and hovering a 92-row board costs a handful of DOM writes. */
 /* The fade lands on the RAIL, not on the rows. Tracing a chain is a rail
@@ -327,20 +327,20 @@
    made the whole list blink on every pointer move. Row text now holds
    still; the lines answer the question.
    (Rows keep a rule here only so a future variant has somewhere to live.) */
-.minidag .md-deck.md-focused .md-edge { opacity: 0.1; }
-.minidag .md-deck.md-focused .md-edge.md-rel { opacity: 1; }
-.minidag .md-chip.drop-ok {
+.outline .md-deck.md-focused .md-edge { opacity: 0.1; }
+.outline .md-deck.md-focused .md-edge.md-rel { opacity: 1; }
+.outline .md-chip.drop-ok {
   border-color: var(--md-primary);
   background: var(--md-primary-bg);
 }
-.minidag .md-chip.drop-no { border-color: #fca5a5; }
+.outline .md-chip.drop-no { border-color: #fca5a5; }
 /* The ring is drawn INWARD. Same 2px weight (a 1px border plus a 1px shadow),
    but an outward spread grew the row past its own border box, and inside a
    stack the frame only leaves FRAME_PAD_Y (2px) around its rows -- so a
    selected member's ring landed 1px from the frame's border and read as
    touching it. Nothing outside the row's box means the frame's padding stays
    the frame's padding. */
-.minidag .md-chip.sel {
+.outline .md-chip.sel {
   border-color: var(--md-primary);
   box-shadow: inset 0 0 0 1px var(--md-primary);
 }
@@ -348,9 +348,9 @@
    against the frame's tint back when every row carried a grey fill; now that
    rows are flush, filling it would put a card back exactly where the frame is
    meant to be doing the work. */
-.minidag .md-chip.instack { background: transparent; }
+.outline .md-chip.instack { background: transparent; }
 
-.minidag .md-kind {
+.outline .md-kind {
   flex: 0 0 18px;
   height: 18px;
   width: 18px;
@@ -362,16 +362,16 @@
   font-weight: 700;
   overflow: hidden;
 }
-.minidag .md-kind img { width: 18px; height: 18px; display: block; }
-.minidag .md-kind svg { width: 11px; height: 11px; }
+.outline .md-kind img { width: 18px; height: 18px; display: block; }
+.outline .md-kind svg { width: 11px; height: 11px; }
 
-.minidag .md-ports {
+.outline .md-ports {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 3px;
 }
-.minidag .md-pip {
+.outline .md-pip {
   width: 7px;
   height: 7px;
   border-radius: 999px;
@@ -379,8 +379,8 @@
   background: #fff;
   box-sizing: border-box;
 }
-.minidag .md-pip.filled { border-color: var(--md-primary); background: var(--md-primary); }
-.minidag .md-pip-inf {
+.outline .md-pip.filled { border-color: var(--md-primary); background: var(--md-primary); }
+.outline .md-pip-inf {
   width: auto;
   height: auto;
   border: none;
@@ -391,7 +391,7 @@
   font-weight: 700;
 }
 
-.minidag .md-name {
+.outline .md-name {
   flex: 0 1 auto;
   font-size: 12.5px;
   white-space: nowrap;
@@ -401,10 +401,10 @@
   border-radius: 3px;
   padding: 1px 3px;
 }
-.minidag .md-name:focus { background: #fff; box-shadow: 0 0 0 1px var(--md-border); }
-.minidag .md-spring { flex: 1 1 auto; }
+.outline .md-name:focus { background: #fff; box-shadow: 0 0 0 1px var(--md-border); }
+.outline .md-spring { flex: 1 1 auto; }
 
-.minidag .md-badge {
+.outline .md-badge {
   flex: 0 0 auto;
   height: 16px;
   padding: 0 6px;
@@ -415,13 +415,13 @@
   background: #e5e7eb;
   color: var(--md-g600);
 }
-.minidag .md-badge.hit { background: var(--md-primary-bg); color: var(--md-primary); }
+.outline .md-badge.hit { background: var(--md-primary-bg); color: var(--md-primary); }
 
-/* Row status, immediately after the icon (see chip() in minidag-rail.js).
+/* Row status, immediately after the icon (see chip() in outline-rail.js).
    Hidden with `visibility`, not `display`, so the slot is reserved on every
    row: a block going amber mid-evaluation must not shove its own name 15px
    sideways while the rows above and below stay put. */
-.minidag .md-status {
+.outline .md-status {
   flex: 0 0 8px;
   width: 8px;
   height: 8px;
@@ -429,10 +429,10 @@
   box-shadow: 0 0 0 2px #fff;
   visibility: hidden;
 }
-.minidag .md-status.on { visibility: visible; }
+.outline .md-status.on { visibility: visible; }
 
-.minidag .md-rm,
-.minidag .md-chev {
+.outline .md-rm,
+.outline .md-chev {
   flex: 0 0 18px;
   height: 18px;
   border: none;
@@ -443,17 +443,17 @@
   cursor: pointer;
   border-radius: 4px;
 }
-.minidag .md-rm { opacity: 0; font-size: 13px; }
-.minidag .md-chip:hover .md-rm,
-.minidag .md-stackhead:hover .md-rm { opacity: 1; }
-.minidag .md-rm:hover { color: #dc2626; }
-.minidag .md-chev svg { width: 11px; height: 11px; }
-.minidag .md-chev:hover { color: var(--md-primary); }
+.outline .md-rm { opacity: 0; font-size: 13px; }
+.outline .md-chip:hover .md-rm,
+.outline .md-stackhead:hover .md-rm { opacity: 1; }
+.outline .md-rm:hover { color: #dc2626; }
+.outline .md-chev svg { width: 11px; height: 11px; }
+.outline .md-chev:hover { color: var(--md-primary); }
 
 /* The way into the stack-focus view. Unlike `md-rm` it is NOT hover-revealed:
    it changes what the whole list shows, so it has to be discoverable -- always
    there, quiet until pointed at. */
-.minidag .md-focusbtn {
+.outline .md-focusbtn {
   flex: 0 0 18px;
   height: 18px;
   border: none;
@@ -467,22 +467,22 @@
   align-items: center;
   justify-content: center;
 }
-.minidag .md-focusbtn svg { width: 13px; height: 13px; }
-.minidag .md-focusbtn:hover,
-.minidag .md-focusbtn.active {
+.outline .md-focusbtn svg { width: 13px; height: 13px; }
+.outline .md-focusbtn:hover,
+.outline .md-focusbtn.active {
   opacity: 1;
   color: var(--md-primary);
   background: var(--md-primary-bg);
 }
 
 /* A neighbour's collapsed row inside a focused view: the whole row hops. */
-.minidag .md-chip.md-hop { cursor: pointer; }
-.minidag .md-chip.md-hop:hover { background: var(--md-primary-bg); }
+.outline .md-chip.md-hop { cursor: pointer; }
+.outline .md-chip.md-hop:hover { background: var(--md-primary-bg); }
 
 /* --- stacks --- */
 
-.minidag .md-stackhead { padding-left: 4px; }
-.minidag .md-cap {
+.outline .md-stackhead { padding-left: 4px; }
+.outline .md-cap {
   flex: 0 0 18px;
   height: 18px;
   width: 18px;
@@ -492,8 +492,8 @@
   color: var(--md-g500);
   background: #eef0f3;
 }
-.minidag .md-cap svg { width: 11px; height: 11px; }
-.minidag .md-stackhead .md-name {
+.outline .md-cap svg { width: 11px; height: 11px; }
+.outline .md-stackhead .md-name {
   font-weight: 600;
   font-size: 12px;
   color: var(--md-g600);
@@ -503,7 +503,7 @@
    blue ring a single block gets, drawn around the group instead. Ringing
    the header row worked but read as a second object inside the first, and
    the row already has an X of its own for dissolving. */
-.minidag .md-stackframe {
+.outline .md-stackframe {
   position: absolute;
   z-index: 1;
   border: 1px solid var(--md-stack-color, #dbe2ea);
@@ -511,7 +511,7 @@
   border-radius: 9px;
   pointer-events: none;
 }
-.minidag .md-stackframe.sel {
+.outline .md-stackframe.sel {
   border-color: var(--md-primary);
   box-shadow: 0 0 0 1px var(--md-primary);
 }
@@ -519,27 +519,27 @@
 /* Dropping a row into a group, or taking it out of the one it is in. The
    frame answers, not the row: a group gaining a member is a change to the
    group, and the pointer is over the frame when it happens. */
-.minidag .md-stackframe.drop-ok {
+.outline .md-stackframe.drop-ok {
   border-color: var(--md-primary);
   border-style: dashed;
   background: var(--md-primary-bg);
 }
-.minidag .md-stackframe.drop-no {
+.outline .md-stackframe.drop-no {
   border-color: #dc2626;
   border-style: dashed;
 }
-.minidag .md-stackframe.drop-out {
+.outline .md-stackframe.drop-out {
   border-style: dashed;
   opacity: 0.6;
 }
 /* The row being moved stays where it is (it has no position of its own to
    drag) and says so by receding: the tip at the pointer carries the news. */
-.minidag .md-chip.md-moving {
+.outline .md-chip.md-moving {
   opacity: 0.45;
   cursor: grabbing;
 }
 
-/* Follows the pointer, so it is fixed to the viewport rather than to a minidag
+/* Follows the pointer, so it is fixed to the viewport rather than to a outline
    that scrolls under it. */
 .md-droptip {
   position: fixed;
@@ -559,7 +559,7 @@
 /* A stack the flow leaves and comes back to. Amber rather than red: the
    board is valid, the PICTURE is compromised -- and the button is the fix,
    so it has to read as an offer, not as an error. */
-.minidag .md-warn {
+.outline .md-warn {
   flex: 0 0 auto;
   height: 16px;
   margin-left: 4px;
@@ -574,26 +574,26 @@
   line-height: 14px;
   cursor: pointer;
 }
-.minidag .md-warn:hover:not(:disabled) {
+.outline .md-warn:hover:not(:disabled) {
   background: #fef3c7;
   border-color: #f59e0b;
 }
-.minidag .md-warn:disabled { cursor: default; opacity: 0.7; }
+.outline .md-warn:disabled { cursor: default; opacity: 0.7; }
 
-.minidag .md-chip.md-stackchip {
+.outline .md-chip.md-stackchip {
   background: #f8fafc;
   border-style: solid;
   border-color: #dbe2ea;
 }
-.minidag .md-chip.md-stackchip .md-kind { background: #64748b; }
-.minidag .md-chip.md-stackchip .md-name {
+.outline .md-chip.md-stackchip .md-kind { background: #64748b; }
+.outline .md-chip.md-stackchip .md-name {
   font-weight: 600;
   color: var(--md-g600);
 }
 
 /* --- pickers / popovers --- */
 
-.minidag .md-picker {
+.outline .md-picker {
   position: absolute;
   z-index: 20;
   background: #fff;
@@ -603,7 +603,7 @@
   padding: 4px;
   width: 190px;
 }
-.minidag .md-pick {
+.outline .md-pick {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -611,11 +611,11 @@
   border-radius: 6px;
   cursor: pointer;
 }
-.minidag .md-pick:hover { background: var(--md-primary-bg); }
-.minidag .md-pick b { font-size: 12px; font-weight: 600; }
+.outline .md-pick:hover { background: var(--md-primary-bg); }
+.outline .md-pick b { font-size: 12px; font-weight: 600; }
 
-.minidag .md-conn { width: 220px; }
-.minidag .md-sect {
+.outline .md-conn { width: 220px; }
+.outline .md-sect {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -623,7 +623,7 @@
   color: var(--md-g400);
   padding: 5px 8px 2px;
 }
-.minidag .md-crow {
+.outline .md-crow {
   display: flex;
   align-items: center;
   gap: 7px;
@@ -631,15 +631,15 @@
   border-radius: 6px;
   font-size: 12px;
 }
-.minidag .md-crow:hover { background: var(--md-bg-input); }
-.minidag .md-dir { color: var(--md-g400); font-size: 11px; flex: 0 0 auto; }
-.minidag .md-who {
+.outline .md-crow:hover { background: var(--md-bg-input); }
+.outline .md-dir { color: var(--md-g400); font-size: 11px; flex: 0 0 auto; }
+.outline .md-who {
   flex: 1 1 auto;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.minidag .md-slot {
+.outline .md-slot {
   flex: 0 0 auto;
   font-size: 10px;
   font-weight: 600;
@@ -648,7 +648,7 @@
   border-radius: 999px;
   padding: 1px 6px;
 }
-.minidag .md-unlink {
+.outline .md-unlink {
   flex: 0 0 18px;
   height: 18px;
   border: none;
@@ -660,9 +660,9 @@
   border-radius: 4px;
   opacity: 0;
 }
-.minidag .md-crow:hover .md-unlink { opacity: 1; }
-.minidag .md-unlink:hover { color: #dc2626; }
-.minidag .md-none {
+.outline .md-crow:hover .md-unlink { opacity: 1; }
+.outline .md-unlink:hover { color: #dc2626; }
+.outline .md-none {
   padding: 6px 8px 4px;
   font-size: 11.5px;
   color: var(--md-g400);
@@ -670,7 +670,7 @@
 
 /* --- ghost / edge unlink --- */
 
-.minidag .md-ghost {
+.outline .md-ghost {
   position: absolute;
   z-index: 7;
   height: var(--md-row-h, 28px);
@@ -681,12 +681,12 @@
   pointer-events: none;
 }
 
-.minidag .md-deck svg.md-rail path.md-edge-hit {
+.outline .md-deck svg.md-rail path.md-edge-hit {
   pointer-events: stroke;
   cursor: pointer;
 }
-.minidag .md-deck svg.md-rail path.md-edge { transition: opacity 0.14s ease; }
-.minidag .md-edge-x {
+.outline .md-deck svg.md-rail path.md-edge { transition: opacity 0.14s ease; }
+.outline .md-edge-x {
   position: absolute;
   z-index: 12;
   width: 16px;
@@ -702,7 +702,7 @@
   cursor: pointer;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
 }
-.minidag .md-edge-x:hover { background: #fee2e2; }
+.outline .md-edge-x:hover { background: #fee2e2; }
 
 /* --- selection action bar --- */
 
@@ -716,7 +716,7 @@
    moves. Covering the search field is not a loss either: with a
    multi-selection in hand you are acting on it, not searching, and clearing
    the selection puts the field straight back. */
-.minidag .md-actionbar {
+.outline .md-actionbar {
   display: none;
   align-items: center;
   gap: 8px;
@@ -726,7 +726,7 @@
   padding: 0 10px;
   font-size: 12px;
 }
-.minidag .md-actionbar.on {
+.outline .md-actionbar.on {
   display: flex;
   position: absolute;
   top: 10px;          /* .md-head's padding-top */
@@ -735,8 +735,8 @@
   height: 30px;       /* the search row it covers */
   margin: 0;
 }
-.minidag .md-actionbar.err { background: #b91c1c; }
-.minidag .md-actionbar button {
+.outline .md-actionbar.err { background: #b91c1c; }
+.outline .md-actionbar button {
   height: 22px;
   padding: 0 10px;
   border-radius: 6px;
@@ -744,19 +744,19 @@
   font-size: 11.5px;
   cursor: pointer;
 }
-.minidag .md-go { background: var(--md-primary); color: #fff; }
-.minidag .md-no { background: transparent; color: #cbd5e1; }
+.outline .md-go { background: var(--md-primary); color: #fff; }
+.outline .md-no { background: transparent; color: #cbd5e1; }
 
 /* --- empty state --- */
 
-.minidag .md-empty {
+.outline .md-empty {
   padding: 28px 8px;
   text-align: center;
   color: var(--md-g500);
   font-size: 12.5px;
 }
-.minidag .md-empty p { margin: 0 0 10px; }
-.minidag .md-empty-add {
+.outline .md-empty p { margin: 0 0 10px; }
+.outline .md-empty-add {
   height: 28px;
   padding: 0 14px;
   border-radius: 7px;
@@ -766,7 +766,7 @@
   font-size: 12.5px;
   cursor: pointer;
 }
-.minidag .md-empty-add:hover {
+.outline .md-empty-add:hover {
   border-color: var(--md-primary);
   color: var(--md-primary);
   background: var(--md-primary-bg);
@@ -774,14 +774,14 @@
 
 /* --- loop-backs and edge labels (a process has both, a board neither) --- */
 
-.minidag .md-edge-back {
+.outline .md-edge-back {
   opacity: 0.75;
 }
-.minidag .md-arrow {
+.outline .md-arrow {
   fill: currentColor;
   stroke: none;
 }
-.minidag .md-edge-label {
+.outline .md-edge-label {
   font-size: 9px;
   font-weight: 600;
   letter-spacing: 0.01em;
@@ -791,14 +791,14 @@
   stroke-linejoin: round;
   pointer-events: none;
 }
-.minidag .md-focused .md-edge-label { opacity: 0.35; }
-.minidag .md-focused .md-edge-label.md-rel { opacity: 1; }
+.outline .md-focused .md-edge-label { opacity: 0.35; }
+.outline .md-focused .md-edge-label.md-rel { opacity: 1; }
 
 /* --- views: membership on a row, and the list that focuses one ---------
    Both live past the spring (`nodeAside` / `stackAside`), so they read as a
-   column down the minidag rather than as ragged text after each name. */
+   column down the outline rather than as ragged text after each name. */
 
-.minidag .md-views {
+.outline .md-views {
   margin-left: auto;
   display: flex;
   align-items: center;
@@ -806,7 +806,7 @@
   flex: 0 0 auto;
   padding-left: 10px;
 }
-.minidag .md-vtag {
+.outline .md-vtag {
   font-size: 10.5px;
   line-height: 1;
   padding: 3px 6px;
@@ -816,8 +816,8 @@
   white-space: nowrap;
   cursor: pointer;
 }
-.minidag .md-vtag:hover { color: var(--md-primary); }
-.minidag .md-vmore {
+.outline .md-vtag:hover { color: var(--md-primary); }
+.outline .md-vmore {
   background: var(--md-bg);
   border: 1px solid var(--md-border);
   color: var(--md-g500);
@@ -827,7 +827,7 @@
 /* While a drag is looking for empty canvas: the gutter is the drop zone that
    is reachable at every scroll position, so it is tinted for as long as the
    release would append. The ghost row follows the pointer (see `onMove`). */
-.minidag .md-deck.md-dropzone .md-rail {
+.outline .md-deck.md-dropzone .md-rail {
   background: var(--md-primary-bg);
   border-radius: 6px;
 }
@@ -847,7 +847,7 @@
    name, package badge, flush (no rules between), description as `title`.
    A second style for the same job is what made this read as clutter. */
 
-.minidag .md-picker {
+.outline .md-picker {
   position: absolute;
   z-index: 40;
   width: 400px;
@@ -860,7 +860,7 @@
 }
 
 /* the block browser's search field, magnifier and all */
-.minidag .md-pick-search {
+.outline .md-pick-search {
   display: block;
   width: calc(100% - 24px);
   margin: 8px 12px;
@@ -875,13 +875,13 @@
   color: var(--md-g900);
   outline: none;
 }
-.minidag .md-pick-search::placeholder { color: var(--md-g400); }
-.minidag .md-pick-search:focus {
+.outline .md-pick-search::placeholder { color: var(--md-g400); }
+.outline .md-pick-search:focus {
   border-color: var(--md-primary);
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
 }
 
-.minidag .md-pick-list {
+.outline .md-pick-list {
   /* Load-bearing: `el()` hands back a span by default, and `max-height` /
      `overflow` do nothing on an inline box -- the list grew to its full
      1047px and never scrolled. The class carries the contract, so it says
@@ -892,7 +892,7 @@
   padding: 0 6px 6px;
 }
 
-.minidag .md-pick-group {
+.outline .md-pick-group {
   display: block;          /* same reason: vertical margins need a block */
   margin: 8px 0 2px;
   padding: 0 6px;
@@ -902,13 +902,13 @@
   text-transform: uppercase;
   color: var(--md-g500);
 }
-.minidag .md-pick-group:first-child { margin-top: 2px; }
+.outline .md-pick-group:first-child { margin-top: 2px; }
 
-/* The picker row IS the minidag row: same height, gap, padding, radius and
+/* The picker row IS the outline row: same height, gap, padding, radius and
    tile. A block is one object, so it should not be drawn one way in the
    list and another in the menu that adds it. The tile reuses `.md-kind`
    outright rather than restating its geometry, so the two cannot drift. */
-.minidag .md-pick-row {
+.outline .md-pick-row {
   display: flex;
   align-items: center;
   gap: 7px;
@@ -919,12 +919,12 @@
   border-radius: 7px;
   cursor: pointer;
 }
-.minidag .md-pick-row:hover,
-.minidag .md-pick-row.cur {
+.outline .md-pick-row:hover,
+.outline .md-pick-row.cur {
   border-color: var(--md-border);
   background: var(--md-bg-input);
 }
-.minidag .md-pick-name {
+.outline .md-pick-name {
   flex: 1 1 auto;
   min-width: 0;
   font-size: 12.5px;
@@ -932,23 +932,23 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.minidag .md-pick-pkg { font-size: 11px; color: var(--md-g400); }
+.outline .md-pick-pkg { font-size: 11px; color: var(--md-g400); }
 
 /* `blk_color()` is a pure function of the category, so the same values it
    gives a block on the board give its type here -- the tile a block will
    have is the tile you picked. */
-.minidag .md-pick-row[data-cat="input"] .md-kind { background: #0072B2; }
-.minidag .md-pick-row[data-cat="transform"] .md-kind { background: #009E73; }
-.minidag .md-pick-row[data-cat="structured"] .md-kind { background: #56B4E9; }
-.minidag .md-pick-row[data-cat="plot"] .md-kind { background: #E69F00; }
-.minidag .md-pick-row[data-cat="table"] .md-kind { background: #CC79A7; }
-.minidag .md-pick-row[data-cat="model"] .md-kind { background: #F0E442; }
-.minidag .md-pick-row[data-cat="output"] .md-kind { background: #D55E00; }
-.minidag .md-pick-row[data-cat="utility"] .md-kind { background: #CCCCCC; }
-.minidag .md-pick-row .md-kind { background: #999999; }
+.outline .md-pick-row[data-cat="input"] .md-kind { background: #0072B2; }
+.outline .md-pick-row[data-cat="transform"] .md-kind { background: #009E73; }
+.outline .md-pick-row[data-cat="structured"] .md-kind { background: #56B4E9; }
+.outline .md-pick-row[data-cat="plot"] .md-kind { background: #E69F00; }
+.outline .md-pick-row[data-cat="table"] .md-kind { background: #CC79A7; }
+.outline .md-pick-row[data-cat="model"] .md-kind { background: #F0E442; }
+.outline .md-pick-row[data-cat="output"] .md-kind { background: #D55E00; }
+.outline .md-pick-row[data-cat="utility"] .md-kind { background: #CCCCCC; }
+.outline .md-pick-row .md-kind { background: #999999; }
 
 /* the mouse fallback for the drag: append after this row */
-.minidag .md-rowadd {
+.outline .md-rowadd {
   width: 17px;
   height: 17px;
   flex: 0 0 17px;
@@ -966,8 +966,8 @@
   align-items: center;
   justify-content: center;
 }
-.minidag .md-chip:hover .md-rowadd { opacity: 1; }
-.minidag .md-rowadd:hover {
+.outline .md-chip:hover .md-rowadd { opacity: 1; }
+.outline .md-rowadd:hover {
   border-style: solid;
   border-color: var(--md-primary);
   color: var(--md-primary);
@@ -978,12 +978,12 @@
    a stack frame is part of the board's structure, this is not -- it is the
    panels the board carries, listed where they cannot be mistaken for a step
    in the pipeline. */
-.minidag .md-exts {
+.outline .md-exts {
   margin-top: 12px;
   border-top: 1px solid var(--md-border);
   padding-top: 6px;
 }
-.minidag .md-extshead {
+.outline .md-extshead {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -993,7 +993,7 @@
   color: var(--md-g500);
   padding: 2px 4px 4px;
 }
-.minidag .md-extscount {
+.outline .md-extscount {
   margin-left: auto;
   font-variant-numeric: tabular-nums;
   text-transform: none;
@@ -1002,14 +1002,14 @@
 }
 /* A round tile, where a block's is square: the one thing that says "not a
    block" without a word spent on it. */
-.minidag .md-ext .md-extkind {
+.outline .md-ext .md-extkind {
   border-radius: 50%;
   background: var(--md-g400);
 }
 /* --- the row menu ------------------------------------------------------
    On `document.body`, fixed to the viewport, because the panel it belongs to
    both scrolls and clips: a menu taller than the panel cannot live inside it.
-   `.md-droptip` is fixed for the same reason. Hence no `.minidag` ancestor in
+   `.md-droptip` is fixed for the same reason. Hence no `.outline` ancestor in
    these selectors -- the menu is not inside one. */
 .md-ctxmenu {
   position: fixed;
@@ -1024,7 +1024,7 @@
   box-shadow: 0 4px 12px rgb(0 0 0 / 10%);
   /* NO font-family: the design system's first rule is that components never
      hardcode one, and a body portal inherits the page font for free. The size
-     is `--blockr-font-size-xs`, one step below the 13px the minidag's own rows
+     is `--blockr-font-size-xs`, one step below the 13px the outline's own rows
      run at, because a menu about a row must not be bigger than the row.
      (This declaration used to be a `font:` shorthand ending in `inherit`, which
      is not a legal family in the shorthand -- so the whole thing was dropped and
@@ -1037,7 +1037,7 @@
   display: flex;
   gap: 6px;
   padding: 4px 8px 3px;
-  font-size: 10px;   /* the minidag's meta scale, as on `.md-vtag` */
+  font-size: 10px;   /* the outline's meta scale, as on `.md-vtag` */
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--blockr-grey-400, #9ca3af);
@@ -1226,7 +1226,7 @@
 .md-ctxdanger:hover:not(:disabled) { background: #fef2f2; }
 
 /* on every view: the one answer a list of names reads worse than a word */
-.minidag .md-vall-tag {
+.outline .md-vall-tag {
   color: var(--md-primary);
   background: var(--md-primary-bg);
   border-color: #bfdbfe;
@@ -1240,21 +1240,21 @@
    only adds where it wired the handler -- a stack row's tag summarises members
    and does nothing, so it must not take the pointer. The CURRENT view's tag is
    tinted as well, because it is the one whose panel you can watch go. */
-.minidag .md-vdrop { cursor: pointer; }
-.minidag .md-vdrop:hover { border-color: var(--md-primary); }
-.minidag .md-vcur {
+.outline .md-vdrop { cursor: pointer; }
+.outline .md-vdrop:hover { border-color: var(--md-primary); }
+.outline .md-vcur {
   color: var(--md-primary);
   background: var(--md-primary-bg);
   border-color: #bfdbfe;
   cursor: pointer;
 }
-.minidag .md-vcur:hover {
+.outline .md-vcur:hover {
   border-color: var(--md-primary);
   background: #dbeafe;
 }
 /* the count is not a view, so it is not a button */
-.minidag .md-vmore { cursor: help; }
-.minidag .md-vx {
+.outline .md-vmore { cursor: help; }
+.outline .md-vx {
   margin-left: 3px;
   font-size: 11px;
   line-height: 1;
@@ -1262,5 +1262,5 @@
 }
 /* revealed by hovering the ROW, so the affordance is findable without landing on
    the tag first, and lit once the pointer is actually on it */
-.minidag .md-chip:hover .md-vx { opacity: 0.55; }
-.minidag .md-vcur:hover .md-vx { opacity: 1; }
+.outline .md-chip:hover .md-vx { opacity: 0.55; }
+.outline .md-vcur:hover .md-vx { opacity: 1; }

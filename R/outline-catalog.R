@@ -1,8 +1,8 @@
-# The block catalogue, as the minidag's inline picker needs it.
+# The block catalogue, as the outline's inline picker needs it.
 #
 # The picker is one surface with two states: at rest it BROWSES (every type,
 # grouped by category, with its description), and once you type it RECALLS
-# (flat, ranked). Both read this same list, which is why the minidag needs no
+# (flat, ranked). Both read this same list, which is why the outline needs no
 # second copy of the catalogue in a pane.
 #
 # It is a pure function of the registry, so it is sent once when the client
@@ -18,8 +18,8 @@
 # no link, so nothing is filtered -- this is the same rule blockr.dock's
 # block browser applies via `need_inputs <- mode == "append"`, restated here
 # because that helper is internal to dock.
-minidag_registry <- function() {
-  entries <- minidag_registry_entries()
+outline_registry <- function() {
+  entries <- outline_registry_entries()
   list(
     add = unname(entries),
     append = unname(
@@ -31,7 +31,7 @@ minidag_registry <- function() {
   )
 }
 
-minidag_registry_entries <- memoise0(function() {
+outline_registry_entries <- memoise0(function() {
 
   registry <- blockr.core::available_blocks()
 
@@ -41,7 +41,7 @@ minidag_registry_entries <- memoise0(function() {
     uid <- names(registry)[[i]]
 
     # Arity has to come from an instance, and a constructor with required
-    # arguments (or a broken package) would otherwise take the whole minidag
+    # arguments (or a broken package) would otherwise take the whole outline
     # down at startup. A type we cannot instantiate is still offered; it
     # just never qualifies as an append candidate.
     blk <- tryCatch(ctor(), error = function(e) NULL)
