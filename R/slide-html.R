@@ -51,6 +51,7 @@ slide_html_css <- function() {
 .bslide-table td { padding:7px 10px; border-bottom:1px solid #e5e7eb; }
 .bslide-table .num { text-align:right; }
 .bslide-cut { margin-top:8px; font-size:14px; color:#b45309; }
+.bslide-cut--paged { color:#6b7280; }
 .bslide-bullets { margin:0; padding:0 0 0 22px; font-size:20px;
   line-height:1.5; }
 .bslide-bullets li { margin-bottom:14px; }
@@ -73,7 +74,7 @@ slide_html_css <- function() {
 # that fit, and how many did not. Truncate-and-say-so (spec req. 21) -- the
 # arithmetic mirrors the stylesheet above (42px header, 40px rows, 30px
 # marker), so the preview never scrolls and never lies.
-slide_table_html <- function(x, r) {
+slide_table_html <- function(x, r, paginate = FALSE) {
 
   df <- as.data.frame(x)
 
@@ -106,7 +107,11 @@ slide_table_html <- function(x, r) {
   htmltools::HTML(paste0(
     "<table class=\"bslide-table\"><thead><tr>", head_cells,
     "</tr></thead><tbody>", body, "</tbody></table>",
-    if (cut > 0L) {
+    if (cut > 0L && paginate) {
+      # The download pages; the preview is page one and says so.
+      paste0("<div class=\"bslide-cut bslide-cut--paged\">", cut,
+             " more rows continue on further slides</div>")
+    } else if (cut > 0L) {
       paste0("<div class=\"bslide-cut\">", cut, " more rows do not fit</div>")
     }
   ))
@@ -153,7 +158,10 @@ slide_slot_html <- function(s, x) {
       if (is.null(val)) {
         htmltools::div(class = "bslide-empty", "not linked")
       } else {
-        slide_table_html(val, r)
+        slide_table_html(
+          val, r,
+          paginate = isTRUE(x$paginate) && slide_single_exhibit(x)
+        )
       }
     },
     bullets = slide_bullets_html(x$text),

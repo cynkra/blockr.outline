@@ -10,6 +10,7 @@ new_slide_block(
   subtitle = "",
   footnote = "",
   text = "",
+  paginate = TRUE,
   ...
 )
 }
@@ -19,6 +20,9 @@ new_slide_block(
 \item{title, subtitle, footnote}{Slide chrome; empty strings render nothing.}
 
 \item{text}{The chosen layout's text field (takeaway, bullets, kicker).}
+
+\item{paginate}{Single-exhibit layouts: page an overflowing table over
+further slides (see \code{\link[=slide]{slide()}}). Ignored by other layouts.}
 
 \item{...}{Forwarded to \code{\link[blockr.core:new_block]{blockr.core::new_block()}}.}
 }

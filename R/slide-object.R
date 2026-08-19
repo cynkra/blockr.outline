@@ -20,12 +20,20 @@
 #'   `*italic*` are honoured; bullet-shaped fields read one bullet per line.
 #' @param exhibits Linked block results, in slot order. More values than the
 #'   layout has slots are not drawn; missing ones leave the slot empty.
+#' @param paginate Single-exhibit layouts only: a table too tall for its
+#'   slot is carried over further slides by blockr.viz's paginator (repeated
+#'   header, the title marked `(2 of 3)`, the slide's subtitle and footnote
+#'   stamped on every page), exactly like the deck's paged tables. `FALSE`
+#'   truncates with a visible marker instead. Layouts with more than one
+#'   content slot always truncate: a second slide would duplicate the other
+#'   slots.
 #'
 #' @return A `blockr_slide` object.
 #'
 #' @export
 slide <- function(layout = "exhibit-full", title = "", subtitle = "",
-                  footnote = "", text = "", exhibits = list()) {
+                  footnote = "", text = "", exhibits = list(),
+                  paginate = TRUE) {
 
   spec <- slide_layout_spec(layout)
 
@@ -36,10 +44,21 @@ slide <- function(layout = "exhibit-full", title = "", subtitle = "",
       subtitle = as_chr1(subtitle),
       footnote = as_chr1(footnote),
       text = as_chr1(text),
-      exhibits = exhibits
+      exhibits = exhibits,
+      paginate = isTRUE(paginate)
     ),
     class = "blockr_slide"
   )
+}
+
+# Pagination applies when the layout's ONLY content slot is the exhibit --
+# then nothing on a continuation slide duplicates, which is the whole of
+# requirement 21's objection to a composed slide paging.
+slide_single_exhibit <- function(x) {
+  spec <- slide_layout_spec(x$layout)
+  body <- rect(0, 0, 1, 1)
+  kinds <- chr_ply(spec$build(body), `[[`, "kind")
+  identical(kinds, "exhibit")
 }
 
 as_chr1 <- function(x) {

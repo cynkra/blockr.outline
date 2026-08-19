@@ -48,19 +48,118 @@ slide_pptx_add <- function(doc, x, template = NULL) {
   }
   master <- layouts$master[match(lay, layouts$layout)]
 
-  doc <- officer::add_slide(doc, layout = lay, master = master)
-
   fnt <- coal(tryCatch(template_body_font(template), error = function(e) NULL),
               "Inter")
 
   has_sub <- nzchar(x$subtitle)
   frame <- slide_template_frame(template)
 
+  # The paginating single-exhibit slide: blockr.viz's paginator makes the
+  # slides (repeated header, title marked "(2 of 3)"), and the slide's own
+  # subtitle / footnote chrome is stamped onto every page afterwards, so
+  # each slide pulled out of the deck stands alone. Anything that keeps
+  # this from working falls through to the fixed-canvas painter below --
+  # which is also why the branch runs BEFORE add_slide(): the paginator
+  # makes its own slides, and a slide made here first would stay blank.
+  if (isTRUE(x$paginate) && slide_single_exhibit(x) &&
+      length(x$exhibits) >= 1L) {
+    paged <- slide_pptx_paged(doc, x, fnt, frame, template, lay, master)
+    if (!is.null(paged)) {
+      return(paged)
+    }
+  }
+
+  doc <- officer::add_slide(doc, layout = lay, master = master)
+
   for (s in slide_slots(x$layout, has_subtitle = has_sub, frame = frame)) {
     doc <- slide_pptx_slot(doc, s, x, fnt, template, frame)
   }
 
   slide_strip_placeholders(doc)
+}
+
+# The single-exhibit slide through blockr.viz's paginator. NULL when the
+# exhibit is not a table the paginator can rebuild (a chart, an unknown
+# object) or when it fits its slot anyway -- then the fixed canvas is the
+# simpler, identical answer.
+slide_pptx_paged <- function(doc, x, fnt, frame, template, lay, master) {
+
+  val <- x$exhibits[[1L]]
+
+  df <- tryCatch(as.data.frame(val), error = function(e) NULL)
+  if (is.null(df)) {
+    return(NULL)
+  }
+
+  has_sub <- nzchar(x$subtitle)
+  slots <- slide_slots(x$layout, has_subtitle = has_sub, frame = frame)
+  r <- NULL
+  for (s in slots) {
+    if (s$kind == "exhibit") r <- s$rect
+  }
+
+  # The same fit estimate the fixed painter uses: only an OVERFLOWING table
+  # is worth the paginator, a fitting one comes out the same either way.
+  if (nrow(df) <= floor((r$h - 0.40) / 0.28)) {
+    return(NULL)
+  }
+
+  if (!requireNamespace("blockr.viz", quietly = TRUE)) {
+    return(NULL)
+  }
+
+  before <- length(doc)
+
+  out <- tryCatch(
+    {
+      # The deck render sets this pair globally around a whole render; a
+      # block's own download reaches the paginator directly, so it states
+      # them here: columns sized to the slot, the template's face.
+      old <- options(
+        c(
+          list(blockr.viz.ft_fit_width = r$w),
+          if (is.null(getOption("blockr.viz.ft_font"))) {
+            list(blockr.viz.ft_font = fnt)
+          }
+        )
+      )
+      on.exit(options(old), add = TRUE)
+      blockr.viz::pptx_add_exhibit(
+        doc, val,
+        title = if (nzchar(x$title)) x$title,
+        template = template, layout = lay, master = master,
+        top = r$y
+      )
+    },
+    error = function(e) NULL
+  )
+
+  if (is.null(out) || length(out) <= before) {
+    return(NULL)
+  }
+
+  # The slide's own chrome, on every page: a slide pulled out of the deck
+  # has to say what it shows and where the numbers came from, same rule the
+  # paginator applies to the title and the header band.
+  for (k in seq(before + 1L, length(out))) {
+    out <- tryCatch(
+      {
+        cur <- officer::on_slide(out, index = k)
+        for (s in slots) {
+          if (s$kind %in% c("subtitle", "footnote")) {
+            cur <- slide_pptx_slot(cur, s, x, fnt, template, frame)
+          }
+        }
+        slide_strip_placeholders(cur)
+      },
+      error = function(e) out
+    )
+  }
+
+  tryCatch(
+    officer::on_slide(out, index = length(out)),
+    error = function(e) out
+  )
 }
 
 loc <- function(r, ...) {

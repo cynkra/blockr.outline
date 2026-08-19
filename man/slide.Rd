@@ -10,7 +10,8 @@ slide(
   subtitle = "",
   footnote = "",
   text = "",
-  exhibits = list()
+  exhibits = list(),
+  paginate = TRUE
 )
 }
 \arguments{
@@ -24,6 +25,14 @@ nothing (and an empty subtitle hands its room to the body).}
 
 \item{exhibits}{Linked block results, in slot order. More values than the
 layout has slots are not drawn; missing ones leave the slot empty.}
+
+\item{paginate}{Single-exhibit layouts only: a table too tall for its
+slot is carried over further slides by blockr.viz's paginator (repeated
+header, the title marked \verb{(2 of 3)}, the slide's subtitle and footnote
+stamped on every page), exactly like the deck's paged tables. \code{FALSE}
+truncates with a visible marker instead. Layouts with more than one
+content slot always truncate: a second slide would duplicate the other
+slots.}
 }
 \value{
 A \code{blockr_slide} object.

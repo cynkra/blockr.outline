@@ -39,11 +39,14 @@ as_dot_call <- function(x) {
 #' @param layout Layout id, one of `names(slide_layouts())`.
 #' @param title,subtitle,footnote Slide chrome; empty strings render nothing.
 #' @param text The chosen layout's text field (takeaway, bullets, kicker).
+#' @param paginate Single-exhibit layouts: page an overflowing table over
+#'   further slides (see [slide()]). Ignored by other layouts.
 #' @param ... Forwarded to [blockr.core::new_block()].
 #'
 #' @export
 new_slide_block <- function(layout = "exhibit-full", title = "",
-                            subtitle = "", footnote = "", text = "", ...) {
+                            subtitle = "", footnote = "", text = "",
+                            paginate = TRUE, ...) {
 
   blockr.core::new_block(
 
@@ -55,8 +58,11 @@ new_slide_block <- function(layout = "exhibit-full", title = "",
         sub <- shiny::reactiveVal(subtitle)
         fno <- shiny::reactiveVal(footnote)
         txt <- shiny::reactiveVal(text)
+        pgn <- shiny::reactiveVal(isTRUE(paginate))
 
         shiny::observeEvent(input$layout, lay(input$layout))
+        shiny::observeEvent(input$paginate, pgn(isTRUE(input$paginate)),
+                            ignoreInit = TRUE)
         shiny::observeEvent(input$title, tit(input$title), ignoreInit = TRUE)
         shiny::observeEvent(input$subtitle, sub(input$subtitle),
                             ignoreInit = TRUE)
@@ -82,6 +88,25 @@ new_slide_block <- function(layout = "exhibit-full", title = "",
           )
         })
 
+        # The pagination toggle exists only where pagination can: a layout
+        # whose sole content slot is the exhibit (no option, no control --
+        # the no-gear-when-no-options rule).
+        output$paginate_field <- shiny::renderUI({
+          spec <- slide_layout_spec(lay())
+          kinds <- chr_ply(
+            spec$build(rect(0, 0, 1, 1)),
+            function(s) s$kind
+          )
+          if (!identical(kinds, "exhibit")) {
+            return(NULL)
+          }
+          shiny::checkboxInput(
+            session$ns("paginate"),
+            "Page a long table over further slides",
+            value = shiny::isolate(pgn())
+          )
+        })
+
         # The capacity indicator (spec req. 12): what the layout wants
         # against what is linked. An indicator, not a validation -- being a
         # link short is an ordinary state while authoring.
@@ -101,7 +126,7 @@ new_slide_block <- function(layout = "exhibit-full", title = "",
         cur_slide <- shiny::reactive(
           slide(
             layout = lay(), title = tit(), subtitle = sub(),
-            footnote = fno(), text = txt(),
+            footnote = fno(), text = txt(), paginate = pgn(),
             # By position, not via unname() (the reactives names<- method
             # rejects NULL), and no call: the store binds each slot as an
             # active binding, so indexing already yields the current value.
@@ -124,12 +149,12 @@ new_slide_block <- function(layout = "exhibit-full", title = "",
             bquote(
               blockr.outline::slide(
                 layout = .(lay), title = .(tit), subtitle = .(sub),
-                footnote = .(fno), text = .(txt),
+                footnote = .(fno), text = .(txt), paginate = .(pgn),
                 exhibits = list(..(dat))
               ),
               list(
                 lay = lay(), tit = tit(), sub = sub(), fno = fno(),
-                txt = txt(),
+                txt = txt(), pgn = pgn(),
                 dat = lapply(unname(arg_names()), as_dot_call)
               ),
               splice = TRUE
@@ -137,7 +162,7 @@ new_slide_block <- function(layout = "exhibit-full", title = "",
           ),
           state = list(
             layout = lay, title = tit, subtitle = sub,
-            footnote = fno, text = txt
+            footnote = fno, text = txt, paginate = pgn
           )
         )
       })
@@ -161,6 +186,7 @@ new_slide_block <- function(layout = "exhibit-full", title = "",
           width = "100%"
         ),
         shiny::uiOutput(shiny::NS(id, "text_field")),
+        shiny::uiOutput(shiny::NS(id, "paginate_field")),
         htmltools::div(
           style = "font-size:12px;color:#6b7280;margin-bottom:8px;",
           shiny::textOutput(shiny::NS(id, "capacity"), inline = TRUE)
