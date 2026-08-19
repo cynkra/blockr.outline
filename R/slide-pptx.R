@@ -226,8 +226,17 @@ slide_pptx_slot <- function(doc, s, x, fnt, template = NULL,
 slide_pptx_exhibit <- function(doc, val, r, fnt, template = NULL) {
 
   if (inherits(val, c("gg", "ggplot"))) {
+    # A chart that states its own size (static_chart's pptx_width/height)
+    # keeps it, centred in the slot; capped at the slot, never stretched.
+    w <- min(coal(attr(val, "pptx_width"), r$w), r$w)
+    h <- min(coal(attr(val, "pptx_height"), r$h), r$h)
     return(tryCatch(
-      officer::ph_with(doc, val, location = loc(r)),
+      officer::ph_with(
+        doc, val,
+        location = officer::ph_location(
+          left = r$x + (r$w - w) / 2, top = r$y, width = w, height = h
+        )
+      ),
       error = function(e) doc
     ))
   }

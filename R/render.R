@@ -1180,12 +1180,37 @@ render_pptx_officer <- function(sects, file, title, template = NULL,
     # flextable, so an exhibit that arrives already rendered still pages.
     # Everything else -- plots, widgets, an unknown object -- keeps the
     # single-slide placement below.
-    n_paged <- deck_add_table(doc, exhibit, nm, layout, master, template)
+    n_paged <- deck_add_table(doc, exhibit, nm, layout, master, template,
+                              top = slide_template_frame(template)$body_top_bare)
 
     if (!is.null(n_paged)) {
       doc <- n_paged$doc
       n_slides <- n_slides + n_paged$n
       next
+    }
+
+    # An ordinary pick is a DEFAULT slide: the block's name as the title,
+    # one exhibit, no subtitle -- the same slide a fresh slide block shows,
+    # so promoting a pick to a slide block changes nothing until authored.
+    # Pageable tables took the branch above (the one licensed multi-slide
+    # case: a default slide has nothing that would duplicate); a note keeps
+    # the classic placement below, because the report extension's prose
+    # layout is its own design.
+    if (!nzchar(desc)) {
+      placed <- tryCatch(
+        slide_pptx_add(
+          doc,
+          slide(layout = "exhibit-full", title = coal(nm, ""),
+                exhibits = list(exhibit)),
+          template = template
+        ),
+        error = function(e) NULL
+      )
+      if (!is.null(placed)) {
+        doc <- placed
+        n_slides <- n_slides + 1L
+        next
+      }
     }
 
     doc <- officer::add_slide(doc, layout = layout, master = master)
@@ -1878,7 +1903,8 @@ deck_set_title_size <- function(doc, size) {
 # flextable carrying no source frame, a blockr.viz too old to export the
 # entry point, or a paginator that threw. A deck that loses its pagination is
 # a worse deck; a deck that loses a slide is a broken one.
-deck_add_table <- function(doc, exhibit, title, layout, master, template) {
+deck_add_table <- function(doc, exhibit, title, layout, master, template,
+                           top = NULL) {
 
   if (!deck_pageable(exhibit)) {
     return(NULL)
@@ -1895,9 +1921,17 @@ deck_add_table <- function(doc, exhibit, title, layout, master, template) {
 
   before <- length(doc)
 
+  args <- list(doc, exhibit, title = title, template = template,
+               layout = layout, master = master)
+  if (!is.null(top)) {
+    # The deck's default-slide geometry: a paged table starts where a slide
+    # block's exhibit starts, so a pick and its slide-block promotion sit
+    # at the same height.
+    args$top <- top
+  }
+
   out <- tryCatch(
-    add(doc, exhibit, title = title, template = template,
-        layout = layout, master = master),
+    do.call(add, args),
     error = function(e) {
       cat("[deck] could not page '", coal(title, "table"), "': ",
           conditionMessage(e), "\n", sep = "", file = stderr())
