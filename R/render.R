@@ -568,10 +568,10 @@ render_logged <- function(expr) {
 #                 startup. Both are invisible to a fresh session, so quarto
 #                 fails on documents that render perfectly in the app.
 #
-# Deliberately an OPTION rather than an argument on new_outline_extension():
-# this is a property of the deployment (what that server can install), not of
-# the report, and a constructor argument would serialise with the board and
-# travel to a deployment where the answer is different.
+# Deliberately an OPTION rather than a constructor argument on the rendering
+# extensions: this is a property of the deployment (what that server can
+# install), not of the report, and a constructor argument would serialise with
+# the board and travel to a deployment where the answer is different.
 execute_mode <- function() {
   mode <- getOption("blockr.outline.execute", "quarto")
   if (!is.character(mode) || length(mode) != 1L ||

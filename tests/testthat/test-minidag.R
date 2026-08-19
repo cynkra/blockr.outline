@@ -158,17 +158,17 @@ test_that("minidag_extensions gives every mounted extension a row, view or no vi
     blocks = c(d1 = blockr.core::new_dataset_block("iris")),
     extensions = list(
       minidag = new_minidag_extension(),
-      outline = new_outline_extension()
+      deck = new_slides_extension()
     ),
     views = list(one = blockr.dock::dock_view(c("minidag", "d1")))
   )
 
   extensions <- minidag_extensions(board)
 
-  # mount order, and the OUTLINE is here despite being on no view at all: the
+  # mount order, and the DECK is here despite being on no view at all: the
   # catalogue comes from the board, which is the whole reason a row can report
   # "nowhere"
-  expect_identical(vapply(extensions, `[[`, "", "id"), c("minidag", "outline"))
+  expect_identical(vapply(extensions, `[[`, "", "id"), c("minidag", "deck"))
   expect_identical(extensions[[1L]]$name, "Minidag")
 
   # `self` marks our own row, so the client can guard the one gesture that
@@ -190,7 +190,7 @@ test_that("minidag_membership_delta covers the whole mode vocabulary", {
     links = blockr.core::links(from = "d1", to = "h1"),
     extensions = list(
       minidag = new_minidag_extension(),
-      outline = new_outline_extension()
+      deck = new_slides_extension()
     ),
     views = list(
       one = blockr.dock::dock_view(c("minidag", "d1")),

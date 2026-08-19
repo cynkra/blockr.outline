@@ -35,9 +35,6 @@ test_that("a board carries no template of its own", {
   file.create(house)
   withr::local_options(list(blockr.outline.template = house))
 
-  ext <- new_outline_extension(template = "/saved/on/another/machine.pptx")
-  expect_s3_class(ext, "outline_extension")
-
   deck <- new_slides_extension(template = "/saved/on/another/machine.pptx")
   expect_s3_class(deck, "slides_extension")
 
