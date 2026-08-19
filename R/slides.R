@@ -246,12 +246,14 @@ slides_dep <- function() {
 slides_js <- function(ns) {
 
   consts <- sprintf(
-    "var ACT = '%s', MOVE = '%s', DL = '%s', ADD = '%s', ROOT = '%s';",
+    paste0("var ACT = '%s', MOVE = '%s', DL = '%s', ADD = '%s', ",
+           "ROOT = '%s', OPEN = '%s';"),
     ns("sld_act"),
     ns("sld_move"),
     ns("sld_dl"),
     ns("sld_add"),
-    ns("sld_root")
+    ns("sld_root"),
+    ns("sld_open")
   )
 
   tags$script(HTML(paste0(
@@ -263,14 +265,24 @@ slides_js <- function(ns) {
       document.addEventListener('click', function(e) {
 
         var btn = e.target.closest ? e.target.closest('.blockr-sld-act') : null;
-        if (!btn) return;
-        var row = btn.closest('.blockr-sld-row');
-        if (!row) return;
-        Shiny.setInputValue(
-          ACT,
-          {id: row.dataset.blk, act: btn.dataset.act},
-          {priority: 'event'}
-        );
+        if (btn) {
+          var arow = btn.closest('.blockr-sld-row');
+          if (!arow) return;
+          Shiny.setInputValue(
+            ACT,
+            {id: arow.dataset.blk, act: btn.dataset.act},
+            {priority: 'event'}
+          );
+          return;
+        }
+
+        // A plain click on the row opens that block's panel, the same move
+        // the report extension's rows make: the deck lists blocks, and the
+        // obvious question about a listed block is \"show me this one\".
+        var row = e.target.closest ?
+          e.target.closest('.blockr-sld-row') : null;
+        if (!row || !row.dataset.blk) return;
+        Shiny.setInputValue(OPEN, {id: row.dataset.blk}, {priority: 'event'});
       });
 
       var dragged = null;
@@ -767,6 +779,39 @@ slides_ext_srv <- function(slides, title, format = "pptx") {
             rv_slides(
               append(rest, blk, after = if (isTRUE(input$sld_move$after)) at else at - 1L)
             )
+          }
+        )
+
+        # ---- open a block --------------------------------------------
+        #
+        # The outline's open move, which the report extension's rows make
+        # too: reveal the block's panel in the ACTIVE view -- focus it when
+        # it is already there, add it when it is not -- and never switch
+        # views. A deck row names a block; clicking it should show that
+        # block, not navigate somewhere else.
+        observeEvent(
+          input$sld_open,
+          {
+            blk_id <- input$sld_open$id
+            req(is.character(blk_id))
+            req(blk_id %in% blockr.core::board_block_ids(board$board))
+
+            views <- blockr.dock::board_views(board$board)
+            view <- blockr.dock::active_view(views)
+
+            if (is.null(view)) {
+              return()
+            }
+
+            pid <- as.character(blockr.dock::as_block_panel_id(blk_id))
+
+            ops <- if (pid %in% blockr.dock::view_members(views[[view]])) {
+              list(select = pid)
+            } else {
+              list(add = setNames(list(list()), pid), select = pid)
+            }
+
+            update(list(views = list(mod = setNames(list(ops), view))))
           }
         )
 
