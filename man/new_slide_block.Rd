@@ -21,8 +21,8 @@ new_slide_block(
 \item{title, subtitle, footnote}{Slide chrome; empty strings render nothing.}
 
 \item{text}{The Details field: one field for every layout, so the words
-survive a layout switch. \verb{- } starts a bullet (a numbered item on the
-agenda layout); plain lines stay plain; \verb{**bold**}, \verb{*italic*}.}
+survive a layout switch. \verb{- } starts a bullet, \code{1. } a numbered item,
+plain lines stay plain; \verb{**bold**}, \verb{*italic*}.}
 
 \item{labels}{Compare layout only: panel headings, \code{|}-separated.}
 

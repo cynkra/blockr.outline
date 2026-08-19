@@ -18,9 +18,10 @@
 #'   nothing (and an empty subtitle hands its room to the body).
 #' @param text The layout's Details field -- ONE field, the same content
 #'   whatever the layout, so switching layouts reshapes the words rather
-#'   than losing them. Lines starting with `- ` become bullets (numbered
-#'   items on the agenda layout); lines without stay plain text, and a
-#'   slide freely mixes both. Inline `**bold**` and `*italic*`.
+#'   than losing them. Lines starting with `- ` become bullets, lines
+#'   starting with `1. ` become numbered items (renumbered in order, as
+#'   markdown does), lines without stay plain text, and a slide freely
+#'   mixes all three. Inline `**bold**` and `*italic*`.
 #' @param labels Panel headings for the compare layout, separated by `|`
 #'   (e.g. `"Before | After"`). Ignored by other layouts.
 #' @param exhibits Linked block results, in slot order. More values than the
@@ -131,18 +132,25 @@ md_runs <- function(line) {
   out
 }
 
-# The Details field as classified lines: each entry `list(runs=, bullet=)`.
-# `- ` (or `* `) opens a bullet line; anything else is a plain line.
+# The Details field as classified lines: each entry `list(runs=, marker=)`
+# with marker "bullet" (`- ` / `* `), "number" (`1. ` / `1) ` -- the typed
+# digits are dropped and consecutive items renumber in order, as markdown
+# does), or "none". Numbering is CONTENT, not a layout: an agenda is the
+# bullets layout with numbered lines, and any Details slot can carry one.
 md_lines <- function(text) {
   lines <- strsplit(coal(text, ""), "\n", fixed = TRUE)[[1L]]
   lines <- lines[nzchar(trimws(lines))]
   lapply(lines, function(l) {
     l <- trimws(l)
-    bullet <- grepl("^[-*] ", l)
-    if (bullet) {
+    marker <- "none"
+    if (grepl("^[-*] ", l)) {
+      marker <- "bullet"
       l <- sub("^[-*] +", "", l)
+    } else if (grepl("^[0-9]+[.)] ", l)) {
+      marker <- "number"
+      l <- sub("^[0-9]+[.)] +", "", l)
     }
-    list(runs = md_runs(l), bullet = bullet)
+    list(runs = md_runs(l), marker = marker)
   })
 }
 

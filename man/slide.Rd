@@ -23,9 +23,10 @@ nothing (and an empty subtitle hands its room to the body).}
 
 \item{text}{The layout's Details field -- ONE field, the same content
 whatever the layout, so switching layouts reshapes the words rather
-than losing them. Lines starting with \verb{- } become bullets (numbered
-items on the agenda layout); lines without stay plain text, and a
-slide freely mixes both. Inline \verb{**bold**} and \verb{*italic*}.}
+than losing them. Lines starting with \verb{- } become bullets, lines
+starting with \code{1. } become numbered items (renumbered in order, as
+markdown does), lines without stay plain text, and a slide freely
+mixes all three. Inline \verb{**bold**} and \verb{*italic*}.}
 
 \item{labels}{Panel headings for the compare layout, separated by \code{|}
 (e.g. \code{"Before | After"}). Ignored by other layouts.}

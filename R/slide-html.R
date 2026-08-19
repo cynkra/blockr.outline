@@ -129,41 +129,46 @@ slide_table_html <- function(x, r, paginate = FALSE) {
   ))
 }
 
-# The Details field, painted: plain lines as paragraphs, runs of `- ` lines
-# grouped into a list (numbered on the agenda layout). One renderer for
-# every text-carrying slot, because it is ONE field -- switching layouts
-# reshapes the words, it never reinterprets them.
-slide_details_html <- function(text, numbered = FALSE) {
+# The Details field, painted: plain lines as paragraphs, consecutive `- `
+# lines grouped into a bullet list, consecutive `1. ` lines into a numbered
+# one. One renderer for every text-carrying slot, because it is ONE field --
+# switching layouts reshapes the words, it never reinterprets them.
+slide_details_html <- function(text) {
 
   lines <- md_lines(text)
   if (!length(lines)) {
     return(NULL)
   }
 
-  tag <- if (numbered) "ol" else "ul"
   parts <- character()
-  open <- FALSE
+  open <- "none"
+
+  close_list <- function() {
+    if (open != "none") {
+      parts <<- c(parts, if (open == "number") "</ol>" else "</ul>")
+      open <<- "none"
+    }
+  }
 
   for (l in lines) {
-    if (isTRUE(l$bullet)) {
-      if (!open) {
-        parts <- c(parts, paste0("<", tag, " class=\"bslide-bullets\">"))
-        open <- TRUE
+    if (l$marker %in% c("bullet", "number")) {
+      if (!identical(open, l$marker)) {
+        close_list()
+        parts <- c(parts, paste0(
+          if (l$marker == "number") "<ol" else "<ul",
+          " class=\"bslide-bullets\">"
+        ))
+        open <- l$marker
       }
       parts <- c(parts, paste0("<li>", runs_html(l$runs), "</li>"))
     } else {
-      if (open) {
-        parts <- c(parts, paste0("</", tag, ">"))
-        open <- FALSE
-      }
+      close_list()
       parts <- c(parts,
                  paste0("<div class=\"bslide-para\">", runs_html(l$runs),
                         "</div>"))
     }
   }
-  if (open) {
-    parts <- c(parts, paste0("</", tag, ">"))
-  }
+  close_list()
 
   htmltools::HTML(paste0(parts, collapse = ""))
 }
@@ -199,7 +204,7 @@ slide_slot_html <- function(s, x) {
       }
     },
     text = htmltools::div(class = "bslide-lead", slide_details_html(x$text)),
-    bullets = slide_details_html(x$text, numbered = isTRUE(s$numbered)),
+    bullets = slide_details_html(x$text),
     callout = htmltools::div(
       class = "bslide-callout",
       htmltools::div(slide_details_html(x$text))

@@ -220,16 +220,6 @@ slide_layouts <- function() {
       }
     ),
 
-    "agenda" = list(
-      name = "Agenda", inputs = 0L, chrome = "full",
-      text = list(key = "agenda", label = "Details", kind = "bullets"),
-      build = function(b) {
-        list(slot("bullets", "agenda",
-                  rect(b$x, b$y + 0.2, b$w * 0.7, b$h - 0.2),
-                  numbered = TRUE))
-      }
-    ),
-
     "section" = list(
       name = "Section divider", inputs = 0L, chrome = "none",
       text = list(key = "kicker", label = "Details", kind = "text"),
@@ -291,10 +281,6 @@ slide_layout_features <- function() {
     paginate = has(function(i) {
       kinds <- chr_ply(lays[[i]]$build(rect(0, 0, 1, 1)), `[[`, "kind")
       identical(kinds, "exhibit")
-    }),
-    numbered = has(function(i) {
-      slots <- lays[[i]]$build(rect(0, 0, 1, 1))
-      any(vapply(slots, function(s) isTRUE(s$numbered), logical(1L)))
     })
   )
 }

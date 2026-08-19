@@ -39,8 +39,8 @@ as_dot_call <- function(x) {
 #' @param layout Layout id, one of `names(slide_layouts())`.
 #' @param title,subtitle,footnote Slide chrome; empty strings render nothing.
 #' @param text The Details field: one field for every layout, so the words
-#'   survive a layout switch. `- ` starts a bullet (a numbered item on the
-#'   agenda layout); plain lines stay plain; `**bold**`, `*italic*`.
+#'   survive a layout switch. `- ` starts a bullet, `1. ` a numbered item,
+#'   plain lines stay plain; `**bold**`, `*italic*`.
 #' @param labels Compare layout only: panel headings, `|`-separated.
 #' @param paginate Single-exhibit layouts: page an overflowing table over
 #'   further slides (see [slide()]). Ignored by other layouts.
@@ -210,13 +210,9 @@ new_slide_block <- function(layout = "exhibit-full", title = "",
             ),
             htmltools::div(
               style = "font-size:11px;color:#9ca3af;margin:-6px 0 10px;",
-              "Kept across layouts \u00b7 \u201c- \u201d starts a bullet",
-              slide_layout_field(
-                "numbered", layout,
-                htmltools::span(" (numbered here)"),
-                inline = TRUE
-              ),
-              " \u00b7 **bold** *italic*"
+              paste0("Kept across layouts \u00b7 \u201c- \u201d bullet ",
+                     "\u00b7 \u201c1.\u201d numbered \u00b7 **bold** ",
+                     "*italic*")
             )
           )
         ),

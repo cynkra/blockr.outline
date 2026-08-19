@@ -192,24 +192,27 @@ runs_fpar <- function(runs, font, size, color = "#111827", prefix = NULL) {
   do.call(officer::fpar, txts)
 }
 
-# The Details field as an officer block: a `- ` line takes the bullet dot
-# (or its number on the agenda layout), a plain line takes none. Same
-# classification as the HTML painter's slide_details_html().
-lines_block <- function(text, font, size, color = "#111827",
-                        numbered = FALSE) {
+# The Details field as an officer block: a `- ` line takes the bullet dot,
+# a `1. ` line its renumbered position (the counter follows consecutive
+# runs, resetting when a plain line or a bullet breaks the list -- markdown
+# semantics), a plain line takes none. Same classification as the HTML
+# painter's slide_details_html().
+lines_block <- function(text, font, size, color = "#111827") {
   lines <- md_lines(text)
   if (!length(lines)) {
     return(NULL)
   }
   counter <- 0L
   do.call(officer::block_list, lapply(lines, function(l) {
-    prefix <- if (isTRUE(l$bullet)) {
-      if (numbered) {
-        counter <<- counter + 1L
-        paste0(counter, ".  ")
-      } else {
-        "\u2022  "
-      }
+    prefix <- if (identical(l$marker, "bullet")) {
+      counter <<- 0L
+      "\u2022  "
+    } else if (identical(l$marker, "number")) {
+      counter <<- counter + 1L
+      paste0(counter, ".  ")
+    } else {
+      counter <<- 0L
+      NULL
     }
     runs_fpar(l$runs, font, size, color, prefix = prefix)
   }))
@@ -269,7 +272,7 @@ slide_pptx_slot <- function(doc, s, x, fnt, template = NULL,
     },
 
     bullets = {
-      blk <- lines_block(x$text, fnt, 15, numbered = isTRUE(s$numbered))
+      blk <- lines_block(x$text, fnt, 15)
       if (is.null(blk)) doc else place(blk)
     },
 
