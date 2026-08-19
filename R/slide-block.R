@@ -107,19 +107,45 @@ new_slide_block <- function(layout = "exhibit-full", title = "",
           )
         })
 
-        # The capacity indicator (spec req. 12): what the layout wants
-        # against what is linked. An indicator, not a validation -- being a
-        # link short is an ordinary state while authoring.
-        output$capacity <- shiny::renderText({
+        # The capacity indicator (spec req. 12): the quiet meter -- one
+        # cell per slot the layout expects, filled left to right, an amber
+        # cell per surplus input, the text as the accessible label. An
+        # indicator, not a validation: a link short is an ordinary state
+        # while authoring, and the preview below already SHOWS the empty
+        # slot -- the meter only has to count.
+        output$capacity <- shiny::renderUI({
           spec <- slide_layout_spec(lay())
           n <- length(arg_names())
           want <- spec$inputs
-          paste0(
-            "Layout takes ", want,
-            if (want == 1L) " exhibit" else " exhibits",
-            " · ", n, " linked",
-            if (n > want) " — extra inputs are not drawn",
-            if (n < want) " — unfilled slots stay empty"
+
+          cells <- c(
+            lapply(seq_len(want), function(i) {
+              htmltools::span(class = paste0(
+                "slb-cell", if (i <= n) " slb-cell--on"
+              ))
+            }),
+            lapply(seq_len(max(0L, n - want)), function(i) {
+              htmltools::span(class = "slb-cell slb-cell--over")
+            })
+          )
+
+          label <- if (want == 0L) {
+            if (n > 0L) {
+              paste(n, "linked — this layout draws none")
+            } else {
+              "no inputs"
+            }
+          } else {
+            paste0(
+              n, " of ", want, " linked",
+              if (n > want) paste0(" — ", n - want, " not drawn")
+            )
+          }
+
+          htmltools::div(
+            class = "slb-meter",
+            if (length(cells)) htmltools::span(class = "slb-cells", cells),
+            htmltools::span(label)
           )
         })
 
@@ -199,8 +225,8 @@ new_slide_block <- function(layout = "exhibit-full", title = "",
             "display:flex;align-items:center;gap:10px;margin-bottom:8px;"
           ),
           htmltools::div(
-            style = "font-size:12px;color:#6b7280;flex:1 1 auto;",
-            shiny::textOutput(shiny::NS(id, "capacity"), inline = TRUE)
+            style = "flex:1 1 auto;",
+            shiny::uiOutput(shiny::NS(id, "capacity"))
           ),
           slide_dl_menu(id)
         )

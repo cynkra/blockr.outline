@@ -117,6 +117,15 @@ slide_layout_picker <- function(input_id, selected) {
   border-color: var(--blockr-blue-100, #dbeafe); }
 .slb-tile-label { overflow: hidden; white-space: nowrap;
   text-overflow: ellipsis; }
+.slb-meter { display: flex; align-items: center; gap: 8px;
+  font-size: var(--blockr-font-size-xs, 0.75rem);
+  color: var(--blockr-grey-500, #6b7280); }
+.slb-cells { display: inline-flex; gap: 3px; }
+.slb-cell { width: 14px; height: 10px; border-radius: 2px;
+  border: 1px solid var(--blockr-grey-300, #d1d5db); background: #fff; }
+.slb-cell--on { background: #0072b2; border-color: #0072b2; }
+.slb-cell--over { background: var(--blockr-color-warning-bg, #fffbeb);
+  border-color: var(--blockr-color-warning, #f59e0b); }
     ")),
     htmltools::div(
       class = "slb-layouts",
