@@ -30,7 +30,8 @@
 # because the deck emits every block's code up front, hidden, and each slide
 # carries only its exhibit expression (see export_deck_qmd; the officer path
 # has always worked this way).
-slide_sections <- function(expressions, board, slides = character()) {
+slide_sections <- function(expressions, board, slides = character(),
+                           annotations = list()) {
 
   # Read before any subsetting: `[` drops non-standard attributes.
   pending_ids <- coal(attr(expressions, "pending"), character())
@@ -68,9 +69,12 @@ slide_sections <- function(expressions, board, slides = character()) {
     code = chr_ply(lapply(exprs, deparse), paste0, collapse = "\n"),
     names = chr_ply(blks, blockr.core::block_name),
     icons = chr_ply(seq_along(blks), function(i) block_icon_html(blks[[i]])),
-    # No prose on a slide, so no descriptions -- but the field has to exist
-    # and be per-block, because prune_sections() subsets it.
-    descriptions = setNames(rep("", n), ids),
+    # Per-block prose from the caller's annotation map (the outline's
+    # shape: annotations[[id]]$description). The deck passes none -- no
+    # prose on a slide -- the report extension feeds its notes through
+    # here. The field always exists per-block, because prune_sections()
+    # subsets it.
+    descriptions = chr_ply(ids, function(i) ann_description(annotations, i)),
     report = report,
     exported = export_closure(ids, report, dag_reaches(lnks, ids)),
     kinds = chr_ply(blks, block_exhibit_kind),

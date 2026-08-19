@@ -743,11 +743,14 @@ format_markdown <- function(md, fmt, dir) {
   )
 }
 
+# `intro` reaches only the officer path: in every other format the intro is
+# already IN the qmd/spin text (export_qmd/export_spin emit it), while the
+# officer path renders from the sections projection, which does not carry it.
 render_report <- function(qmd_txt, spin_txt, fmt, file, title,
-                          template = NULL, sects = NULL) {
+                          template = NULL, sects = NULL, intro = "") {
 
   if (identical(fmt, "pptx")) {
-    return(render_pptx_officer(sects, file, title, template))
+    return(render_pptx_officer(sects, file, title, template, intro = intro))
   }
 
   dir <- tempfile("blockr-outline-")
@@ -786,7 +789,12 @@ render_report <- function(qmd_txt, spin_txt, fmt, file, title,
 
     # A downloaded html report is a single file, so resources (plot pngs)
     # must be embedded. The first "\n---\n" is the yaml closing fence.
-    if (identical(fmt, "html")) {
+    # Skipped when the document already says so itself: the report
+    # extension emits embed-resources into its YAML (the qmd the panel
+    # shows must render the same outside the app), and injecting on top
+    # would duplicate the format key.
+    if (identical(fmt, "html") &&
+          !grepl("embed-resources", qmd_txt, fixed = TRUE)) {
       qmd_txt <- sub(
         "\n---\n",
         "\nformat:\n  html:\n    embed-resources: true\n---\n",
@@ -980,7 +988,7 @@ deck_eval_env <- function(sects, render_err) {
 }
 
 render_pptx_officer <- function(sects, file, title, template = NULL,
-                                title_slide = TRUE) {
+                                title_slide = TRUE, intro = "") {
 
   if (!requireNamespace("officer", quietly = TRUE)) {
     stop("Rendering a pptx deck needs the 'officer' package.", call. = FALSE)
@@ -1096,6 +1104,14 @@ render_pptx_officer <- function(sects, file, title, template = NULL,
     n_title <- 1L
   }
 
+  # The report's intro: one untitled body slide after the title slide,
+  # before the first exhibit. Decks pass none.
+  if (nzchar(coal(intro, ""))) {
+    doc <- officer::add_slide(doc, layout = layout, master = master)
+    doc <- place_description(doc, intro, template)$doc
+    n_title <- n_title + 1L
+  }
+
   # Pass 2 walks the SLIDE order, which the pass above could not: evaluation
   # has to follow the DAG, the deck does not. For an outline projection the
   # two are the same sequence (slide_seq falls back to document order); a
@@ -1181,6 +1197,7 @@ render_pptx_officer <- function(sects, file, title, template = NULL,
     # Everything else -- plots, widgets, an unknown object -- keeps the
     # single-slide placement below.
     n_paged <- deck_add_table(doc, exhibit, nm, layout, master, template,
+                              desc = desc,
                               top = slide_template_frame(template)$body_top_bare)
 
     if (!is.null(n_paged)) {
@@ -1221,6 +1238,21 @@ render_pptx_officer <- function(sects, file, title, template = NULL,
         error = function(e) doc
       )
     }
+
+    # The note sits between the title and the exhibit, and the exhibit
+    # moves down to make room -- but never UP: an exhibit that placed
+    # itself lower (a chart's own pptx_top) keeps its position.
+    if (nzchar(desc)) {
+      placed <- place_description(doc, desc, template)
+      doc <- placed$doc
+      if (placed$height > 0) {
+        attr(exhibit, "pptx_top") <- max(
+          coal(attr(exhibit, "pptx_top"), 1.1),
+          1.05 + placed$height + 0.1
+        )
+      }
+    }
+
     doc <- place_exhibit(doc, exhibit)
     n_slides <- n_slides + 1L
   }
@@ -1904,7 +1936,7 @@ deck_set_title_size <- function(doc, size) {
 # entry point, or a paginator that threw. A deck that loses its pagination is
 # a worse deck; a deck that loses a slide is a broken one.
 deck_add_table <- function(doc, exhibit, title, layout, master, template,
-                           top = NULL) {
+                           desc = "", top = NULL) {
 
   if (!deck_pageable(exhibit)) {
     return(NULL)
@@ -1921,12 +1953,21 @@ deck_add_table <- function(doc, exhibit, title, layout, master, template,
 
   before <- length(doc)
 
+  # A note travels in two halves: the exhibit starts lower (the `top`
+  # argument every pptx_add_exhibit method takes -- it applies to every
+  # page, so the follow-on pages of a long table keep a matching gap), and
+  # the text itself lands on the FIRST added slide afterwards, since no
+  # slide exists to put it on before the paginator runs.
+  desc_h <- desc_height(desc_lines(coal(desc, ""), template))
+
   args <- list(doc, exhibit, title = title, template = template,
                layout = layout, master = master)
-  if (!is.null(top)) {
+  if (desc_h > 0) {
+    args$top <- 1.05 + desc_h + 0.1
+  } else if (!is.null(top)) {
     # The deck's default-slide geometry: a paged table starts where a slide
-    # block's exhibit starts, so a pick and its slide-block promotion sit
-    # at the same height.
+    # block's exhibit starts, so a pick and its slide-block promotion sit at
+    # the same height.
     args$top <- top
   }
 
@@ -1941,6 +1982,21 @@ deck_add_table <- function(doc, exhibit, title, layout, master, template,
 
   if (is.null(out)) {
     return(NULL)
+  }
+
+  if (desc_h > 0 && length(out) > before) {
+    out <- tryCatch(
+      {
+        cur <- officer::on_slide(out, index = before + 1L)
+        cur <- place_description(cur, desc, template)$doc
+        officer::on_slide(cur, index = length(cur))
+      },
+      error = function(e) {
+        cat("[deck] note on '", coal(title, "table"), "' dropped: ",
+            conditionMessage(e), "\n", sep = "", file = stderr())
+        out
+      }
+    )
   }
 
   list(doc = out, n = max(1L, length(out) - before))
@@ -2030,4 +2086,74 @@ place_exhibit <- function(doc, exhibit) {
                      location = officer::ph_location_type(type = "body")),
     error = function(e) doc
   )
+}
+
+# A block's markdown note, as slide-ready lines: markdown flattened to text
+# (commonmark keeps the paragraph breaks; a slide is no place for nested
+# formatting), wrapped to the template's content width. ~9 chars per inch at
+# 12pt is a rough but stable estimate; the wrap only counts lines to space
+# the exhibit below -- the text itself re-wraps in PowerPoint's own layout.
+desc_lines <- function(desc, template) {
+
+  txt <- tryCatch(
+    commonmark::markdown_text(desc, width = 0L),
+    error = function(e) desc
+  )
+  txt <- trimws(coal(txt, ""))
+
+  if (!nzchar(txt)) {
+    return(character())
+  }
+
+  width <- template_content_width(template)
+
+  unlist(
+    lapply(
+      strsplit(txt, "\n", fixed = TRUE)[[1L]],
+      function(l) if (nzchar(l)) strwrap(l, width = round(width * 9)) else ""
+    )
+  )
+}
+
+desc_height <- function(lines) {
+  if (!length(lines)) 0 else min(0.1 + 0.26 * length(lines), 2.6)
+}
+
+# Place a block's markdown note under the slide title, above its exhibit.
+# Set in the template's own body face, and the caller pushes the exhibit
+# down by the returned height. Free placement, like place_exhibit -- a free
+# box inherits nothing from the layout, so the face is set explicitly.
+place_description <- function(doc, desc, template) {
+
+  lines <- desc_lines(desc, template)
+  height <- desc_height(lines)
+
+  if (height == 0) {
+    return(list(doc = doc, height = 0))
+  }
+
+  fp <- officer::fp_text(
+    font.size = 12,
+    color = "#374151",
+    font.family = coal(template_body_font(template), "Calibri")
+  )
+
+  pars <- do.call(
+    officer::block_list,
+    lapply(lines, function(l) officer::fpar(officer::ftext(l, fp)))
+  )
+
+  doc <- tryCatch(
+    officer::ph_with(
+      doc,
+      pars,
+      location = officer::ph_location(
+        left = 0.4, top = 1.05,
+        width = template_content_width(template), height = height
+      )
+    ),
+    error = function(e) doc
+  )
+
+  list(doc = doc, height = height)
 }

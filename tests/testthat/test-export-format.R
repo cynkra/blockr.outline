@@ -190,12 +190,12 @@ test_that("a block-supplied report call wins the chunk output line", {
   }
 })
 
-test_that("data-shaped blocks print through the static exhibit renderer", {
-  # A block that returns a display table returns a bare annotated data frame
-  # (the styled table lives in its Shiny UI), so the exporters wrap the result
-  # variable in blockr.viz::static_exhibit(), which picks the renderer from the
-  # VALUE at render time. Deliberately not a table-block class check: a
-  # function block emitting a composer table must print the same way.
+test_that("display-table blocks keep the exhibit wrap, plain blocks print bare", {
+  # The default output line is the bare variable: the document reads as
+  # canonical R, a data frame renders through df-print:kable, and no blockr
+  # package is needed to run it. Only a display-table block (its styled
+  # table lives in its Shiny UI, the result is a bare annotated data frame)
+  # keeps the blockr.viz::static_exhibit() wrap.
   skip_if_not_installed("blockr.viz", "0.2.38")
 
   blocks <- c(
@@ -217,13 +217,21 @@ test_that("data-shaped blocks print through the static exhibit renderer", {
                         stack_annotations = list())
   expect_identical(unname(s$renderers[s$ids == "tbl"]),
                    "blockr.viz::static_exhibit")
-  expect_identical(unname(s$renderers[s$ids == "data"]),
-                   "blockr.viz::static_exhibit")
+  expect_identical(unname(s$renderers[s$ids == "data"]), "")
 
   for (txt in list(export_qmd(s), export_spin(s))) {
     expect_match(txt, "blockr.viz::static_exhibit(tbl)", fixed = TRUE)
-    expect_match(txt, "blockr.viz::static_exhibit(data)", fixed = TRUE)
+    expect_no_match(txt, "static_exhibit(data)", fixed = TRUE)
   }
+
+  # The escape hatch restores the previous blanket wrap for every
+  # non-figure block.
+  withr::local_options(blockr.outline.report_renderer = "static")
+  s <- outline_sections(exprs, board,
+                        annotations = otl_ann(ids = c("data", "tbl")),
+                        stack_annotations = list())
+  expect_identical(unname(s$renderers[s$ids == "data"]),
+                   "blockr.viz::static_exhibit")
 })
 
 test_that("figure blocks are not wrapped", {

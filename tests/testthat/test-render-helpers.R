@@ -781,16 +781,16 @@ test_that("seeded messages carry the block name too", {
   expect_match(html, "pin not found")
 })
 
-test_that("a table-shaped result prints the same with or without a table block", {
+test_that("a table-shaped result lands on the slide as a table either way", {
   skip_if_not_installed("blockr.viz", "0.2.38")
   skip_if_not_installed("flextable")
   skip_if_not_installed("officer")
 
-  # The interactive table block is a DASHBOARD component: the structure that
-  # makes a display table a table lives in the annotated data frame it passes
-  # along. So a block that just returns such a frame (a function block wrapping
-  # composer, say -- a head block stands in here) must reach the deck as the
-  # same styled table, with no render block spliced in front of it.
+  # Emission is not rendering. A plain block returning a table-shaped frame
+  # (a function block wrapping composer, say -- a head block stands in here)
+  # now EMITS the bare variable: the document stays canonical R. But the
+  # officer path wraps values at render time (place_exhibit static_tables a
+  # bare data frame), so on the SLIDE both still land as real tables.
   board <- blockr.core::new_board(
     blocks = c(
       data = blockr.core::new_dataset_block("iris"),
@@ -821,14 +821,20 @@ test_that("a table-shaped result prints the same with or without a table block",
   for (i in seq_along(s$ids)) {
     eval(parse(text = sect_export_code(s, i)), envir = env)
   }
-  ex <- lapply(
-    which(s$ids %in% c("direct", "tbl")),
-    function(i) eval(parse(text = sect_output(s, i)), envir = env)
+  ex <- sapply(
+    c("direct", "tbl"),
+    function(id) {
+      i <- which(s$ids == id)
+      eval(parse(text = sect_output(s, i)), envir = env)
+    },
+    simplify = FALSE
   )
 
-  expect_s3_class(ex[[1L]], "flextable")
-  expect_equal(ex[[1L]]$body$dataset, ex[[2L]]$body$dataset)
-  expect_equal(ex[[1L]]$header$dataset, ex[[2L]]$header$dataset)
+  # direct emits bare (a data-frame-shaped value); tbl is a table block and
+  # keeps the exhibit wrap, resolving to the styled flextable.
+  expect_s3_class(ex[["direct"]], "data.frame")
+  expect_s3_class(ex[["tbl"]], "flextable")
+  expect_identical(unname(s$renderers[s$ids == "direct"]), "")
 
   # ... and both land on a slide as a real table (a:tbl), not a text box
   f <- withr::local_tempfile(fileext = ".pptx")

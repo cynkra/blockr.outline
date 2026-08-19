@@ -499,23 +499,25 @@ block_exhibit_kind <- function(b) {
 }
 
 # The report renderer wrapped around a block's printed result ("" = bare
-# print). A block that returns a display table returns a bare annotated data
-# frame -- the styled table lives in the block's Shiny UI, so a bare print
-# degrades to df-print:kable, dot-columns and all. Wrapping the result variable
-# in the static flextable renderer restores the styled table, and flextable is
-# the one engine whose knit_print emits real OpenXML tables in pptx and docx
-# (it renders in html and pdf too), so a single wrapper serves every format.
+# print). The default IS the bare print: a data frame renders through the
+# document's df-print:kable, a ggplot prints itself, and the emitted script
+# stays the canonical R an analyst would have written, with no blockr
+# package on its search path (see _inbox/2026-07-31-report-code-emits-
+# expressions-not-renderer-calls.md -- reproducible, reviewable, editable).
 #
-# The wrapper is blockr.viz::static_exhibit(), which decides at RENDER time
-# from the value: a data frame or an as_annotated_df()-coercible object (a
-# composer table straight out of a function block, say) becomes the styled
-# table; a ggplot / gt / htmlwidget / anything else comes back untouched, so
-# the wrap can never be worse than the bare print. That is deliberately NOT a
-# block-class check: the structure that makes a table a table lives in the
-# annotated data frame, not in the block that renders it, so the interactive
-# table block stays a dashboard component instead of a report requirement.
-# Figures skip the wrap -- it would be a no-op on a ggplot and only clutters
-# the generated script.
+# The wrap is the exception, reserved for the display-table blocks
+# (table_block, summary_table_block, registry category "table") whose result
+# is a bare annotated data frame: the styled table lives in the block's
+# Shiny UI, so a bare print degrades to dot-columns and all. For those,
+# blockr.viz::static_exhibit() restores the styled table -- flextable is the
+# one engine whose knit_print emits real OpenXML tables in pptx and docx --
+# and decides at RENDER time from the value, so wrapping a value that turns
+# out printable can never be worse than the bare print. Figures skip the
+# wrap outright.
+#
+# options(blockr.outline.report_renderer = "static") restores the previous
+# blanket wrap (every non-figure block), for deployments whose documents
+# leaned on static_exhibit's annotated-df coercion of plain results.
 #
 # Resolved defensively (same pattern as block_report_call_str): blockr.viz need
 # not be installed to project the sections, and a blockr.viz older than 0.2.38
@@ -530,6 +532,23 @@ block_report_renderer <- function(blk) {
 
   if (!requireNamespace("blockr.viz", quietly = TRUE)) {
     return("")
+  }
+
+  style <- getOption("blockr.outline.report_renderer", "auto")
+
+  if (!identical(style, "static")) {
+
+    cat <- tryCatch(
+      blockr.core::block_meta_category(blk),
+      error = function(e) character()
+    )
+
+    display_table <- inherits(blk, c("table_block", "summary_table_block")) ||
+      any(cat %in% "table")
+
+    if (!display_table) {
+      return("")
+    }
   }
 
   has_exhibit <- is.function(
@@ -920,7 +939,209 @@ chapter_intro <- function(sects, chapters, i) {
   desc
 }
 
-export_spin <- function(sects, stack_level = "#", block_level = "caption") {
+# ---- report items: flags, settings, text -------------------------------
+#
+# The report extension's document model rides into the emitters as three
+# optional arguments; all default NULL, and NULL reproduces the pre-item
+# behaviour exactly, so the outline's and the deck's emissions are
+# byte-stable.
+#
+#   flags     named list keyed by block id: per-item chunk visibility --
+#             `code` / `output` (quarto's echo / output pair, both
+#             independent) plus figure overrides (`fig_width`,
+#             `fig_height`, `full_width`). A block absent from `flags`
+#             was never added to the document and gets the legacy
+#             `include: false` chunk.
+#   items     the ordered item list (block and text entries): text items
+#             are woven between the chunks, anchored to the block that
+#             follows them (see weave_text_items).
+#   settings  the document-wide settings list (report_settings_default());
+#             emits the YAML header, embed-resources included -- the qmd
+#             the panel shows must be sufficient for `quarto render`
+#             outside the app, with nothing injected at render time.
+
+section_shown <- function(flags, sects, i) {
+  if (is.null(flags)) {
+    sects$report[i]
+  } else {
+    isTRUE(flags[[sects$ids[i]]]$output)
+  }
+}
+
+# The 2x2 of the two switches. Everything still evaluates -- `eval` is
+# never emitted -- these only decide what the reader sees.
+chunk_vis_qmd <- function(flags, sects, i) {
+  if (is.null(flags)) {
+    return(if (!sects$report[i]) "#| include: false")
+  }
+  f <- flags[[sects$ids[i]]]
+  out <- isTRUE(f$output)
+  code <- isTRUE(f$code)
+  if (out && code) {
+    return(character())
+  }
+  if (out) {
+    return("#| echo: false")
+  }
+  if (code) {
+    return("#| output: false")
+  }
+  "#| include: false"
+}
+
+chunk_fig_qmd <- function(flags, sects, i) {
+  f <- if (!is.null(flags)) flags[[sects$ids[i]]]
+  if (is.null(f)) {
+    return(character())
+  }
+  c(
+    if (is.numeric(f$fig_width)) paste0("#| fig-width: ", f$fig_width),
+    if (is.numeric(f$fig_height)) paste0("#| fig-height: ", f$fig_height),
+    if (isTRUE(f$full_width)) "#| column: page"
+  )
+}
+
+# Spin mirrors: knitr chunk options on the `#+` line. `output: false` has
+# no single spin equivalent, so it becomes the results/fig.show pair;
+# `column: page` is quarto-only and is dropped from the script.
+chunk_vis_spin <- function(flags, sects, i) {
+  if (is.null(flags)) {
+    return(if (!sects$report[i]) ", include=FALSE" else "")
+  }
+  f <- flags[[sects$ids[i]]]
+  out <- isTRUE(f$output)
+  code <- isTRUE(f$code)
+  if (out && code) {
+    return("")
+  }
+  if (out) {
+    return(", echo=FALSE")
+  }
+  if (code) {
+    return(", results=\"hide\", fig.show=\"hide\"")
+  }
+  ", include=FALSE"
+}
+
+chunk_fig_spin <- function(flags, sects, i) {
+  f <- if (!is.null(flags)) flags[[sects$ids[i]]]
+  if (is.null(f)) {
+    return("")
+  }
+  paste0(
+    c(
+      if (is.numeric(f$fig_width)) paste0(", fig.width=", f$fig_width),
+      if (is.numeric(f$fig_height)) paste0(", fig.height=", f$fig_height)
+    ),
+    collapse = ""
+  )
+}
+
+# The YAML header from the settings list. Options are emitted only when
+# they differ from quarto's own defaults (a toc line saying `false` is
+# noise); fig size and embed-resources always (both differ), and the
+# execute block whenever warnings are suppressed -- which is the report's
+# default, and most of what makes a generated document read as written.
+report_yaml <- function(title, s) {
+  c(
+    "---",
+    paste0("title: \"", yaml_dq(title), "\""),
+    if (isTRUE(s$toc)) "toc: true",
+    if (isTRUE(s$number_sections)) "number-sections: true",
+    paste0("fig-width: ", s$fig_width),
+    paste0("fig-height: ", s$fig_height),
+    "df-print: kable",
+    "format:",
+    "  html:",
+    "    embed-resources: true",
+    if (isTRUE(s$code_fold)) "    code-fold: true",
+    if (!isTRUE(s$warnings)) {
+      c("execute:", "  warning: false", "  message: false")
+    },
+    "---"
+  )
+}
+
+# Weave the item list's text entries between the emitted chunks. Document
+# order must be a valid evaluation order, so the BLOCK order is the snapped
+# one (`sects$ids`); text placement is then derived, not ordered: a text
+# item anchors to the nearest FOLLOWING block item in the list (the
+# trailing run to the preceding one), and is re-attached around its anchor
+# in the snapped order. A drag that inverts a dependency therefore moves
+# the paragraph WITH its exhibit. Anchors are computed here, never stored:
+# a stored anchor can dangle, a derived one cannot. Text whose anchor block
+# is not in the emission (or an all-text document) lands after the header.
+weave_text_items <- function(pieces, ids, items, spin = FALSE) {
+
+  if (is.null(items)) {
+    return(list(pieces = pieces, ids = ids))
+  }
+
+  blk_at <- which(chr_ply(items, function(x) coal(x$block, "")) != "")
+
+  before <- setNames(vector("list", length(ids)), ids)
+  after <- setNames(vector("list", length(ids)), ids)
+  top <- character()
+
+  for (t in seq_along(items)) {
+    txt <- items[[t]]$text
+    if (is.null(txt) || !nzchar(trimws(coal(txt, "")))) {
+      next
+    }
+    nxt <- blk_at[blk_at > t]
+    prv <- blk_at[blk_at < t]
+    if (length(nxt) && items[[nxt[[1L]]]]$block %in% ids) {
+      id <- items[[nxt[[1L]]]]$block
+      before[[id]] <- c(before[[id]], txt)
+    } else if (length(prv) && items[[prv[[length(prv)]]]]$block %in% ids) {
+      id <- items[[prv[[length(prv)]]]]$block
+      after[[id]] <- c(after[[id]], txt)
+    } else {
+      top <- c(top, txt)
+    }
+  }
+
+  fmt <- function(x) {
+    if (spin) {
+      paste0("#' ", strsplit(x, "\n")[[1L]], collapse = "\n")
+    } else {
+      x
+    }
+  }
+
+  out_p <- character()
+  out_i <- character()
+  put <- function(p, i) {
+    out_p <<- c(out_p, p)
+    out_i <<- c(out_i, i)
+  }
+
+  for (txt in top) {
+    put(fmt(txt), NA_character_)
+  }
+  for (k in seq_along(ids)) {
+    for (txt in before[[ids[[k]]]]) {
+      put(fmt(txt), NA_character_)
+    }
+    put(pieces[[k]], ids[[k]])
+    for (txt in after[[ids[[k]]]]) {
+      put(fmt(txt), NA_character_)
+    }
+  }
+
+  list(pieces = out_p, ids = out_i)
+}
+
+# `title` / `intro` head the script as spin prose (spin has no YAML, so the
+# title is a `#' #` heading). Both default off; the outline never sets them.
+# `collapse = FALSE` returns the per-section pieces instead of one string,
+# with attr(, "ids") naming each piece's block (NA for the header piece) --
+# the report extension's gutter view consumes that, while every download
+# path collapses, so the code on screen and the file written are one
+# emission and cannot drift.
+export_spin <- function(sects, stack_level = "#", block_level = "caption",
+                        title = NULL, intro = "", collapse = TRUE,
+                        flags = NULL, items = NULL, settings = NULL) {
 
   sects <- prune_sections(sects)
 
@@ -934,7 +1155,9 @@ export_spin <- function(sects, stack_level = "#", block_level = "caption") {
 
   one_section <- function(i) {
 
-    prose <- if (sects$report[i]) {
+    shown <- section_shown(flags, sects, i)
+
+    prose <- if (shown) {
       desc <- sects$descriptions[i]
       intro <- chapter_intro(sects, chapters, i)
       title_line <- if (!is.null(block_hd) && nzchar(sects$names[i])) {
@@ -956,7 +1179,8 @@ export_spin <- function(sects, stack_level = "#", block_level = "caption") {
 
     header <- paste0(
       "#+ ", sects$ids[i],
-      if (!sects$report[i]) ", include=FALSE"
+      chunk_vis_spin(flags, sects, i),
+      chunk_fig_spin(flags, sects, i)
     )
 
     paste(
@@ -964,21 +1188,69 @@ export_spin <- function(sects, stack_level = "#", block_level = "caption") {
         prose,
         header,
         sect_export_code(sects, i),
-        if (sects$report[i] && !isTRUE(sects$pending[i])) sect_output(sects, i)
+        if (shown && !isTRUE(sects$pending[i])) sect_output(sects, i)
       ),
       collapse = "\n"
     )
   }
 
-  paste0(
+  # With a settings list the script opens on the same YAML front matter as
+  # the qmd, spin-quoted -- knitr::spin and quarto both honour it -- so
+  # the two views describe one document.
+  header <- if (is.null(settings)) {
+    spin_header(title, intro)
+  } else {
+    paste(paste0("#' ", report_yaml(title, settings)), collapse = "\n")
+  }
+
+  woven <- weave_text_items(
     chr_ply(seq_along(sects$ids), one_section),
-    collapse = "\n\n"
+    sects$ids,
+    items,
+    spin = TRUE
+  )
+
+  pieces <- c(header, woven$pieces)
+
+  if (isTRUE(collapse)) {
+    paste0(pieces, collapse = "\n\n")
+  } else {
+    structure(
+      pieces,
+      ids = c(rep(NA_character_, length(header)), woven$ids)
+    )
+  }
+}
+
+# The spin document's header piece: title as a `#' #` heading, intro as
+# spin prose under it. character(0) when neither is set, so the outline's
+# spin (which sets neither) is byte-identical to before.
+spin_header <- function(title, intro) {
+
+  has_title <- !is.null(title) && nzchar(title)
+  has_intro <- nzchar(coal(intro, ""))
+
+  if (!has_title && !has_intro) {
+    return(character())
+  }
+
+  paste(
+    c(
+      if (has_title) paste0("#' # ", title),
+      if (has_title && has_intro) "#' ",
+      if (has_intro) paste0("#' ", strsplit(intro, "\n")[[1L]])
+    ),
+    collapse = "\n"
   )
 }
 
+# `intro` is emitted as a markdown paragraph directly under the YAML block;
+# `collapse = FALSE` returns the pieces + attr(, "ids") exactly as in
+# export_spin (NA for the YAML and intro pieces).
 export_qmd <- function(sects, title = "Board report",
                        stack_level = "#", block_level = "caption",
-                       slides = FALSE) {
+                       slides = FALSE, intro = "", collapse = TRUE,
+                       flags = NULL, items = NULL, settings = NULL) {
 
   sects <- prune_sections(sects)
 
@@ -1015,7 +1287,9 @@ export_qmd <- function(sects, title = "Board report",
 
   one_section <- function(i) {
 
-    prose <- if (sects$report[i]) {
+    shown <- section_shown(flags, sects, i)
+
+    prose <- if (shown) {
       desc <- sects$descriptions[i]
       intro <- chapter_intro(sects, chapters, i)
       c(
@@ -1047,7 +1321,7 @@ export_qmd <- function(sects, title = "Board report",
 
     # Caption only when the block title is set to "caption"; a heading
     # title already carries the name, and "none" wants no title at all.
-    cap <- if (sects$report[i] && identical(block_level, "caption") &&
+    cap <- if (shown && identical(block_level, "caption") &&
                  nzchar(kind)) {
       paste0("#| ", kind, "-cap: \"", gsub("\"", "'", sects$names[i]), "\"")
     }
@@ -1056,9 +1330,10 @@ export_qmd <- function(sects, title = "Board report",
       "```{r}",
       paste0("#| label: ", lbl),
       cap,
-      if (!sects$report[i]) "#| include: false",
+      chunk_vis_qmd(flags, sects, i),
+      chunk_fig_qmd(flags, sects, i),
       sect_export_code(sects, i),
-      if (sects$report[i] && !isTRUE(sects$pending[i])) sect_output(sects, i),
+      if (shown && !isTRUE(sects$pending[i])) sect_output(sects, i),
       "```"
     )
 
@@ -1068,23 +1343,41 @@ export_qmd <- function(sects, title = "Board report",
     )
   }
 
-  yaml <- paste(
-    c(
-      "---",
-      paste0("title: \"", yaml_dq(title), "\""),
-      # Render plain data.frames / tibbles as kable tables rather than
-      # verbatim console output, so the report reads like a document. A
-      # top-level quarto option, so it holds across html / pdf / pptx.
-      # Exhibits with their own print method (flextable, gt, htmlwidgets)
-      # are untouched -- df-print only governs bare data frames.
-      "df-print: kable",
-      "---"
-    ),
-    collapse = "\n"
+  yaml <- if (is.null(settings)) {
+    paste(
+      c(
+        "---",
+        paste0("title: \"", yaml_dq(title), "\""),
+        # Render plain data.frames / tibbles as kable tables rather than
+        # verbatim console output, so the report reads like a document. A
+        # top-level quarto option, so it holds across html / pdf / pptx.
+        # Exhibits with their own print method (flextable, gt, htmlwidgets)
+        # are untouched -- df-print only governs bare data frames.
+        "df-print: kable",
+        "---"
+      ),
+      collapse = "\n"
+    )
+  } else {
+    paste(report_yaml(title, settings), collapse = "\n")
+  }
+
+  header <- c(yaml, if (nzchar(coal(intro, ""))) intro)
+
+  woven <- weave_text_items(
+    chr_ply(seq_along(sects$ids), one_section),
+    sects$ids,
+    items
   )
 
-  paste0(
-    c(yaml, chr_ply(seq_along(sects$ids), one_section)),
-    collapse = "\n\n"
-  )
+  pieces <- c(header, woven$pieces)
+
+  if (isTRUE(collapse)) {
+    paste0(pieces, collapse = "\n\n")
+  } else {
+    structure(
+      pieces,
+      ids = c(rep(NA_character_, length(header)), woven$ids)
+    )
+  }
 }
