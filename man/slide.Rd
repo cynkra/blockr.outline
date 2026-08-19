@@ -10,6 +10,7 @@ slide(
   subtitle = "",
   footnote = "",
   text = "",
+  labels = "",
   exhibits = list(),
   paginate = TRUE
 )
@@ -20,8 +21,14 @@ slide(
 \item{title, subtitle, footnote}{The slide chrome. Empty strings render
 nothing (and an empty subtitle hands its room to the body).}
 
-\item{text}{The layout's text field (see above). Inline \verb{**bold**} and
-\verb{*italic*} are honoured; bullet-shaped fields read one bullet per line.}
+\item{text}{The layout's Details field -- ONE field, the same content
+whatever the layout, so switching layouts reshapes the words rather
+than losing them. Lines starting with \verb{- } become bullets (numbered
+items on the agenda layout); lines without stay plain text, and a
+slide freely mixes both. Inline \verb{**bold**} and \verb{*italic*}.}
+
+\item{labels}{Panel headings for the compare layout, separated by \code{|}
+(e.g. \code{"Before | After"}). Ignored by other layouts.}
 
 \item{exhibits}{Linked block results, in slot order. More values than the
 layout has slots are not drawn; missing ones leave the slot empty.}

@@ -16,8 +16,13 @@
 #' @param layout Layout id, one of `names(slide_layouts())`.
 #' @param title,subtitle,footnote The slide chrome. Empty strings render
 #'   nothing (and an empty subtitle hands its room to the body).
-#' @param text The layout's text field (see above). Inline `**bold**` and
-#'   `*italic*` are honoured; bullet-shaped fields read one bullet per line.
+#' @param text The layout's Details field -- ONE field, the same content
+#'   whatever the layout, so switching layouts reshapes the words rather
+#'   than losing them. Lines starting with `- ` become bullets (numbered
+#'   items on the agenda layout); lines without stay plain text, and a
+#'   slide freely mixes both. Inline `**bold**` and `*italic*`.
+#' @param labels Panel headings for the compare layout, separated by `|`
+#'   (e.g. `"Before | After"`). Ignored by other layouts.
 #' @param exhibits Linked block results, in slot order. More values than the
 #'   layout has slots are not drawn; missing ones leave the slot empty.
 #' @param paginate Single-exhibit layouts only: a table too tall for its
@@ -32,7 +37,7 @@
 #'
 #' @export
 slide <- function(layout = "exhibit-full", title = "", subtitle = "",
-                  footnote = "", text = "", exhibits = list(),
+                  footnote = "", text = "", labels = "", exhibits = list(),
                   paginate = TRUE) {
 
   spec <- slide_layout_spec(layout)
@@ -44,6 +49,7 @@ slide <- function(layout = "exhibit-full", title = "", subtitle = "",
       subtitle = as_chr1(subtitle),
       footnote = as_chr1(footnote),
       text = as_chr1(text),
+      labels = as_chr1(labels),
       exhibits = exhibits,
       paginate = isTRUE(paginate)
     ),
@@ -83,8 +89,10 @@ print.blockr_slide <- function(x, ...) {
 
 # --- markdown runs ----------------------------------------------------------
 #
-# The authored text fields accept exactly what both painters can draw as
-# runs: **bold**, *italic* and line breaks (spec req. 16). Everything else a
+# The Details field accepts exactly what both painters can draw as runs:
+# **bold**, *italic*, line breaks, and the `- ` bullet marker (spec req.
+# 16). A line without the marker is plain text -- no bullet means no
+# bullet, and a slide mixes a sentence and a list freely. Everything else a
 # markdown parser would recognise is treated as literal text, so nothing is
 # accepted that would then be silently dropped from the pptx.
 #
@@ -123,9 +131,25 @@ md_runs <- function(line) {
   out
 }
 
-# A text field as lines of runs (bullet fields: one bullet per line).
+# The Details field as classified lines: each entry `list(runs=, bullet=)`.
+# `- ` (or `* `) opens a bullet line; anything else is a plain line.
 md_lines <- function(text) {
   lines <- strsplit(coal(text, ""), "\n", fixed = TRUE)[[1L]]
   lines <- lines[nzchar(trimws(lines))]
-  lapply(lines, md_runs)
+  lapply(lines, function(l) {
+    l <- trimws(l)
+    bullet <- grepl("^[-*] ", l)
+    if (bullet) {
+      l <- sub("^[-*] +", "", l)
+    }
+    list(runs = md_runs(l), bullet = bullet)
+  })
+}
+
+# The compare layout's panel headings, split on `|`.
+panel_labels <- function(labels, n) {
+  parts <- trimws(strsplit(coal(labels, ""), "|", fixed = TRUE)[[1L]])
+  out <- character(n)
+  out[seq_len(min(n, length(parts)))] <- parts[seq_len(min(n, length(parts)))]
+  out
 }

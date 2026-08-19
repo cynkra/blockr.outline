@@ -192,13 +192,26 @@ runs_fpar <- function(runs, font, size, color = "#111827", prefix = NULL) {
   do.call(officer::fpar, txts)
 }
 
-lines_block <- function(text, font, size, color = "#111827", bullet = FALSE) {
+# The Details field as an officer block: a `- ` line takes the bullet dot
+# (or its number on the agenda layout), a plain line takes none. Same
+# classification as the HTML painter's slide_details_html().
+lines_block <- function(text, font, size, color = "#111827",
+                        numbered = FALSE) {
   lines <- md_lines(text)
   if (!length(lines)) {
     return(NULL)
   }
+  counter <- 0L
   do.call(officer::block_list, lapply(lines, function(l) {
-    runs_fpar(l, font, size, color, prefix = if (bullet) "•  ")
+    prefix <- if (isTRUE(l$bullet)) {
+      if (numbered) {
+        counter <<- counter + 1L
+        paste0(counter, ".  ")
+      } else {
+        "\u2022  "
+      }
+    }
+    runs_fpar(l$runs, font, size, color, prefix = prefix)
   }))
 }
 
@@ -256,8 +269,22 @@ slide_pptx_slot <- function(doc, s, x, fnt, template = NULL,
     },
 
     bullets = {
-      blk <- lines_block(x$text, fnt, 15, bullet = TRUE)
+      blk <- lines_block(x$text, fnt, 15, numbered = isTRUE(s$numbered))
       if (is.null(blk)) doc else place(blk)
+    },
+
+    text = {
+      blk <- lines_block(x$text, fnt, 14, color = "#374151")
+      if (is.null(blk)) doc else place(blk)
+    },
+
+    panelhead = {
+      lab <- panel_labels(x$labels, 2L)[[coal(s$panel, 1L)]]
+      if (!nzchar(lab)) return(doc)
+      place(do.call(officer::block_list, list(runs_fpar(
+        list(list(text = lab, bold = TRUE, italic = FALSE)),
+        fnt, 14, color = "#374151"
+      ))))
     },
 
     callout = {

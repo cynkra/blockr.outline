@@ -111,8 +111,8 @@ rect <- function(x, y, w, h) {
   list(x = x, y = y, w = w, h = h)
 }
 
-slot <- function(kind, key, rect) {
-  list(kind = kind, key = key, rect = rect)
+slot <- function(kind, key, rect, ...) {
+  c(list(kind = kind, key = key, rect = rect), list(...))
 }
 
 # The layout registry: the six starting layouts (spec req. 4). `inputs` is
@@ -145,7 +145,7 @@ slide_layouts <- function() {
 
     "exhibit-callout" = list(
       name = "Exhibit + takeaway", inputs = 1L, chrome = "full",
-      text = list(key = "callout", label = "Takeaway", kind = "text"),
+      text = list(key = "callout", label = "Details", kind = "text"),
       build = function(b) {
         gap <- slide_frame()$gap
         ch <- 1.05
@@ -158,8 +158,7 @@ slide_layouts <- function() {
 
     "exhibit-notes" = list(
       name = "Exhibit + notes", inputs = 1L, chrome = "full",
-      text = list(key = "notes", label = "Notes (one bullet per line)",
-                  kind = "bullets"),
+      text = list(key = "notes", label = "Details", kind = "bullets"),
       build = function(b) {
         gap <- slide_frame()$gap
         w <- b$w * 0.64
@@ -173,16 +172,67 @@ slide_layouts <- function() {
 
     "bullets" = list(
       name = "Bullets", inputs = 0L, chrome = "full",
-      text = list(key = "bullets", label = "Bullets (one per line)",
-                  kind = "bullets"),
+      text = list(key = "bullets", label = "Details", kind = "bullets"),
       build = function(b) {
         list(slot("bullets", "bullets", b))
       }
     ),
 
+    "compare-2" = list(
+      name = "Compare", inputs = 2L, chrome = "full", text = NULL,
+      labels = TRUE,
+      build = function(b) {
+        gap <- slide_frame()$gap
+        w <- (b$w - gap) / 2
+        hh <- 0.42
+        et <- b$y + hh + 0.12
+        list(
+          slot("panelhead", "label1", rect(b$x, b$y, w, hh), panel = 1L),
+          slot("panelhead", "label2", rect(b$x + w + gap, b$y, w, hh),
+               panel = 2L),
+          slot("exhibit", "exhibit1", rect(b$x, et, w, b$h - hh - 0.12)),
+          slot("exhibit", "exhibit2",
+               rect(b$x + w + gap, et, w, b$h - hh - 0.12))
+        )
+      }
+    ),
+
+    "lead-exhibit" = list(
+      name = "Lead + exhibit", inputs = 1L, chrome = "full",
+      text = list(key = "lead", label = "Details", kind = "text"),
+      build = function(b) {
+        gap <- slide_frame()$gap
+        lh <- 0.80
+        list(
+          slot("text", "lead", rect(b$x, b$y, b$w, lh)),
+          slot("exhibit", "exhibit1",
+               rect(b$x, b$y + lh + gap, b$w, b$h - lh - gap))
+        )
+      }
+    ),
+
+    "full-bleed" = list(
+      name = "Full bleed", inputs = 1L, chrome = "none", text = NULL,
+      build = function(b) {
+        sz <- slide_size()
+        list(slot("exhibit", "exhibit1",
+                  rect(0.4, 0.4, sz[["w"]] - 0.8, sz[["h"]] - 0.8)))
+      }
+    ),
+
+    "agenda" = list(
+      name = "Agenda", inputs = 0L, chrome = "full",
+      text = list(key = "agenda", label = "Details", kind = "bullets"),
+      build = function(b) {
+        list(slot("bullets", "agenda",
+                  rect(b$x, b$y + 0.2, b$w * 0.7, b$h - 0.2),
+                  numbered = TRUE))
+      }
+    ),
+
     "section" = list(
       name = "Section divider", inputs = 0L, chrome = "none",
-      text = list(key = "kicker", label = "Kicker", kind = "text"),
+      text = list(key = "kicker", label = "Details", kind = "text"),
       build = function(b) {
         # The body box arrives even for chrome = "none" layouts; the divider
         # centres itself in the frame it was handed.

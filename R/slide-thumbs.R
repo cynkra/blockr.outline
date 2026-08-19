@@ -34,6 +34,11 @@ slide_layout_thumb <- function(layout) {
     r <- s$rect
     if (s$kind == "exhibit") {
       add(r$x, r$y, r$w, r$h, "#c7d2de")
+    } else if (s$kind == "panelhead") {
+      add(r$x, r$y + 0.08, r$w * 0.5, 0.2, "#374151")
+    } else if (s$kind == "text") {
+      add(r$x, r$y + 0.05, r$w * 0.94, 0.14, "#c3c8d0")
+      add(r$x, r$y + 0.35, r$w * 0.72, 0.14, "#c3c8d0")
     } else if (s$kind == "callout") {
       add(r$x, r$y, r$w, r$h, "#9dc3dd")
     } else if (s$kind == "section") {

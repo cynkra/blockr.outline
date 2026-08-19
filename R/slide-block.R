@@ -38,7 +38,10 @@ as_dot_call <- function(x) {
 #'
 #' @param layout Layout id, one of `names(slide_layouts())`.
 #' @param title,subtitle,footnote Slide chrome; empty strings render nothing.
-#' @param text The chosen layout's text field (takeaway, bullets, kicker).
+#' @param text The Details field: one field for every layout, so the words
+#'   survive a layout switch. `- ` starts a bullet (a numbered item on the
+#'   agenda layout); plain lines stay plain; `**bold**`, `*italic*`.
+#' @param labels Compare layout only: panel headings, `|`-separated.
 #' @param paginate Single-exhibit layouts: page an overflowing table over
 #'   further slides (see [slide()]). Ignored by other layouts.
 #' @param ... Forwarded to [blockr.core::new_block()].
@@ -46,7 +49,7 @@ as_dot_call <- function(x) {
 #' @export
 new_slide_block <- function(layout = "exhibit-full", title = "",
                             subtitle = "", footnote = "", text = "",
-                            paginate = TRUE, ...) {
+                            labels = "", paginate = TRUE, ...) {
 
   blockr.core::new_block(
 
@@ -59,9 +62,12 @@ new_slide_block <- function(layout = "exhibit-full", title = "",
         fno <- shiny::reactiveVal(footnote)
         txt <- shiny::reactiveVal(text)
         pgn <- shiny::reactiveVal(isTRUE(paginate))
+        lbl <- shiny::reactiveVal(labels)
 
         shiny::observeEvent(input$layout, lay(input$layout))
         shiny::observeEvent(input$paginate, pgn(isTRUE(input$paginate)),
+                            ignoreInit = TRUE)
+        shiny::observeEvent(input$labels, lbl(input$labels),
                             ignoreInit = TRUE)
         shiny::observeEvent(input$title, tit(input$title), ignoreInit = TRUE)
         shiny::observeEvent(input$subtitle, sub(input$subtitle),
@@ -74,17 +80,39 @@ new_slide_block <- function(layout = "exhibit-full", title = "",
           dot_arg_refs(...args)
         )
 
-        # The layout's own text field: label and visibility follow the
-        # chosen layout (a takeaway line, a bullet list, a kicker -- or
-        # nothing at all for the pure exhibit layouts).
+        # The Details field: ONE label whatever the layout, because it is
+        # one field -- the takeaway, the bullets, the kicker are the same
+        # words reshaped, and the constant name is what says so. Hidden
+        # only where no layout slot reads it.
         output$text_field <- shiny::renderUI({
           spec <- slide_layout_spec(lay())
           if (is.null(spec$text)) {
             return(NULL)
           }
-          shiny::textAreaInput(
-            session$ns("text"), spec$text$label,
-            value = shiny::isolate(txt()), rows = 3L, width = "100%"
+          htmltools::tagList(
+            shiny::textAreaInput(
+              session$ns("text"), "Details",
+              value = shiny::isolate(txt()), rows = 3L, width = "100%"
+            ),
+            htmltools::div(
+              style = paste0("font-size:11px;color:#9ca3af;",
+                             "margin:-6px 0 10px;"),
+              "Kept across layouts \u00b7 \u201c- \u201d starts a bullet",
+              if (isTRUE(slide_layout_spec(lay())$build(
+                    rect(0, 0, 1, 1))[[1L]]$numbered)) " (numbered here)",
+              " \u00b7 **bold** *italic*"
+            )
+          )
+        })
+
+        # Compare's panel headings, only there.
+        output$labels_field <- shiny::renderUI({
+          if (!isTRUE(slide_layout_spec(lay())$labels)) {
+            return(NULL)
+          }
+          shiny::textInput(
+            session$ns("labels"), "Panel labels (left | right)",
+            value = shiny::isolate(lbl()), width = "100%"
           )
         })
 
@@ -152,7 +180,8 @@ new_slide_block <- function(layout = "exhibit-full", title = "",
         cur_slide <- shiny::reactive(
           slide(
             layout = lay(), title = tit(), subtitle = sub(),
-            footnote = fno(), text = txt(), paginate = pgn(),
+            footnote = fno(), text = txt(), labels = lbl(),
+            paginate = pgn(),
             # By position, not via unname() (the reactives names<- method
             # rejects NULL), and no call: the store binds each slot as an
             # active binding, so indexing already yields the current value.
@@ -182,12 +211,13 @@ new_slide_block <- function(layout = "exhibit-full", title = "",
             bquote(
               blockr.outline::slide(
                 layout = .(lay), title = .(tit), subtitle = .(sub),
-                footnote = .(fno), text = .(txt), paginate = .(pgn),
+                footnote = .(fno), text = .(txt), labels = .(lbl),
+                paginate = .(pgn),
                 exhibits = list(..(dat))
               ),
               list(
                 lay = lay(), tit = tit(), sub = sub(), fno = fno(),
-                txt = txt(), pgn = pgn(),
+                txt = txt(), lbl = lbl(), pgn = pgn(),
                 dat = lapply(unname(arg_names()), as_dot_call)
               ),
               splice = TRUE
@@ -195,7 +225,7 @@ new_slide_block <- function(layout = "exhibit-full", title = "",
           ),
           state = list(
             layout = lay, title = tit, subtitle = sub,
-            footnote = fno, text = txt, paginate = pgn
+            footnote = fno, text = txt, labels = lbl, paginate = pgn
           )
         )
       })
@@ -219,6 +249,7 @@ new_slide_block <- function(layout = "exhibit-full", title = "",
           width = "100%"
         ),
         shiny::uiOutput(shiny::NS(id, "text_field")),
+        shiny::uiOutput(shiny::NS(id, "labels_field")),
         shiny::uiOutput(shiny::NS(id, "paginate_field")),
         htmltools::div(
           style = paste0(

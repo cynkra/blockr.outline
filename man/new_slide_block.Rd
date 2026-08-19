@@ -10,6 +10,7 @@ new_slide_block(
   subtitle = "",
   footnote = "",
   text = "",
+  labels = "",
   paginate = TRUE,
   ...
 )
@@ -19,7 +20,11 @@ new_slide_block(
 
 \item{title, subtitle, footnote}{Slide chrome; empty strings render nothing.}
 
-\item{text}{The chosen layout's text field (takeaway, bullets, kicker).}
+\item{text}{The Details field: one field for every layout, so the words
+survive a layout switch. \verb{- } starts a bullet (a numbered item on the
+agenda layout); plain lines stay plain; \verb{**bold**}, \verb{*italic*}.}
+
+\item{labels}{Compare layout only: panel headings, \code{|}-separated.}
 
 \item{paginate}{Single-exhibit layouts: page an overflowing table over
 further slides (see \code{\link[=slide]{slide()}}). Ignored by other layouts.}

@@ -52,9 +52,21 @@ slide_html_css <- function() {
 .bslide-table .num { text-align:right; }
 .bslide-cut { margin-top:8px; font-size:14px; color:#b45309; }
 .bslide-cut--paged { color:#6b7280; }
-.bslide-bullets { margin:0; padding:0 0 0 22px; font-size:20px;
+.bslide-bullets { margin:0 0 10px; padding:0 0 0 26px; font-size:20px;
   line-height:1.5; }
 .bslide-bullets li { margin-bottom:14px; }
+ol.bslide-bullets li::marker { color:#0072b2; font-weight:600; }
+.bslide-para { font-size:20px; line-height:1.5; margin:0 0 12px; }
+.bslide-callout .bslide-para, .bslide-callout .bslide-bullets {
+  font-size:19px; margin-bottom:0; }
+.bslide-callout .bslide-para + .bslide-para,
+.bslide-callout .bslide-bullets { margin-top:8px; }
+.bslide-lead .bslide-para, .bslide-lead .bslide-bullets { font-size:19px;
+  color:#374151; margin-bottom:6px; }
+.bslide-panelhead { font-size:18px; font-weight:600; color:#374151;
+  padding-bottom:6px; border-bottom:1.5px solid #e5e7eb; }
+.bslide-kicker .bslide-para { font:inherit; letter-spacing:inherit;
+  margin:0; }
 .bslide-callout { display:flex; align-items:center; height:100%;
   box-sizing:border-box; padding:16px 20px; background:#f2f7fb;
   border-left:4px solid #0072b2; border-radius:4px; font-size:19px;
@@ -117,27 +129,43 @@ slide_table_html <- function(x, r, paginate = FALSE) {
   ))
 }
 
-slide_bullets_html <- function(text) {
-  lines <- md_lines(text)
-  if (!length(lines)) {
-    return(NULL)
-  }
-  htmltools::HTML(paste0(
-    "<ul class=\"bslide-bullets\">",
-    paste0(chr_ply(lines, function(l) paste0("<li>", runs_html(l), "</li>")),
-           collapse = ""),
-    "</ul>"
-  ))
-}
+# The Details field, painted: plain lines as paragraphs, runs of `- ` lines
+# grouped into a list (numbered on the agenda layout). One renderer for
+# every text-carrying slot, because it is ONE field -- switching layouts
+# reshapes the words, it never reinterprets them.
+slide_details_html <- function(text, numbered = FALSE) {
 
-slide_para_html <- function(text) {
   lines <- md_lines(text)
   if (!length(lines)) {
     return(NULL)
   }
-  htmltools::HTML(
-    paste0(chr_ply(lines, runs_html), collapse = "<br>")
-  )
+
+  tag <- if (numbered) "ol" else "ul"
+  parts <- character()
+  open <- FALSE
+
+  for (l in lines) {
+    if (isTRUE(l$bullet)) {
+      if (!open) {
+        parts <- c(parts, paste0("<", tag, " class=\"bslide-bullets\">"))
+        open <- TRUE
+      }
+      parts <- c(parts, paste0("<li>", runs_html(l$runs), "</li>"))
+    } else {
+      if (open) {
+        parts <- c(parts, paste0("</", tag, ">"))
+        open <- FALSE
+      }
+      parts <- c(parts,
+                 paste0("<div class=\"bslide-para\">", runs_html(l$runs),
+                        "</div>"))
+    }
+  }
+  if (open) {
+    parts <- c(parts, paste0("</", tag, ">"))
+  }
+
+  htmltools::HTML(paste0(parts, collapse = ""))
 }
 
 slide_slot_html <- function(s, x) {
@@ -164,13 +192,21 @@ slide_slot_html <- function(s, x) {
         )
       }
     },
-    bullets = slide_bullets_html(x$text),
+    panelhead = {
+      lab <- panel_labels(x$labels, 2L)[[coal(s$panel, 1L)]]
+      if (nzchar(lab)) {
+        htmltools::div(class = "bslide-panelhead", lab)
+      }
+    },
+    text = htmltools::div(class = "bslide-lead", slide_details_html(x$text)),
+    bullets = slide_details_html(x$text, numbered = isTRUE(s$numbered)),
     callout = htmltools::div(
       class = "bslide-callout",
-      htmltools::div(slide_para_html(x$text))
+      htmltools::div(slide_details_html(x$text))
     ),
     section = htmltools::tagList(
-      htmltools::div(class = "bslide-kicker", x$text),
+      htmltools::div(class = "bslide-kicker",
+                     slide_details_html(x$text)),
       htmltools::h2(class = "bslide-section-title", x$title),
       htmltools::div(class = "bslide-rule")
     )
