@@ -246,7 +246,13 @@
         // and the anchor with it: "Clear" means start over, so the next
         // shift-click must not sweep from a row cleared three actions ago
         selAnchor = null;
-        render();
+        // Selection is painted, not built: rings off + bar update, same as
+        // every other selection change. This used to call render() -- a
+        // full 92-row rebuild to remove some CSS classes.
+        deckEl.querySelectorAll('.md-chip.sel').forEach(
+          (x) => x.classList.remove('sel')
+        );
+        updateBar();
       });
 
       mkstackBtn.addEventListener('click', () => {
