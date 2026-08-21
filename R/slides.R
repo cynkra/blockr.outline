@@ -304,10 +304,57 @@ slides_js <- function(ns) {
         return (e.clientY - box.top) > box.height / 2;
       }
 
+      // ONE caret per list, moved to the targeted gap -- the report
+      // builder's arrangement, and for the reason given there: anchoring
+      // the line to a row via ::after only lands on the right pixel while
+      // the rows are flush and borderless, which is an invisible
+      // dependency rather than a property anyone maintains.
+      function caretFor(row) {
+        var list = row.closest('.blockr-sld-list');
+        if (!list) return null;
+        var caret = list.querySelector('.blockr-sld-caret');
+        if (!caret) {
+          caret = document.createElement('div');
+          caret.className = 'blockr-sld-caret is-hidden';
+          list.appendChild(caret);
+        }
+        return caret;
+      }
+
+      function hideCarets() {
+        document.querySelectorAll('.blockr-sld-caret').forEach(function(c) {
+          c.classList.add('is-hidden');
+        });
+      }
+
+      // The gap's centre, read off what is actually on screen, so this
+      // knows nothing about the rows' border, margin or height.
+      function moveCaret(row, after) {
+        var caret = caretFor(row);
+        if (!caret) return;
+        var box = row.getBoundingClientRect();
+        var sib = after ? row.nextElementSibling : row.previousElementSibling;
+        while (sib && !sib.classList.contains('blockr-sld-row')) {
+          sib = after ? sib.nextElementSibling : sib.previousElementSibling;
+        }
+        var y;
+        if (sib) {
+          var sb = sib.getBoundingClientRect();
+          y = after ? (box.bottom + sb.top) / 2 : (sb.bottom + box.top) / 2;
+        } else {
+          var edge = parseFloat(getComputedStyle(row).marginBottom) || 0;
+          y = after ? box.bottom + edge / 2 : box.top - edge / 2;
+        }
+        var lb = row.closest('.blockr-sld-list').getBoundingClientRect();
+        caret.style.top = (y - lb.top) + 'px';
+        caret.classList.remove('is-hidden');
+      }
+
       document.addEventListener('dragend', function() {
         dragged = null;
+        hideCarets();
         document.querySelectorAll('.blockr-sld-row').forEach(function(r) {
-          r.classList.remove('is-dragging', 'is-over', 'is-over-top');
+          r.classList.remove('is-dragging');
         });
       });
 
@@ -316,11 +363,7 @@ slides_js <- function(ns) {
         var row = e.target.closest ? e.target.closest('.blockr-sld-row') : null;
         if (!row) return;
         e.preventDefault();
-        var after = dropAfter(e, row);
-        document.querySelectorAll('.blockr-sld-row').forEach(function(r) {
-          r.classList.remove('is-over', 'is-over-top');
-        });
-        row.classList.add(after ? 'is-over' : 'is-over-top');
+        moveCaret(row, dropAfter(e, row));
       });
 
       document.addEventListener('drop', function(e) {
@@ -328,6 +371,7 @@ slides_js <- function(ns) {
         var row = e.target.closest ? e.target.closest('.blockr-sld-row') : null;
         if (!row) return;
         e.preventDefault();
+        hideCarets();
         Shiny.setInputValue(
           MOVE,
           {id: dragged, target: row.dataset.blk, after: dropAfter(e, row)},
