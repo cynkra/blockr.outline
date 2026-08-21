@@ -807,10 +807,65 @@ report_js <- function(ns) {
         return (e.clientY - box.top) > box.height / 2;
       }
 
+      // ONE caret per list, moved to the targeted gap -- not a pair of
+      // pseudo-elements on the rows. The rows here are flush and
+      // borderless, which is the only condition under which anchoring the
+      // line to a row works: a row's bottom edge is then literally the next
+      // row's top edge, so `bottom: -1px` on one and `top: -1px` on the
+      // next land on the same pixel. Give a row a border or a margin and
+      // they do not -- a pseudo-element is laid out against the padding
+      // box, which a border insets -- and the same gap gets drawn 2px apart
+      // depending on which row the pointer is over, so the caret jumps
+      // between clinging to one row and the other. That is what it did in
+      // the patient profile sidebar, which is where this rewrite comes
+      // from. Nothing visible changes here; what changes is that the
+      // appearance no longer depends on the rows staying flush.
+      function caretFor(row) {
+        var list = row.closest('.blockr-rpt-list');
+        if (!list) return null;
+        var caret = list.querySelector('.blockr-rpt-caret');
+        if (!caret) {
+          caret = document.createElement('div');
+          caret.className = 'blockr-rpt-caret is-hidden';
+          list.appendChild(caret);
+        }
+        return caret;
+      }
+
+      function hideCarets() {
+        document.querySelectorAll('.blockr-rpt-caret').forEach(function(c) {
+          c.classList.add('is-hidden');
+        });
+      }
+
+      // The gap's centre, read off what is actually on screen, so this
+      // knows nothing about the rows' border, margin or height.
+      function moveCaret(row, after) {
+        var caret = caretFor(row);
+        if (!caret) return;
+        var box = row.getBoundingClientRect();
+        var sib = after ? row.nextElementSibling : row.previousElementSibling;
+        while (sib && !sib.classList.contains('blockr-rpt-row')) {
+          sib = after ? sib.nextElementSibling : sib.previousElementSibling;
+        }
+        var y;
+        if (sib) {
+          var sb = sib.getBoundingClientRect();
+          y = after ? (box.bottom + sb.top) / 2 : (sb.bottom + box.top) / 2;
+        } else {
+          var edge = parseFloat(getComputedStyle(row).marginBottom) || 0;
+          y = after ? box.bottom + edge / 2 : box.top - edge / 2;
+        }
+        var lb = row.closest('.blockr-rpt-list').getBoundingClientRect();
+        caret.style.top = (y - lb.top) + 'px';
+        caret.classList.remove('is-hidden');
+      }
+
       document.addEventListener('dragend', function() {
         dragged = null;
+        hideCarets();
         document.querySelectorAll('.blockr-rpt-row').forEach(function(r) {
-          r.classList.remove('is-dragging', 'is-over', 'is-over-top');
+          r.classList.remove('is-dragging');
         });
       });
 
@@ -819,11 +874,7 @@ report_js <- function(ns) {
         var row = e.target.closest ? e.target.closest('.blockr-rpt-row') : null;
         if (!row) return;
         e.preventDefault();
-        var after = dropAfter(e, row);
-        document.querySelectorAll('.blockr-rpt-row').forEach(function(r) {
-          r.classList.remove('is-over', 'is-over-top');
-        });
-        row.classList.add(after ? 'is-over' : 'is-over-top');
+        moveCaret(row, dropAfter(e, row));
       });
 
       document.addEventListener('drop', function(e) {
@@ -831,6 +882,7 @@ report_js <- function(ns) {
         var row = e.target.closest ? e.target.closest('.blockr-rpt-row') : null;
         if (!row) return;
         e.preventDefault();
+        hideCarets();
         Shiny.setInputValue(
           MOVE,
           {from: dragged, to: rowIdx(row), after: dropAfter(e, row)},
