@@ -347,8 +347,7 @@ report_ext_srv <- function(items, title, settings) {
                 list(
                   name = blockr.core::block_name(blks[[i]]),
                   kind = block_exhibit_kind(blks[[i]]),
-                  icon = block_icon_html(blks[[i]]),
-                  desc = block_descr_text(blks[[i]])
+                  icon = block_icon_html(blks[[i]])
                 )
               }
             )
@@ -400,8 +399,7 @@ report_ext_srv <- function(items, title, settings) {
                   id = i,
                   name = coal(na_blank(meta[[i]]$name), i),
                   icon_key = tbl$keys[[k]],
-                  kind = coal(meta[[i]]$kind, ""),
-                  desc = coal(meta[[i]]$desc, "")
+                  kind = coal(meta[[i]]$kind, "")
                 )
               }
             )

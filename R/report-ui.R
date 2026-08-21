@@ -933,11 +933,16 @@ report_js <- function(ns) {
         return esc(t.slice(0, i)) + '<mark>' + esc(t.slice(i, i + q.length)) +
           '</mark>' + esc(t.slice(i + q.length));
       }
+      // Match on the name and the id, which is what an entry SHOWS plus the
+      // thing that disambiguates two blocks sharing a name. Deliberately not
+      // the registry description: it is boilerplate per block TYPE -- every
+      // dm block carries the same sentence -- so matching it returns dozens
+      // of identical-looking hits for a word the user cannot see on any of
+      // them.
       function searchHits(q) {
         return catalog.filter(function(b) {
           if (!q) return true;
-          return (b.name + ' ' + b.desc + ' ' + b.id)
-            .toLowerCase().indexOf(q) >= 0;
+          return (b.name + ' ' + b.id).toLowerCase().indexOf(q) >= 0;
         });
       }
       function cardHtml(b, q, idx) {
@@ -953,11 +958,7 @@ report_js <- function(ns) {
                 (b.kind ?
                   '<span class=\"blockr-block-browser-card-package\">' +
                   esc(b.kind) + '</span>' : '') +
-                '<span class=\"blockr-rpt-optact\">' +
-                  (isPicked(b) ? 'In the report' : 'Add') + '</span>' +
               '</div>' +
-              '<p class=\"blockr-rpt-optdesc\">' +
-                (b.desc ? mark(b.desc, q) : esc(b.id)) + '</p>' +
             '</div>' +
           '</div>' +
         '</div>';

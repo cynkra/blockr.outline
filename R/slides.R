@@ -436,13 +436,15 @@ slides_js <- function(ns) {
         return esc(t.slice(0, i)) + '<mark>' + esc(t.slice(i, i + q.length)) +
           '</mark>' + esc(t.slice(i + q.length));
       }
-      // Match on everything the entry shows plus the id, which is what
-      // disambiguates two blocks carrying the same name.
+      // Match on the name and the id, which is what an entry SHOWS plus the
+      // thing that disambiguates two blocks sharing a name. Deliberately not
+      // the registry description: it is boilerplate per block TYPE -- every
+      // block of a kind carries the same sentence -- so matching it returns
+      // hits for a word the user cannot see on any of them.
       function searchHits(q) {
         return catalog.filter(function(b) {
           if (!q) return true;
-          return (b.name + ' ' + b.desc + ' ' + b.id)
-            .toLowerCase().indexOf(q) >= 0;
+          return (b.name + ' ' + b.id).toLowerCase().indexOf(q) >= 0;
         });
       }
       function cardHtml(b, q, idx) {
@@ -458,11 +460,7 @@ slides_js <- function(ns) {
                 (b.kind ?
                   '<span class=\"blockr-block-browser-card-package\">' +
                   esc(b.kind) + '</span>' : '') +
-                '<span class=\"blockr-sld-optact\">' +
-                  (isPicked(b) ? 'In the deck' : 'Add') + '</span>' +
               '</div>' +
-              '<p class=\"blockr-sld-optdesc\">' +
-                (b.desc ? mark(b.desc, q) : esc(b.id)) + '</p>' +
             '</div>' +
           '</div>' +
         '</div>';
@@ -686,8 +684,7 @@ slides_ext_srv <- function(slides, title, format = "pptx") {
                 list(
                   name = blockr.core::block_name(blks[[i]]),
                   kind = block_exhibit_kind(blks[[i]]),
-                  icon = block_icon_html(blks[[i]]),
-                  desc = block_descr_text(blks[[i]])
+                  icon = block_icon_html(blks[[i]])
                 )
               }
             )
@@ -747,8 +744,7 @@ slides_ext_srv <- function(slides, title, format = "pptx") {
                   id = i,
                   name = coal(na_blank(meta[[i]]$name), i),
                   icon_key = tbl$keys[[k]],
-                  kind = coal(meta[[i]]$kind, ""),
-                  desc = coal(meta[[i]]$desc, "")
+                  kind = coal(meta[[i]]$kind, "")
                 )
               }
             )

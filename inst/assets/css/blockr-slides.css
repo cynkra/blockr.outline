@@ -110,17 +110,13 @@
 .blockr-sld-searchmenu.is-empty .blockr-block-browser-empty { display: flex; }
 .blockr-sld-searchmenu mark { background: #fef08a; color: inherit;
   border-radius: 2px; padding: 0 1px; }
-/* What the row does when chosen, in the browser's trailing slot. */
-.blockr-sld-optact { flex: 0 0 auto;
-  font-size: var(--blockr-font-size-xs, 0.75rem); font-weight: 500;
-  color: var(--blockr-grey-400, #9ca3af); }
-.blockr-block-browser-card:hover .blockr-sld-optact,
-.blockr-block-browser-card.card-selected .blockr-sld-optact {
-  color: var(--blockr-blue-600, #2563eb); }
-/* The registry line, where the browser puts the package name. */
-.blockr-sld-optdesc { margin: 2px 0 0; font-size: 0.75rem; line-height: 1.35;
-  color: var(--blockr-grey-500, #6b7280); overflow: hidden;
-  text-overflow: ellipsis; white-space: nowrap; }
+/* A picker entry is icon, name and kind badge, one line -- the shape
+   blockr.dock's block-type browser has, which is the reference.
+   Nothing else: the registry DESCRIPTION is boilerplate per block type,
+   so it repeats verbatim down the list and says nothing about the block
+   being chosen; and a trailing "Add" word is not a second control (the
+   entry itself is the control) while the two section headings already
+   say whether a click adds the block or goes to the row it has. */
 
 /* ---- the deck ------------------------------------------------------ */
 
