@@ -805,15 +805,67 @@ report_ext_srv <- function(items, title, settings) {
         spin_txt <- reactive(paste0(spin_pieces(), collapse = "\n\n"))
 
         # ---- the code views ------------------------------------------
+        #
+        # The projection is re-DERIVED far more often than it CHANGES, and
+        # the difference is what the reader sees. board_exprs() reads every
+        # block's expr reactive, and selecting a dock panel invalidates
+        # those: the active view decides the board's needed set, so a tab
+        # click re-evaluates blocks and their expr reactives fire again
+        # carrying the same expression. Shiny propagates invalidation, not
+        # value equality, so a renderUI reading sections() directly tore
+        # down and rebuilt the whole file on every tab click -- the code
+        # view blanked and came back, while the code in it was byte for
+        # byte the one already on screen.
+        #
+        # reactiveVal is the brake: it compares with identical() and stays
+        # silent when the value has not changed, so expr churn that lands
+        # on the same code stops here instead of reaching the DOM. Cheap,
+        # because the comparison is on the emitted pieces -- the thing that
+        # actually decides what the view looks like.
+        #
+        # The observe is gated on a code view being open rather than
+        # reading sections() unconditionally, which keeps the projection as
+        # lazy as it was: nothing is demanded while the builder is on
+        # screen, and a deferred board still costs nothing until the reader
+        # asks for the code.
+        code_view <- reactiveVal(NULL)
 
-        output$rpt_code <- renderUI({
+        observe({
 
           view <- coal(input$rpt_view, "builder")
-          req(view %in% c("script", "qmd"))
+
+          if (!view %in% c("script", "qmd")) {
+            return()
+          }
 
           sects <- tryCatch(sections(), error = function(e) NULL)
 
+          # No pieces is the empty state; the render arm reads it off the
+          # missing element rather than a second flag.
           if (is.null(sects) || !length(item_block_ids(rv_items()))) {
+            code_view(list(view = view))
+            return()
+          }
+
+          code_view(
+            list(
+              view = view,
+              sects = sects,
+              pieces = if (identical(view, "qmd")) {
+                qmd_pieces()
+              } else {
+                spin_pieces()
+              }
+            )
+          )
+        })
+
+        output$rpt_code <- renderUI({
+
+          state <- code_view()
+          req(state)
+
+          if (is.null(state$pieces)) {
             return(
               div(
                 class = "blockr-rpt-empty",
@@ -822,13 +874,9 @@ report_ext_srv <- function(items, title, settings) {
             )
           }
 
-          pieces <- if (identical(view, "qmd")) {
-            qmd_pieces()
-          } else {
-            spin_pieces()
-          }
-
-          report_code_ui(pieces, view, sects, session$ns)
+          report_code_ui(
+            state$pieces, state$view, state$sects, session$ns
+          )
         })
 
         # ---- open a block --------------------------------------------
