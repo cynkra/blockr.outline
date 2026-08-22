@@ -31,11 +31,8 @@ report_ext_ui <- function(id, board, ...) {
         label = NULL,
         size = "sm",
         status = "light",
-        choices = c(
-          "Builder" = "builder",
-          "report.R" = "script",
-          "report.qmd" = "qmd"
-        ),
+        choiceNames = report_view_names(),
+        choiceValues = names(report_view_icons()),
         selected = "builder"
       ),
       div(
@@ -107,6 +104,69 @@ report_ext_ui <- function(id, board, ...) {
       uiOutput(ns("rpt_code"))
     ),
     report_js(ns)
+  )
+}
+
+# The three view segments, icon only. The glyphs are hand-drawn 15px
+# currentColor SVG in blockr.viz's TYPE_ICONS idiom (chart.js) rather than
+# fontawesome: the same three shapes have to read at 15px inside a 28px
+# segment, which is a drawing decision, not an icon-set lookup. Rows, then
+# angle brackets, then a page: a list, a script, a document.
+report_view_icons <- function() {
+  svg <- function(...) {
+    paste0(
+      '<svg width="15" height="15" viewBox="0 0 16 16" fill="none" ',
+      'stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" ',
+      'aria-hidden="true" focusable="false" ', ..., "</svg>"
+    )
+  }
+  list(
+    builder = svg(
+      'stroke-width="1.4">',
+      '<rect x="2" y="2.9" width="3.4" height="3.4" rx="0.9" ',
+      'fill="currentColor" stroke="none"/><path d="M7.6 4.6 h6.4"/>',
+      '<rect x="2" y="9.7" width="3.4" height="3.4" rx="0.9" ',
+      'fill="currentColor" stroke="none"/><path d="M7.6 11.4 h6.4"/>'
+    ),
+    script = svg(
+      'stroke-width="1.5">',
+      '<path d="M5.8 4 L2.4 8 L5.8 12 M10.2 4 L13.6 8 L10.2 12"/>'
+    ),
+    qmd = svg(
+      'stroke-width="1.4">',
+      '<path d="M3.6 2.4 h5.2 L12.4 5.8 V13.6 H3.6 Z"/>',
+      '<path d="M8.8 2.4 v3.4 h3.6"/>',
+      '<path d="M5.8 8.9 h4.6 M5.8 11.2 h3.2"/>'
+    )
+  )
+}
+
+# A segment carries no visible text, so the tooltip is its NAME and must not
+# be the only copy of it -- `title` alone never reaches a keyboard or screen
+# reader (ux-principles, tooltip tier 1). Each segment therefore ships the
+# name twice: once as the tooltip, once visually hidden.
+#
+# Dropping the labels is licensed by report_code_ui(): a code view restates
+# its filename in the fileblock header a few pixels below the toolbar, so a
+# `report.qmd` segment label would be the same string twice on one screen.
+report_view_names <- function() {
+
+  nms <- c(builder = "Builder", script = "report.R", qmd = "report.qmd")
+  ico <- report_view_icons()
+
+  unname(
+    Map(
+      function(svg, nm) {
+        span(
+          class = "blockr-rpt-viewicon",
+          title = nm,
+          HTML(svg),
+          span(class = "blockr-rpt-sr", nm)
+        )
+      },
+      ico,
+      nms[names(ico)]
+    )
   )
 }
 

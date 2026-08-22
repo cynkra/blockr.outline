@@ -58,6 +58,61 @@
   color: #14532d; }
 .blockr-rpt-renderbtn .fa, .blockr-rpt-renderbtn svg { font-size: 0.7rem; }
 
+/* ---- the view switcher ---------------------------------------------- */
+
+/* The ecosystem's segmented control, not Bootstrap's button group: white
+   segments divided by hairlines, blue-50 fill and primary text on the
+   active one. Copied from blockr.ggplot's .dd-cfg-types / .dd-type-btn
+   (the chart-type strip) by way of blockr-outline.css, which already
+   states it for the outline toolbar -- including the icon-only segments
+   (.blockr-otl-bodytoggle) this is the report panel's version of.
+
+   Icon only because report_code_ui() prints `report.R` / `report.qmd` in
+   the fileblock header a few pixels below this row: a labelled segment
+   would put the same filename on screen twice. The name survives as the
+   tooltip and as .blockr-rpt-sr inside each segment.
+
+   The active selector must be `.btn-check:checked + label`: shinyWidgets
+   renders the radio as a SIBLING of its label, so neither `.active` nor
+   `label:has(input:checked)` ever matches -- which is what left the
+   active segment invisible when the outline first styled this strip.
+
+   28px, not the 30px of the outline's copy: the gear and the render group
+   on this row are 28px, and one baseline beats one shared token. */
+
+.blockr-rpt-toolbar .btn-group { height: 28px;
+  border: 1px solid var(--blockr-color-border, #e5e7eb);
+  border-radius: 6px; overflow: hidden; }
+.blockr-rpt-toolbar .btn-group > .btn.radiobtn {
+  display: inline-flex; align-items: center; justify-content: center;
+  height: 100%; margin: 0; padding: 0 10px;
+  border: 0; border-right: 1px solid var(--blockr-color-border, #e5e7eb);
+  border-radius: 0; background: #fff; box-shadow: none;
+  color: var(--blockr-grey-500, #6b7280); }
+.blockr-rpt-toolbar .btn-group > .btn.radiobtn:last-of-type {
+  border-right: 0; }
+.blockr-rpt-toolbar .btn-group > .btn.radiobtn:hover {
+  background: var(--blockr-grey-50, #f9fafb); }
+.blockr-rpt-toolbar .btn-check:checked + .btn.radiobtn {
+  background: var(--blockr-blue-50, #eff6ff);
+  color: var(--blockr-color-primary, #2563eb); }
+/* The input is the focus target and it is visually hidden, so the ring has
+   to be drawn on the label -- inset, or the strip's overflow clips it. */
+.blockr-rpt-toolbar .btn-check:focus-visible + .btn.radiobtn {
+  outline: 2px solid var(--blockr-blue-500, #3b82f6); outline-offset: -2px; }
+
+.blockr-rpt-viewicon { display: inline-flex; align-items: center; }
+.blockr-rpt-viewicon svg { opacity: 0.55; }
+.blockr-rpt-toolbar .btn-check:checked + .btn.radiobtn
+  .blockr-rpt-viewicon svg { opacity: 0.9; }
+
+/* The segment's accessible name. Not Bootstrap's .visually-hidden: this
+   stylesheet loads wherever the extension does, and which Bootstrap the
+   host app carries is the host's business. */
+.blockr-rpt-sr { position: absolute; width: 1px; height: 1px; padding: 0;
+  margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap;
+  border: 0; }
+
 /* ---- title ---------------------------------------------------------- */
 
 .blockr-rpt-head { margin-bottom: 10px; }
