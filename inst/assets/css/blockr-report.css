@@ -188,9 +188,26 @@
   color: var(--bb-grey-600); }
 .blockr-rpt-fldhint { display: block; font-size: 0.6875rem;
   color: var(--bb-grey-400); margin-top: 1px; }
+/* Do not let the row's space-between squeeze the control: the label takes
+   the slack, the control keeps its content width. Without this the select
+   shrank to 70px and clipped "Typst PDF". */
 .blockr-rpt-fld .shiny-input-container { margin: 0; width: auto !important; }
+/* Direct children only. The figure-size field nests two number inputs
+   inside .blockr-rpt-figsize, and letting them refuse to shrink blew both
+   boxes out to their default intrinsic width and pushed the next grid
+   cell over the top of them. */
+.blockr-rpt-fld > .shiny-input-container { flex: 0 0 auto; }
+
+/* The caret is a background image at `calc(100% - 12px)`, because the
+   theme sets appearance:none and draws its own -- so the right padding is
+   what keeps the text out from under it. The old `padding: 0 6px` reserved
+   nothing and the arrow landed on the last word.
+   `width: auto` lets the select size to its widest OPTION rather than to
+   whatever the flex row leaves over, which is what a format list that
+   gains entries needs. */
 .blockr-rpt-fld select.form-control, .blockr-rpt-fld select.form-select {
-  height: 26px; padding: 0 6px; font-size: 0.75rem; border-radius: 6px; }
+  height: 26px; padding: 0 26px 0 8px; font-size: 0.75rem;
+  border-radius: 6px; width: auto; min-width: 110px; max-width: none; }
 .blockr-rpt-fld .checkbox { margin: 0; min-height: 0; }
 .blockr-rpt-fld .checkbox label { padding-left: 0; }
 .blockr-rpt-figsize { display: flex; gap: 4px; align-items: center;
