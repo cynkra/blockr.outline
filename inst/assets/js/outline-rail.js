@@ -219,7 +219,9 @@
         addBtn.className = 'md-add';
         addBtn.textContent = '+';
         addBtn.title = 'Add block';
-        addBtn.addEventListener('click', () => emit('block_add', true));
+        // the button itself travels with the gesture: an adapter that
+        // answers with a picker opens it ON the control that was pressed
+        addBtn.addEventListener('click', () => emit('block_add', { el: addBtn }));
         searchRow.appendChild(addBtn);
       }
       headEl.appendChild(searchRow);
@@ -597,7 +599,7 @@
         const b = document.createElement('button');
         b.className = 'md-empty-add';
         b.textContent = opts.emptyAddText;
-        b.addEventListener('click', () => emit('block_add', true));
+        b.addEventListener('click', () => emit('block_add', { el: b }));
         empty.appendChild(b);
         deckEl.appendChild(empty);
         updateBar();
@@ -871,7 +873,7 @@
         const fs = focusedStack();
         lbl.textContent = opts.addRowText + (fs ? ' · joins ' + fs.name : '');
         addRow.appendChild(lbl);
-        addRow.addEventListener('click', () => emit('block_add', true));
+        addRow.addEventListener('click', () => emit('block_add', { el: addRow }));
         deckEl.appendChild(addRow);
       }
 

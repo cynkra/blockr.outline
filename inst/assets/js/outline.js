@@ -211,7 +211,10 @@
           return;
         }
         if (name === 'block_add') {
-          requestAdd(rootEl.querySelector('.md-addrow'));
+          // the renderer names the button that was pressed, so the picker
+          // opens on it wherever it is -- mid-panel on an empty board, at
+          // the foot of the list on a full one
+          requestAdd(payload && payload.el);
           return;
         }
         // Leaving or moving the focus disarms join-at-birth: the add was
@@ -719,7 +722,9 @@
 
       menuEl.appendChild(menuBtn('Add a block', '', '', () => {
         closeMenu();
-        requestAdd(null);
+        // where the menu was opened: the gesture had a position, and the
+        // picker is about to insert something there
+        requestAdd(null, deckPoint(ev));
       }));
       menuEl.appendChild(menuBtn('Paste', CLIP_KEY + 'V', '', () => {
         closeMenu();
@@ -902,9 +907,29 @@
     // both call: a block with no origin, and so no link. Until the catalogue
     // lands the picker cannot open, and swallowing the gesture would be worse
     // than the old behaviour -- so fall through to the board's own browser.
-    const requestAdd = (anchor) => {
+    // A pointer event in the coordinates `at` is stated in: the renderer
+    // measures its drags against the deck, so anything the adapter hands to
+    // `openPicker()` has to arrive in the same frame.
+    const deckPoint = (ev) => {
+      const deck = rootEl.querySelector('.md-deck');
+      if (!deck) return null;
+      const box = deck.getBoundingClientRect();
+      return { x: ev.clientX - box.left, y: ev.clientY - box.top };
+    };
+
+    // Whichever control asked for a block: the "Add a block" row on a board
+    // that has rows, the empty state's button on one that has none. Reading
+    // `.md-addrow` blind is what opened the picker in the bottom-left corner
+    // of an empty panel -- there is no add row there, so the anchor was null
+    // and positioning threw before it could place the box.
+    const addTrigger = () =>
+      rootEl.querySelector('.md-addrow') ||
+      rootEl.querySelector('.md-empty-add') ||
+      rootEl.querySelector('.md-add');
+
+    const requestAdd = (anchor, at) => {
       if (registry.add.length) {
-        openPicker(null, anchor || rootEl.querySelector('.md-addrow'), null);
+        openPicker(null, anchor || addTrigger(), at || null);
       } else {
         push('block_add', true);
       }
@@ -1042,12 +1067,23 @@
       const rootBox = rootEl.getBoundingClientRect();
       let left, top;
       if (at) {
-        left = at.x;
-        top = at.y + 8;
-      } else {
+        // measured against the DECK, which is where the renderer measures
+        // its own gestures -- the box is positioned within the PANEL, and
+        // the search row between the two is why the raw number landed the
+        // picker a header's height above the release
+        const deck = rootEl.querySelector('.md-deck');
+        const dBox = deck ? deck.getBoundingClientRect() : rootBox;
+        left = at.x + (dBox.left - rootBox.left);
+        top = at.y + (dBox.top - rootBox.top) + 8;
+      } else if (anchor) {
         const r = anchor.getBoundingClientRect();
         left = r.left - rootBox.left;
         top = r.bottom - rootBox.top + 6;
+      } else {
+        // nothing to point at (a catalogue that arrived with no add row and
+        // no empty state on screen): the top of the panel, not a throw
+        left = 8;
+        top = 8;
       }
       const w = box.offsetWidth, h = box.offsetHeight;
       // flip up rather than run off the bottom, which is the common case
