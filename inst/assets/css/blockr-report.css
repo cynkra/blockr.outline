@@ -143,8 +143,42 @@
 .blockr-rpt-gh.is-rm:hover { background-color: #fee2e2; color: #dc2626; }
 .blockr-rpt-gh svg, .blockr-rpt-gh .fa { width: 14px; height: 14px; }
 
-.blockr-rpt-gear.is-on { color: var(--bb-blue-500);
-  background-color: var(--blockr-blue-50, #eff6ff); }
+/* ---- the settings gear ---------------------------------------------- */
+
+/* The gear is the ECOSYSTEM's gear, not this panel's ghost button: a
+   bordered 26px square, grey until touched, primary and tinted while its
+   band is open. Every block on a board draws that one -- canon lives in
+   blockr.dplyr's blockr-blocks.css as .blockr-gear-btn -- and a settings
+   gear that looks like nothing else on the page is a gear the reader has
+   to learn twice.
+
+   Restated here under the panel's own class rather than imported:
+   blockr.outline does not otherwise depend on blockr.dplyr, and a bare
+   .blockr-gear-btn rule in this sheet would repaint every gear in the
+   app the moment the report extension is on the page -- the drift
+   blockr.io's unscoped 32px selector already caused once. It moves with
+   the rest of the shared layer when that lands in blockr.ui.
+
+   The ROW buttons above keep .blockr-rpt-gh, and that is not an
+   inconsistency: an eye on a report row IS the eye on a block card, so
+   it wears the dock's borderless header idiom. This one configures a
+   document, and configuring wears a border. */
+
+.blockr-rpt-gear { display: inline-flex; align-items: center;
+  justify-content: center; width: 26px; height: 26px; padding: 0;
+  flex-shrink: 0; color: var(--blockr-grey-400, #9ca3af);
+  background: transparent;
+  border: 1px solid var(--blockr-color-border, #e5e7eb);
+  border-radius: 4px; cursor: pointer; box-shadow: none;
+  transition: color 0.15s ease, border-color 0.15s ease,
+              background 0.15s ease; }
+.blockr-rpt-gear:hover { color: var(--blockr-color-primary, #2563eb);
+  border-color: rgba(37, 99, 235, 0.3);
+  background: rgba(37, 99, 235, 0.04); }
+.blockr-rpt-gear.is-on { color: var(--blockr-color-primary, #2563eb);
+  border-color: rgba(37, 99, 235, 0.3);
+  background: rgba(37, 99, 235, 0.08); }
+.blockr-rpt-gear svg { display: block; }
 
 /* ---- the settings band ---------------------------------------------- */
 

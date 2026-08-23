@@ -39,10 +39,10 @@ report_ext_ui <- function(id, board, ...) {
         class = "blockr-rpt-toolbar-right",
         tags$button(
           type = "button",
-          class = "blockr-rpt-gh blockr-rpt-gear",
+          class = "blockr-rpt-gear",
           title = "Document settings",
           `aria-label` = "Document settings",
-          icon("gear")
+          HTML(report_gear_icon())
         ),
         div(
           class = "blockr-rpt-rendergroup",
@@ -128,9 +128,13 @@ report_view_icons <- function() {
       '<rect x="2" y="9.7" width="3.4" height="3.4" rx="0.9" ',
       'fill="currentColor" stroke="none"/><path d="M7.6 11.4 h6.4"/>'
     ),
+    # `</>`, slash included -- the glyph the row's own code toggle shows
+    # and the one the ecosystem reads as "source". Brackets alone are a
+    # different sign.
     script = svg(
       'stroke-width="1.5">',
-      '<path d="M5.8 4 L2.4 8 L5.8 12 M10.2 4 L13.6 8 L10.2 12"/>'
+      '<path d="M4.9 4.1 L1.7 8 L4.9 11.9 M11.1 4.1 L14.3 8 L11.1 11.9"/>',
+      '<path d="M10 1.7 L6 14.3"/>'
     ),
     qmd = svg(
       'stroke-width="1.4">',
@@ -138,6 +142,30 @@ report_view_icons <- function() {
       '<path d="M8.8 2.4 v3.4 h3.6"/>',
       '<path d="M5.8 8.9 h4.6 M5.8 11.2 h3.2"/>'
     )
+  )
+}
+
+# The gear glyph, matching Blockr.icons.gear (blockr.dplyr's
+# blockr-core.js) rather than fontawesome: the settings gear is one sign
+# across the ecosystem, and every block on a board draws THAT one. Path
+# restated here because the shared set is a JS object and this button is
+# rendered in R -- it moves with the rest of the shared layer when that
+# lands in blockr.ui.
+report_gear_icon <- function() {
+  paste0(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" ',
+    'fill="currentColor" viewBox="0 0 16 16" aria-hidden="true" ',
+    'focusable="false"><path d="M9.405 1.05c-.413-1.4-2.397-1.4-2.81 0',
+    "l-.1.34a1.464 1.464 0 0 1-2.105.872l-.31-.17c-1.283-.698-2.686.705",
+    "-1.987 1.987l.169.311c.446.82.023 1.841-.872 2.105l-.34.1c-1.4.413",
+    "-1.4 2.397 0 2.81l.34.1a1.464 1.464 0 0 1 .872 2.105l-.17.31c-.698 ",
+    "1.283.705 2.686 1.987 1.987l.311-.169a1.464 1.464 0 0 1 2.105.872",
+    "l.1.34c.413 1.4 2.397 1.4 2.81 0l.1-.34a1.464 1.464 0 0 1 2.105",
+    "-.872l.31.17c1.283.698 2.686-.705 1.987-1.987l-.169-.311a1.464 ",
+    "1.464 0 0 1 .872-2.105l.34-.1c1.4-.413 1.4-2.397 0-2.81l-.34-.1a",
+    "1.464 1.464 0 0 1-.872-2.105l.17-.31c.698-1.283-.705-2.686-1.987",
+    "-1.987l-.311.169a1.464 1.464 0 0 1-2.105-.872zM8 10.93a2.929 2.929 ",
+    '0 1 1 0-5.86 2.929 2.929 0 0 1 0 5.858z"/></svg>'
   )
 }
 
