@@ -43,13 +43,33 @@
    what the split group's shared radius was hiding. */
 .blockr-rpt-rendergroup { display: inline-flex; align-items: stretch; }
 
-.blockr-rpt-renderbtn { display: inline-flex; align-items: center; gap: 5px;
+/* A neutral button carrying a primary MARK. The green it replaces was not
+   merely rare in the ecosystem, it was local: #f0fdf4 / #86efac / #166534
+   / #dcfce7 appear in this package and nowhere else, and the palette has
+   no action green to begin with -- colors.md defines exactly one green,
+   --blockr-color-success, for "confirmed states", which is how ggplot's
+   .preview-status.valid and blockr.io's path input use it. Green is a
+   status here, never a verb.
+   The house constructive action is a solid primary fill (.btn-primary),
+   which is LOUDER than what it replaces rather than quieter. So the
+   colour moves off the box and onto the glyph: nothing is filled, the
+   button matches the chrome around it, and the one primary mark on the
+   row still marks where the row ends. */
+.blockr-rpt-renderbtn { display: inline-flex; align-items: center; gap: 6px;
   height: 28px; padding: 0 11px; font-size: 0.75rem; font-weight: 500;
-  border-radius: 6px; border: 1px solid #86efac; background: #f0fdf4;
-  color: #166534; box-shadow: none; white-space: nowrap; }
-.blockr-rpt-renderbtn:hover { border-color: #4ade80; background: #dcfce7;
-  color: #14532d; }
-.blockr-rpt-renderbtn .fa, .blockr-rpt-renderbtn svg { font-size: 0.7rem; }
+  border-radius: 6px; border: 1px solid var(--blockr-color-border, #e5e7eb);
+  background: #fff; color: var(--blockr-grey-900, #111827);
+  box-shadow: none; white-space: nowrap; }
+.blockr-rpt-renderbtn:hover { background: var(--blockr-grey-50, #f9fafb);
+  border-color: var(--blockr-grey-300, #d1d5db);
+  color: var(--blockr-grey-900, #111827); }
+/* The glyph is where the colour lives. Targeted through .action-icon,
+   Shiny's own wrapper: fontawesome renders <i class="fas fa-play">, and
+   the rule this replaces said `.fa` -- which matches neither `fas` nor
+   the svg build, so its font-size had never applied either. */
+.blockr-rpt-renderbtn .action-icon { display: inline-flex; font-size: 0.7rem;
+  color: var(--blockr-color-primary, #2563eb); }
+.blockr-rpt-renderbtn .action-icon svg { color: inherit; }
 
 /* ---- the view switcher ---------------------------------------------- */
 
@@ -86,9 +106,21 @@
   border-right: 0; }
 .blockr-rpt-toolbar .btn-group > .btn.radiobtn:hover {
   background: var(--blockr-grey-50, #f9fafb); }
+/* Selection by WEIGHT, not hue: grey-100 behind a near-black glyph. The
+   strip's own hover is grey-50 behind a grey-500 glyph, so the two greys
+   sit one step apart and the glyph's darkness is what separates them --
+   worth stating, because grey is the ecosystem's HOVER colour (see
+   sidebar-block.css: "a clear blue marker, distinct from the grey
+   hover/expanded state"), so a selected state wearing it has to OUT-WEIGH
+   a hovered one rather than merely differ from it.
+   A deliberate departure from the chart-type strip, which tints blue-50
+   and inks primary. Rationale: icon-only leaves no label to spread the
+   colour across, and the one primary mark on this row belongs to Render.
+   Blue says "the thing you can do"; the switcher says "where you are" in
+   ink and weight. */
 .blockr-rpt-toolbar .btn-check:checked + .btn.radiobtn {
-  background: var(--blockr-blue-50, #eff6ff);
-  color: var(--blockr-color-primary, #2563eb); }
+  background: var(--blockr-grey-100, #f3f4f6);
+  color: var(--blockr-grey-900, #111827); }
 /* The input is the focus target and it is visually hidden, so the ring has
    to be drawn on the label -- inset, or the strip's overflow clips it. */
 .blockr-rpt-toolbar .btn-check:focus-visible + .btn.radiobtn {
@@ -96,8 +128,10 @@
 
 .blockr-rpt-viewicon { display: inline-flex; align-items: center; }
 .blockr-rpt-viewicon svg { opacity: 0.55; }
+/* Full strength on the selected one: with the tint gone, the glyph is
+   carrying the state by itself. */
 .blockr-rpt-toolbar .btn-check:checked + .btn.radiobtn
-  .blockr-rpt-viewicon svg { opacity: 0.9; }
+  .blockr-rpt-viewicon svg { opacity: 1; }
 
 /* The segment's accessible name. Not Bootstrap's .visually-hidden: this
    stylesheet loads wherever the extension does, and which Bootstrap the
