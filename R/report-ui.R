@@ -237,10 +237,16 @@ report_settings_band <- function(ns) {
       # leads).
       fld(
         "Output format",
+        # The VOCABULARY here, not the probed set: probing costs a render
+        # per format, and doing it at UI construction would make every
+        # session wait on it before the page exists. The server narrows
+        # this list once the page is up (see rpt_set_format below). If the
+        # probe never runs, what is left is today's behaviour rather than
+        # an empty control.
         selectInput(
           ns("rpt_set_format"),
           label = NULL,
-          choices = report_render_formats(),
+          choices = report_known_formats(),
           selected = "html",
           selectize = FALSE,
           width = "110px"

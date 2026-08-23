@@ -126,24 +126,43 @@ new_report_extension <- function(items = list(),
 # package is one definition -- the later collation wins silently -- and
 # this list is the report's, not that one's.
 #
-# html and docx, and nothing else until a deployment is shown to render
-# it. That rule is render.R's, argued there at length: pdf was once
-# offered off a PATH probe for a toolchain quarto does not use, so it
-# reached users as a download that simply failed. Offering a format is a
-# promise. docx joins html because it is pandoc's reference-doc path, the
-# same one pptx was trusted on. pdf and typst are exactly the promises
-# that could not be kept, so they are a deployment question, not a
-# vector-literal question -- and answering it here is adding a line.
-report_render_formats <- function() {
+# The VOCABULARY. Every format the report knows how to describe, which is
+# not the same as every format a given machine can produce -- see
+# report_render_formats(). Validation reads this one, deliberately: a
+# board saved against pdf must still LOAD on a deployment without TeX,
+# and be told no when it renders, rather than refuse to open at all.
+report_known_formats <- function() {
   c(
     "HTML" = "html",
-    "Word" = "docx"
+    "Word" = "docx",
+    "PDF" = "pdf",
+    "Typst PDF" = "typst"
   )
 }
 
-# The button says what the gear decided, so it needs the label back.
+# The vocabulary, less what this machine cannot keep. Offering a format is
+# a promise -- render.R argues that at length, having once offered pdf off
+# a PATH probe for a toolchain quarto does not use, which reached users as
+# a download that simply failed. So the question is put to the renderer
+# instead of to the PATH: format_renderable() renders a three-line
+# document and looks for the file.
+#
+# Once per process. The probe costs about a render apiece and the answer
+# cannot change under a running R session -- installing TeX mid-session and
+# expecting the select to notice is not a case worth a re-probe, and a
+# control that changes its mind while open is worse than one that does not.
+report_render_formats <- memoise0(function() {
+  log_render_capability()
+  known <- report_known_formats()
+  known[vapply(known, format_renderable, logical(1L), USE.NAMES = FALSE)]
+})
+
+# The button says what the gear decided, so it needs the label back. Reads
+# the vocabulary, not the offered set: a format that is set but cannot be
+# rendered here still has a name, and "Render PDF" is the honest label for
+# it right up until the render says no.
 report_format_name <- function(fmt) {
-  fmts <- report_render_formats()
+  fmts <- report_known_formats()
   coal(names(fmts)[match(coal(fmt, "html"), fmts)], "HTML")
 }
 
@@ -275,10 +294,10 @@ sanitize_settings <- function(settings) {
 
   if (!is.null(settings$format)) {
     val <- as.character(settings$format)[[1L]]
-    if (!val %in% report_render_formats()) {
+    if (!val %in% report_known_formats()) {
       stop(
         "`format` must be one of ",
-        paste0("\"", report_render_formats(), "\"", collapse = ", "), ".",
+        paste0("\"", report_known_formats(), "\"", collapse = ", "), ".",
         call. = FALSE
       )
     }
@@ -771,6 +790,31 @@ report_ext_srv <- function(items, title, settings) {
           updateCheckboxInput(session, "rpt_set_numbers", value = s$number_sections)
           updateCheckboxInput(session, "rpt_set_fold", value = s$code_fold)
           updateCheckboxInput(session, "rpt_set_warnings", value = s$warnings)
+        })
+
+        # Narrow the format select to what this deployment can actually
+        # produce. Off the UI's critical path on purpose: the probe is a
+        # render per format, so it runs here, after the page exists, and
+        # once per process (report_render_formats() is memoised) -- only
+        # the first session in a worker pays it.
+        #
+        # The current setting stays in the list even when it is not
+        # renderable here. A board saved against pdf on a machine with TeX
+        # must keep saying pdf on a machine without it: silently rewriting
+        # the author's choice to html would make the panel lie about the
+        # document, and the render already has an honest way to say no.
+        observe({
+
+          cur <- isolate(rv_settings()$format)
+          known <- report_known_formats()
+          choices <- known[known %in% c(report_render_formats(), cur)]
+
+          updateSelectInput(
+            session,
+            "rpt_set_format",
+            choices = choices,
+            selected = cur
+          )
         })
 
         # The button reports the gear's decision. Not a picker and not a

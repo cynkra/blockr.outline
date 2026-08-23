@@ -23,7 +23,136 @@ report_formats <- function() {
 # name: revealjs renders an html file (and a downloaded "report.revealjs"
 # would be a file the browser refuses to open).
 report_ext <- function(fmt) {
-  switch(fmt, revealjs = "html", fmt)
+  switch(fmt, revealjs = "html", typst = "pdf", fmt)
+}
+
+# Can this deployment actually produce `fmt`? Answered by producing one:
+# a three-line document rendered to a temp dir, and the verdict is whether
+# a file came out.
+#
+# Everything cheaper is a question about a different program's toolchain,
+# and those have been wrong here before -- see report_formats() above, where
+# pdf was offered off a PATH lookup for engines quarto does not use. Two
+# traps this steps around, both observed on this container rather than
+# assumed:
+#
+#   * `Sys.which("typst")` finds nothing on a machine where typst renders
+#     in 0.3s, because quarto bundles its own. A lookup answers no and the
+#     truth is yes.
+#   * quarto exits 0 when a pdf render dies for want of TeX -- it prints
+#     "No TeX installation was detected" and returns status 0. The exit
+#     code cannot be the verdict, so THE FILE is (which is also how
+#     render_report() ends).
+#
+# Roughly 0.3s a format on a warm quarto, 1s for the first. Cheap, but not
+# free, so the caller memoises and calls it off the UI's critical path.
+#
+# quarto's own chatter is suppressed: four probe renders would bury the log
+# in output about documents nobody asked for. log_render_capability()
+# writes the one line that answers the support question instead.
+format_renderable <- function(fmt) {
+
+  if (!quarto_usable()) {
+    # No CLI to ask, so the rmarkdown fallback in render_report() is what
+    # would run, and html is the only thing it produces worth promising.
+    return(
+      identical(fmt, "html") &&
+        requireNamespace("rmarkdown", quietly = TRUE) &&
+        rmarkdown::pandoc_available()
+    )
+  }
+
+  dir <- tempfile("blockr-probe-")
+  dir.create(dir)
+  on.exit(unlink(dir, recursive = TRUE), add = TRUE)
+
+  # macOS hands back the /var symlink form and quarto resolves through it;
+  # the real render does the same.
+  dir <- normalizePath(dir)
+
+  qmd <- file.path(dir, "probe.qmd")
+
+  writeLines(
+    c("---", "title: probe", paste0("format: ", fmt), "---", "", "probe"),
+    qmd
+  )
+
+  ok <- tryCatch(
+    {
+      suppressMessages(quarto_cli_render(qmd, fmt))
+      TRUE
+    },
+    error = function(e) FALSE
+  )
+
+  ok && file.exists(file.path(dir, paste0("probe.", report_ext(fmt))))
+}
+
+# What the renderer can reach, once per process, on stderr.
+#
+# The successor to log_pdf_capability(), which this package used to carry
+# and which was right about one thing: the deployment that matters is
+# usually one nobody can open a shell on, so the answer has to be in the
+# log before anyone thinks to ask. What changed is where it comes from --
+# `quarto check` is quarto reporting on itself, rather than us guessing at
+# it from outside, and it names TeX and typst separately, which is exactly
+# the distinction that decides whether pdf can be offered.
+#
+# Diagnostic only. It is not the gate -- format_renderable() is -- because
+# this is a scrape of another program's human-readable output.
+render_capability_logged <- new.env(parent = emptyenv())
+
+log_render_capability <- function() {
+
+  if (!is.null(render_capability_logged$done)) {
+    return(invisible(NULL))
+  }
+  render_capability_logged$done <- TRUE
+
+  if (!quarto_usable()) {
+    cat(
+      "[render] quarto: no | pandoc: ",
+      isTRUE(try(rmarkdown::pandoc_available(), silent = TRUE)),
+      "\n",
+      sep = "", file = stderr()
+    )
+    return(invisible(NULL))
+  }
+
+  out <- tryCatch(
+    suppressWarnings(
+      system2(
+        quarto::quarto_path(), "check",
+        stdout = TRUE, stderr = TRUE, timeout = 120
+      )
+    ),
+    error = function(e) character()
+  )
+
+  # The toolchain lines, in quarto's own words. A bare "Version:" is NOT
+  # among the patterns: `quarto check` prints one for quarto, one for
+  # python and one for R, so matching it turns a capability line into a
+  # version dump of things that were never in question.
+  keep <- grep(
+    "Pandoc version|Typst version|TinyTeX|Tex:",
+    strip_ansi(out),
+    value = TRUE
+  )
+
+  # quarto's own version comes from the API rather than the scrape, for
+  # the same reason.
+  ver <- coal(
+    tryCatch(as.character(quarto::quarto_version()), error = function(e) NULL),
+    "unknown"
+  )
+
+  cat(
+    "[render] quarto ", ver, " | ", paste(trimws(keep), collapse = " | "),
+    "\n",
+    sep = "", file = stderr()
+  )
+
+  invisible(NULL)
 }
 
 # Formats that render as HTML slides. The qmd is built once and shown in the

@@ -79,6 +79,12 @@ test_that("a format's extension is the file it actually produces", {
   expect_equal(report_ext("html"), "html")
   expect_equal(report_ext("pptx"), "pptx")
 
+  # typst renders THROUGH typst TO a pdf: quarto compiles report.typ and
+  # leaves report.pdf. render_report() looks for out_name and errors when
+  # it is not there, so a missing mapping here is not a cosmetic filename
+  # bug -- it is a render that always reports failure after succeeding.
+  expect_equal(report_ext("typst"), "pdf")
+
   expect_true(slide_format("revealjs"))
   expect_false(slide_format("html"))
   expect_false(slide_format("pptx"))
@@ -873,4 +879,29 @@ test_that("the theme travels next to the qmd", {
 test_that("yaml_dq escapes quotes in a front-matter scalar", {
   expect_equal(yaml_dq('a "quoted" title'), 'a \\"quoted\\" title')
   expect_equal(yaml_dq("plain"), "plain")
+})
+
+test_that("a format is offered only once it has been shown to render", {
+  # The rule render.R exists to hold: offering a format is a promise. The
+  # probe keeps it by rendering, because every cheaper question is about
+  # someone else's toolchain -- `Sys.which("typst")` finds nothing on a
+  # machine where typst renders in a third of a second, and quarto exits 0
+  # when a pdf render dies for want of TeX.
+  skip_if_not(quarto_usable(), "no quarto CLI")
+
+  offered <- report_render_formats()
+
+  expect_true(all(offered %in% report_known_formats()))
+  expect_true("html" %in% offered)
+  expect_true(all(nzchar(names(offered))))
+})
+
+test_that("an unrenderable format still LOADS from a saved board", {
+  # A board saved against pdf on a machine with TeX has to open on one
+  # without it. Validation reads the vocabulary; only what is OFFERED is
+  # narrowed by the probe. Refusing to load would lose the author's
+  # document over a missing LaTeX install.
+  expect_equal(sanitize_settings(list(format = "pdf"))$format, "pdf")
+  expect_equal(sanitize_settings(list(format = "typst"))$format, "typst")
+  expect_error(sanitize_settings(list(format = "epub")), "must be one of")
 })
