@@ -38,15 +38,15 @@
       #' # Stack
       #' Data preparation.
       #' 
-      #' **Dataset**
       #' The iris data.
       #+ data
+      #| tbl-cap: "Dataset"
       data <- datasets::iris
       data
       
-      #' **Subset**
       #' Setosa only.
       #+ sub
+      #| tbl-cap: "Subset"
       sub <- subset(data, Species == "setosa")
       sub
 

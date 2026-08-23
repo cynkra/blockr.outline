@@ -970,8 +970,7 @@ chunk_fig_qmd <- function(flags, sects, i) {
 }
 
 # Spin mirrors: knitr chunk options on the `#+` line. `output: false` has
-# no single spin equivalent, so it becomes the results/fig.show pair;
-# `column: page` is quarto-only and is dropped from the script.
+# no single spin equivalent, so it becomes the results/fig.show pair.
 chunk_vis_spin <- function(flags, sects, i) {
   if (is.null(flags)) {
     return(if (!sects$report[i]) ", include=FALSE" else "")
@@ -1003,6 +1002,47 @@ chunk_fig_spin <- function(flags, sects, i) {
     ),
     collapse = ""
   )
+}
+
+# One chunk label for both emitters, so `#| label:` in the qmd and the
+# `#+` name in the script are the same string.
+#
+# The label is deliberately NOT prefixed with the kind. A `tbl-`/`fig-`
+# label makes quarto treat the output as a cross-reference FLOAT, and
+# pandoc's pptx path cannot render a flextable inside that float -- the
+# table silently vanishes from the slide. Dropping the prefix keeps one
+# document that renders identically to html, pdf AND pptx (flextables
+# included); the cost is losing @tbl-/@fig- cross-references, which slides
+# do not use and reports rarely do.
+chunk_label <- function(id) {
+  gsub("[^a-zA-Z0-9_-]", "-", id)
+}
+
+# A block that is in the report shows its output, so it IS an exhibit: its
+# title becomes the CAPTION rather than a heading -- stacks head sections,
+# blocks are exhibits. The `kind` (fig/tbl) picks the caption key so the
+# caption sits in the right place.
+#
+# Emitted as a `#|` option, which is why both emitters can share it: knitr
+# reads those comments at the top of a chunk body in a spin script exactly
+# as quarto reads them in a qmd.
+chunk_cap <- function(block_level, sects, i, shown) {
+  kind <- sects$kinds[i]
+  if (!shown || !identical(block_level, "caption") || !nzchar(kind)) {
+    return(character())
+  }
+  paste0("#| ", kind, "-cap: \"", gsub("\"", "'", sects$names[i]), "\"")
+}
+
+# `column: page` is a quarto cell option with no knitr spelling, so it
+# cannot ride on the `#+` line. It rides in the chunk BODY instead: knitr
+# reads `#|` option comments at the top of a chunk and hands what it does
+# not recognise to quarto, which is what makes the layout survive
+# `quarto render report.R`. Under rmarkdown it is an unknown option and is
+# ignored, which is the same thing that happens to `column: page` there.
+chunk_col_spin <- function(flags, sects, i) {
+  f <- if (!is.null(flags)) flags[[sects$ids[i]]]
+  if (isTRUE(f$full_width)) "#| column: page" else character()
 }
 
 # The YAML header from the settings list. Options are emitted only when
@@ -1095,9 +1135,15 @@ weave_text_items <- function(pieces, ids, items, spin = FALSE) {
     }
   }
 
+  # knitr::spin only turns `#'` lines into markdown; the plain blank line
+  # between two of them is R, and leaves no blank line behind in the
+  # markdown. So a text item sitting directly above a block's heading used
+  # to run into it -- "The first rows. ## Head", one paragraph, no section.
+  # A trailing empty `#'` is the paragraph break that survives spin, and it
+  # is what makes the script and the qmd render the same document.
   fmt <- function(x) {
     if (spin) {
-      paste0("#' ", strsplit(x, "\n")[[1L]], collapse = "\n")
+      paste0(c(paste0("#' ", strsplit(x, "\n")[[1L]]), "#' "), collapse = "\n")
     } else {
       x
     }
@@ -1142,9 +1188,6 @@ export_spin <- function(sects, stack_level = "#", block_level = "caption",
   chapters <- section_chapters(sects)
 
   stack_hd <- if (stack_level %in% c("#", "##")) stack_level
-  # spin has no chunk-caption mechanism, so a "caption" block title
-  # becomes a bold line above the output; a heading title is that
-  # heading. Either way the R script stays a faithful mirror.
   block_hd <- if (block_level %in% c("#", "##", "###")) block_level
 
   one_section <- function(i) {
@@ -1156,8 +1199,6 @@ export_spin <- function(sects, stack_level = "#", block_level = "caption",
       intro <- chapter_intro(sects, chapters, i)
       title_line <- if (!is.null(block_hd) && nzchar(sects$names[i])) {
         paste0("#' ", block_hd, " ", sects$names[i])
-      } else if (identical(block_level, "caption") && nzchar(sects$names[i])) {
-        paste0("#' **", sects$names[i], "**")
       }
       c(
         if (!is.na(chapters[i]) && !is.null(stack_hd)) {
@@ -1172,7 +1213,7 @@ export_spin <- function(sects, stack_level = "#", block_level = "caption",
     }
 
     header <- paste0(
-      "#+ ", sects$ids[i],
+      "#+ ", chunk_label(sects$ids[i]),
       chunk_vis_spin(flags, sects, i),
       chunk_fig_spin(flags, sects, i)
     )
@@ -1181,6 +1222,8 @@ export_spin <- function(sects, stack_level = "#", block_level = "caption",
       c(
         prose,
         header,
+        chunk_cap(block_level, sects, i, shown),
+        chunk_col_spin(flags, sects, i),
         sect_export_code(sects, i),
         if (shown && !isTRUE(sects$pending[i])) sect_output(sects, i)
       ),
@@ -1225,8 +1268,9 @@ export_spin <- function(sects, stack_level = "#", block_level = "caption",
 # every document-wide setting the YAML carries for quarto's benefit --
 # whether warnings and messages are shown, and the default figure size --
 # has to be said a second time, in knitr's own language, or the same
-# settings produce two different documents. `column: page` is the one that
-# cannot be mirrored; it is quarto-only and stays dropped.
+# settings produce two different documents. Rendered by quarto (`quarto
+# render report.R` reads the same YAML the qmd does) the chunk is
+# redundant; rendered by rmarkdown it is the only copy that is read.
 spin_setup <- function(s) {
   opts <- c(
     paste0("fig.width = ", s$fig_width),
@@ -1327,32 +1371,12 @@ export_qmd <- function(sects, title = "Board report",
       )
     }
 
-    # A block that is in the report shows its output, so it IS an
-    # exhibit: its title becomes the CAPTION rather than a heading --
-    # stacks head sections, blocks are exhibits. The `kind` (fig/tbl)
-    # picks the caption key so the caption sits in the right place.
-    #
-    # The label is deliberately NOT prefixed with the kind. A `tbl-`/
-    # `fig-` label makes quarto treat the output as a cross-reference
-    # FLOAT, and pandoc's pptx path cannot render a flextable inside that
-    # float -- the table silently vanishes from the slide. Dropping the
-    # prefix keeps one qmd that renders identically to html, pdf AND
-    # pptx (flextables included); the cost is losing @tbl-/@fig- cross-
-    # references, which slides do not use and reports rarely do.
-    kind <- sects$kinds[i]
-    lbl <- gsub("[^a-zA-Z0-9_-]", "-", sects$ids[i])
-
-    # Caption only when the block title is set to "caption"; a heading
-    # title already carries the name, and "none" wants no title at all.
-    cap <- if (shown && identical(block_level, "caption") &&
-                 nzchar(kind)) {
-      paste0("#| ", kind, "-cap: \"", gsub("\"", "'", sects$names[i]), "\"")
-    }
-
     chunk <- c(
       "```{r}",
-      paste0("#| label: ", lbl),
-      cap,
+      paste0("#| label: ", chunk_label(sects$ids[i])),
+      # Caption only when the block title is set to "caption"; a heading
+      # title already carries the name, and "none" wants no title at all.
+      chunk_cap(block_level, sects, i, shown),
       chunk_vis_qmd(flags, sects, i),
       chunk_fig_qmd(flags, sects, i),
       sect_export_code(sects, i),

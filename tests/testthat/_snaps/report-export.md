@@ -71,11 +71,13 @@
       data <- datasets::iris
       
       #' Why we look.
+      #' 
       
       #+ sub, results="hide", fig.show="hide"
       sub <- subset(data, Species == "setosa")
       
       #' The **first** rows.
+      #' 
       
       #' ## Head
       #+ head, echo=FALSE
