@@ -62,6 +62,11 @@
       #'   message: false
       #' ---
       
+      #+ setup, include=FALSE
+      knitr::opts_chunk$set(
+        fig.width = 8, fig.height = 4.5, warning = FALSE, message = FALSE
+      )
+      
       #+ data, include=FALSE
       data <- datasets::iris
       

@@ -1189,12 +1189,16 @@ export_spin <- function(sects, stack_level = "#", block_level = "caption",
   }
 
   # With a settings list the script opens on the same YAML front matter as
-  # the qmd, spin-quoted -- knitr::spin and quarto both honour it -- so
-  # the two views describe one document.
+  # the qmd, spin-quoted, so the two views describe one document -- plus a
+  # setup chunk saying the executable half of it again in knitr's language
+  # (see spin_setup).
   header <- if (is.null(settings)) {
     spin_header(title, intro)
   } else {
-    paste(paste0("#' ", report_yaml(title, settings)), collapse = "\n")
+    c(
+      paste(paste0("#' ", report_yaml(title, settings)), collapse = "\n"),
+      paste(spin_setup(settings), collapse = "\n")
+    )
   }
 
   woven <- weave_text_items(
@@ -1214,6 +1218,31 @@ export_spin <- function(sects, stack_level = "#", block_level = "caption",
       ids = c(rep(NA_character_, length(header)), woven$ids)
     )
   }
+}
+
+# knitr does not read quarto's `execute:` block, and a spin script is
+# rendered by knitr (`rmarkdown::render("report.R")`), not by quarto. So
+# every document-wide setting the YAML carries for quarto's benefit --
+# whether warnings and messages are shown, and the default figure size --
+# has to be said a second time, in knitr's own language, or the same
+# settings produce two different documents. `column: page` is the one that
+# cannot be mirrored; it is quarto-only and stays dropped.
+spin_setup <- function(s) {
+  opts <- c(
+    paste0("fig.width = ", s$fig_width),
+    paste0("fig.height = ", s$fig_height),
+    if (!isTRUE(s$warnings)) c("warning = FALSE", "message = FALSE")
+  )
+  one <- paste0("knitr::opts_chunk$set(", paste(opts, collapse = ", "), ")")
+
+  c(
+    "#+ setup, include=FALSE",
+    if (nchar(one) <= 78L) {
+      one
+    } else {
+      c("knitr::opts_chunk$set(", paste0("  ", paste(opts, collapse = ", ")), ")")
+    }
+  )
 }
 
 # The spin document's header piece: title as a `#' #` heading, intro as
