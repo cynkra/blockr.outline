@@ -106,21 +106,21 @@
   border-right: 0; }
 .blockr-rpt-toolbar .btn-group > .btn.radiobtn:hover {
   background: var(--blockr-grey-50, #f9fafb); }
-/* Selection by WEIGHT, not hue: grey-100 behind a near-black glyph. The
-   strip's own hover is grey-50 behind a grey-500 glyph, so the two greys
-   sit one step apart and the glyph's darkness is what separates them --
-   worth stating, because grey is the ecosystem's HOVER colour (see
-   sidebar-block.css: "a clear blue marker, distinct from the grey
-   hover/expanded state"), so a selected state wearing it has to OUT-WEIGH
-   a hovered one rather than merely differ from it.
-   A deliberate departure from the chart-type strip, which tints blue-50
-   and inks primary. Rationale: icon-only leaves no label to spread the
-   colour across, and the one primary mark on this row belongs to Render.
-   Blue says "the thing you can do"; the switcher says "where you are" in
-   ink and weight. */
+/* Selected is TINTED: blue-50 behind a primary glyph. This is the
+   ecosystem's selected state and it is close to unanimous -- the
+   chart-type strip and tile grid this switcher was copied from
+   (dd-type-active), dplyr's mode pills and popover toggles, viz's control
+   radios, chips and cards, the dock's block-browser card. Grey is not the
+   alternative to it: grey is the HOVER state, said out loud in
+   sidebar-block.css ("a clear blue marker, distinct from the grey
+   hover/expanded state").
+   A grey selected state shipped here briefly and was wrong twice over --
+   it left the strip out of step with every other selector in the app, and
+   it made selected and hovered two greys one step apart, distinguished
+   only by how dark the glyph was. */
 .blockr-rpt-toolbar .btn-check:checked + .btn.radiobtn {
-  background: var(--blockr-grey-100, #f3f4f6);
-  color: var(--blockr-grey-900, #111827); }
+  background: var(--blockr-blue-50, #eff6ff);
+  color: var(--blockr-color-primary, #2563eb); }
 /* The input is the focus target and it is visually hidden, so the ring has
    to be drawn on the label -- inset, or the strip's overflow clips it. */
 .blockr-rpt-toolbar .btn-check:focus-visible + .btn.radiobtn {
@@ -128,10 +128,10 @@
 
 .blockr-rpt-viewicon { display: inline-flex; align-items: center; }
 .blockr-rpt-viewicon svg { opacity: 0.55; }
-/* Full strength on the selected one: with the tint gone, the glyph is
-   carrying the state by itself. */
+/* 0.9, the value the chart-type tiles use for an active glyph -- the tint
+   carries the state, the glyph only stops being muted. */
 .blockr-rpt-toolbar .btn-check:checked + .btn.radiobtn
-  .blockr-rpt-viewicon svg { opacity: 1; }
+  .blockr-rpt-viewicon svg { opacity: 0.9; }
 
 /* The segment's accessible name. Not Bootstrap's .visually-hidden: this
    stylesheet loads wherever the extension does, and which Bootstrap the
