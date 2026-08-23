@@ -257,15 +257,16 @@
 
       mkstackBtn.addEventListener('click', () => {
         const members = [...selection];
-        const already = members.filter((id) => stackOf(id));
-        if (already.length) {
-          barEl.classList.add('err');
-          selcountEl.textContent =
-            already.length + ' of them are already in a ' +
-            opts.stackNoun.toLowerCase();
-          return;
-        }
-        const trial = [...stacks, { id: '_trial', name: '', blocks: members }];
+        // Already stacked is not a refusal. The new group is where they end
+        // up, and they leave the one they were in on the way in -- the same
+        // move as dragging them out of the frame and grouping them, in one
+        // gesture. Regrouping part of a stack is how a stack gets split, and
+        // it was the one membership edit with no gesture at all.
+        const trial = stacks.map((s) => Object.assign({}, s, {
+          blocks: s.blocks.filter((id) => !members.includes(id))
+        })).filter((s) => s.blocks.length).concat(
+          [{ id: '_trial', name: '', blocks: members }]
+        );
         if (G.superOrder(model(), trial).hadCycle) {
           barEl.classList.add('err');
           selcountEl.textContent = 'That grouping would tangle the flow';
@@ -1627,18 +1628,21 @@
       paintStackSel();
       barEl.classList.remove('err');
 
-      // Offering "Stack them" for blocks that are already stacked is an
-      // offer that can only fail -- and selecting a stack is now a normal
-      // gesture, so it would fail often. The button goes away instead, and
-      // the bar says what you have rather than what you cannot do with it.
       const stacked = [...selection].filter((id) => stackOf(id));
       const whole = stacked.length === selection.size && selection.size > 0
         ? stackOf([...selection][0]) : null;
       const allOne = whole && wholeStackSelected(whole) &&
         whole.blocks.length === selection.size;
 
+      // The offer stands for stacked rows too: grouping them MOVES them, so
+      // the button says where the selection is going, and the tooltip says
+      // what it leaves behind.
       if (mkstackBtn) {
-        mkstackBtn.style.display = stacked.length ? 'none' : '';
+        mkstackBtn.style.display = '';
+        mkstackBtn.title = stacked.length
+          ? 'They leave the ' + opts.stackNoun.toLowerCase() +
+            ' they are in now'
+          : '';
       }
 
       // A selected stack needs no bar: the frame's ring already says so, and

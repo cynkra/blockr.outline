@@ -240,18 +240,13 @@ outline_ext_srv <- function(id, board, update, actions, ...) {
         update(upd)
       })
 
+      # Grouping a selection. Blocks already in a stack are not refused: they
+      # move, which is how a stack gets split.
       shiny::observeEvent(input$stack_add, {
-        members <- unlist(input$stack_add$blocks)
-        members <- intersect(
-          members,
-          names(blockr.core::board_blocks(board$board))
-        )
-        if (length(members) < 2L) {
-          return()
+        delta <- outline_stack_new(board$board, unlist(input$stack_add$blocks))
+        if (!is.null(delta)) {
+          update(delta)
         }
-        update(list(stacks = list(add = blockr.core::stacks(
-          blockr.dock::new_dock_stack(blocks = members, name = "New stack")
-        ))))
       })
 
       # Dragged into a frame (or the "⚠ n between" fix on a stack header):

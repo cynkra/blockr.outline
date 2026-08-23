@@ -438,6 +438,85 @@ test_that("a block dragged into a stack leaves the one it was in", {
   expect_null(outline_stack_delta(board, "h1", "nosuchstack"))
 })
 
+test_that("grouping a selection that is stacked splits the stack", {
+
+  board <- blockr.dock::new_dock_board(
+    blocks = c(
+      d1 = blockr.core::new_dataset_block("iris"),
+      h1 = blockr.core::new_head_block(),
+      t1 = blockr.core::new_head_block(),
+      t2 = blockr.core::new_head_block()
+    ),
+    links = blockr.core::links(
+      from = c("d1", "h1", "t1"),
+      to = c("h1", "t1", "t2")
+    ),
+    stacks = blockr.core::stacks(
+      a = blockr.dock::new_dock_stack(
+        c("d1", "h1", "t1"), name = "A", color = "#2563eb"
+      )
+    ),
+    extensions = list(mini = new_outline_extension())
+  )
+
+  # two of a stack's three rows into a new one: A is dropped and put back
+  # without them, under a fresh id but with its name and colour
+  split <- outline_stack_new(board, c("h1", "t1"))
+  expect_identical(split$stacks$rm, "a")
+  expect_length(split$stacks$add, 2L)
+  expect_false("a" %in% names(split$stacks$add))
+
+  rebuilt <- Filter(
+    function(s) identical(blockr.core::stack_blocks(s), "d1"),
+    as.list(split$stacks$add)
+  )
+  expect_length(rebuilt, 1L)
+  expect_identical(attr(rebuilt[[1L]], "name"), "A")
+  expect_identical(attr(rebuilt[[1L]], "color"), "#2563eb")
+
+  fresh <- Filter(
+    function(s) setequal(blockr.core::stack_blocks(s), c("h1", "t1")),
+    as.list(split$stacks$add)
+  )
+  expect_length(fresh, 1L)
+  expect_identical(attr(fresh[[1L]], "name"), "New stack")
+
+  expect_no_error(
+    blockr.core::validate_board(
+      blockr.core::apply_board_update(board, split)
+    )
+  )
+
+  # emptied by the move, A goes and does not come back
+  whole <- outline_stack_new(board, c("d1", "h1", "t1"))
+  expect_identical(whole$stacks$rm, "a")
+  expect_length(whole$stacks$add, 1L)
+  expect_no_error(
+    blockr.core::validate_board(
+      blockr.core::apply_board_update(board, whole)
+    )
+  )
+
+  # blocks that were in no stack take no stack apart
+  none <- outline_stack_new(
+    blockr.dock::new_dock_board(
+      blocks = c(
+        x = blockr.core::new_dataset_block("iris"),
+        y = blockr.core::new_head_block()
+      )
+    ),
+    c("x", "y"),
+    name = "Published"
+  )
+  expect_null(none$stacks$rm)
+  expect_length(none$stacks$add, 1L)
+  expect_identical(attr(none$stacks$add[[1L]], "name"), "Published")
+
+  # a group of one is not a group
+  expect_null(outline_stack_new(board, "h1"))
+  expect_null(outline_stack_new(board, c("h1", "nosuchblock")))
+})
+
 test_that("the clipboard round-trips a selection with fresh ids", {
 
   board <- blockr.dock::new_dock_board(

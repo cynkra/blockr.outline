@@ -583,6 +583,71 @@ outline_stack_delta <- function(board, ids, stack = NULL) {
   upd
 }
 
+# Group a selection into a NEW stack.
+#
+# A block belongs to at most one stack, so the blocks that move have to leave
+# the one they were in. They cannot do it through a `mod`: blockr.core checks
+# the stacks a payload ADDS against the raw membership the board already has,
+# so an `add` naming a block that is still listed elsewhere is rejected even
+# when a `mod` in the same update is what frees it.
+#
+# So a stack the selection reaches into is dropped and put back without those
+# blocks, carrying its name, its colour and every other constructor argument
+# across through `update_stack()` -- but under a NEW id. Re-adding the id it
+# was just dropped under is a payload the DAG canvas cannot draw: it adds
+# combos before it removes them, so g6 refuses the combo that still exists and
+# the whole add fails, new stack included. One the move empties is dropped and
+# not put back.
+#
+# What that costs: anything keyed by the old stack id -- a report chapter
+# description in `stack_annotations`, a saved panel handle -- no longer matches
+# the stack that came back.
+outline_stack_new <- function(board, ids, name = "New stack") {
+
+  ids <- intersect(ids, names(blockr.core::board_blocks(board)))
+
+  if (length(ids) < 2L) {
+    return(NULL)
+  }
+
+  stacks <- blockr.core::board_stacks(board)
+
+  drop <- character()
+  add <- list()
+
+  for (id in names(stacks)) {
+
+    cur <- blockr.core::stack_blocks(stacks[[id]])
+    keep <- setdiff(cur, ids)
+
+    if (setequal(keep, cur)) {
+      next
+    }
+
+    drop <- c(drop, id)
+
+    if (length(keep)) {
+      # unnamed, so `stacks()` mints the id
+      add <- c(
+        add,
+        list(blockr.core::update_stack(stacks[[id]], list(blocks = keep)))
+      )
+    }
+  }
+
+  add <- c(
+    add, list(blockr.dock::new_dock_stack(blocks = ids, name = name))
+  )
+
+  upd <- list(stacks = list(add = do.call(blockr.core::stacks, add)))
+
+  if (length(drop)) {
+    upd$stacks$rm <- drop
+  }
+
+  upd
+}
+
 outline_ext_result <- function(board, extensions) {
   extensions[[
     blockr.dock::extension_ids(
