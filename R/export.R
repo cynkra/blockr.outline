@@ -1019,15 +1019,41 @@ report_yaml <- function(title, s) {
     paste0("fig-width: ", s$fig_width),
     paste0("fig-height: ", s$fig_height),
     "df-print: kable",
-    "format:",
-    "  html:",
-    "    embed-resources: true",
-    if (isTRUE(s$code_fold)) "    code-fold: true",
+    report_format_yaml(s),
     if (!isTRUE(s$warnings)) {
       c("execute:", "  warning: false", "  message: false")
     },
     "---"
   )
+}
+
+# The format block, from the setting rather than from here. It used to be
+# three hardcoded lines saying html, which made `format` the one YAML key
+# the gear did not own -- and made the qmd on screen a document that could
+# not be the one the reader asked for.
+#
+# The sub-keys are the format's, not the document's: `embed-resources`
+# answers "a downloaded html report must be ONE file", and quarto's
+# `code-fold` is html-only. Nesting either under `pdf:` writes YAML the
+# renderer steps over, so a format with nothing to say gets the flat
+# `format: pdf` form instead of an empty mapping (which is a YAML error,
+# not a no-op).
+report_format_yaml <- function(s) {
+
+  fmt <- if (is.character(s$format) && length(s$format)) s$format else "html"
+
+  sub <- if (identical(fmt, "html")) {
+    c(
+      if (isTRUE(s$embed_resources)) "    embed-resources: true",
+      if (isTRUE(s$code_fold)) "    code-fold: true"
+    )
+  }
+
+  if (!length(sub)) {
+    return(paste0("format: ", fmt))
+  }
+
+  c("format:", paste0("  ", fmt, ":"), sub)
 }
 
 # Weave the item list's text entries between the emitted chunks. Document

@@ -46,30 +46,35 @@ report_ext_ui <- function(id, board, ...) {
         ),
         div(
           class = "blockr-rpt-rendergroup",
-          selectInput(
-            ns("rpt_format"),
-            label = NULL,
-            choices = report_dl_formats(),
-            selected = "html",
-            selectize = FALSE,
-            width = "132px"
-          ),
+          # No format picker beside it any more: what gets rendered is a
+          # property of the DOCUMENT and lives in the gear with the rest of
+          # the YAML. The button reports that decision rather than
+          # re-offering it -- the label is updated from rv_settings(), so
+          # the reader still sees what they will get without the toolbar
+          # asking twice.
+          #
           # Two-stage, as in slides.R: the click goes to the server first
           # (demand pending blocks, wait for their code), and the hidden
           # link is clicked from JS once the report is ready.
           actionButton(
             ns("rpt_go"),
-            "Download",
-            icon = icon("download"),
+            "Render HTML",
+            icon = icon("play"),
             class = "blockr-rpt-renderbtn"
           ),
           downloadLink(ns("rpt_dl"), label = NULL, style = "display: none;")
         )
       )
     ),
+    # OUTSIDE the view panels, with the gear that opens it. The band used
+    # to sit inside the builder arm, which made the toolbar's gear a button
+    # that did nothing in a code view -- tolerable while it held only
+    # builder-ish options, and wrong the moment it holds the output format:
+    # the thing Render reads is now the thing the qmd view displays, and
+    # neither of those is the builder's.
+    report_settings_band(ns),
     conditionalPanel(
       condition = sprintf("input['%s'] == 'builder'", ns("rpt_view")),
-      report_settings_band(ns),
       div(
         class = "blockr-rpt-head",
         textInput(
@@ -227,6 +232,31 @@ report_settings_band <- function(ns) {
     class = "blockr-rpt-band",
     div(
       class = "blockr-rpt-bandgrid",
+      # First, and deliberately: the format gates what quarto reads from
+      # everything below it (design-system band rule -- the mode selector
+      # leads).
+      fld(
+        "Output format",
+        selectInput(
+          ns("rpt_set_format"),
+          label = NULL,
+          choices = report_render_formats(),
+          selected = "html",
+          selectize = FALSE,
+          width = "110px"
+        ),
+        hint = "what Render produces"
+      ),
+      # Only html embeds. Shown conditionally rather than shown-and-ignored:
+      # a control that does nothing is worse than an absent one.
+      conditionalPanel(
+        condition = sprintf("input['%s'] == 'html'", ns("rpt_set_format")),
+        fld(
+          "Embed resources",
+          checkboxInput(ns("rpt_set_embed"), label = NULL, value = TRUE),
+          hint = "one self-contained file"
+        )
+      ),
       fld(
         "Block titles",
         selectInput(
@@ -613,18 +643,25 @@ report_code_ui <- function(pieces, view, sects, ns) {
 
   body_id <- ns("rpt_codebody")
 
+  fname <- if (identical(view, "qmd")) "report.qmd" else "report.R"
+
   div(
     class = "blockr-otl-fileblock blockr-rpt-fileblock",
     div(
       class = "blockr-otl-filehead",
-      span(
-        class = "blockr-otl-filename",
-        if (identical(view, "qmd")) "report.qmd" else "report.R"
-      ),
+      span(class = "blockr-otl-filename", fname),
+      # The file's two actions, in blockr.viz's download chrome
+      # (.blockr-dl-xlsx / .dd-chart-dl): icon-only bordered squares, no
+      # words. The filename to their left is the label they share, which is
+      # what licenses dropping the text -- and it is also why the DOWNLOAD
+      # lives here rather than in the toolbar. Source is not a render
+      # target, it is this view; copying it and saving it are the same act
+      # against the same bytes, differing only in where they land.
       tags$button(
         type = "button",
-        class = "blockr-otl-headbtn",
+        class = "blockr-rpt-fbtn",
         title = "Copy to clipboard",
+        `aria-label` = "Copy to clipboard",
         # Join the CODE cells only: innerText on the whole body would drag
         # the gutter's accessible names into the clipboard.
         onclick = sprintf(
@@ -637,11 +674,42 @@ report_code_ui <- function(pieces, view, sects, ns) {
           ),
           body_id
         ),
-        HTML("&#10697;"),
-        "Copy"
+        HTML(report_copy_icon())
+      ),
+      downloadLink(
+        ns("rpt_src"),
+        label = HTML(report_dl_icon()),
+        class = "blockr-rpt-fbtn",
+        title = paste("Download", fname),
+        `aria-label` = paste("Download", fname)
       )
     ),
     div(class = "blockr-rpt-codebody", id = body_id, rows)
+  )
+}
+
+# The file header's two glyphs. Drawn here in the same stroke idiom as the
+# view segments rather than pulled from fontawesome, so the four icons on
+# this panel read as one hand.
+report_copy_icon <- function() {
+  paste0(
+    '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" ',
+    'stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" ',
+    'aria-hidden="true" focusable="false">',
+    '<rect x="5.5" y="1.8" width="8.7" height="8.7" rx="1.4"/>',
+    '<path d="M10.5 12.7v.9a1.4 1.4 0 0 1-1.4 1.4H3.2a1.4 1.4 0 0 1-1.4',
+    '-1.4V6.9a1.4 1.4 0 0 1 1.4-1.4h.9"/></svg>'
+  )
+}
+
+report_dl_icon <- function() {
+  paste0(
+    '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" ',
+    'stroke="currentColor" stroke-width="1.5" stroke-linecap="round" ',
+    'stroke-linejoin="round" aria-hidden="true" focusable="false">',
+    '<path d="M8 1.8v7.4M5.2 6.4 8 9.2l2.8-2.8"/>',
+    '<path d="M2.6 10.6v2.2c0 .5.4.8.8.8h9.2c.5 0 .8-.3.8-.8v-2.2"/>',
+    "</svg>"
   )
 }
 

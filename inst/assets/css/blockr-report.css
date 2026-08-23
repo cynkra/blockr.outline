@@ -37,22 +37,15 @@
 .blockr-rpt-toolbar-right .form-group,
 .blockr-rpt-toolbar-right .shiny-input-container { margin-bottom: 0; }
 
-.blockr-rpt-rendergroup { display: inline-flex; align-items: stretch;
-  border-radius: 6px; overflow: hidden; }
-.blockr-rpt-rendergroup > .shiny-input-container { margin: 0; width: auto; }
-.blockr-rpt-rendergroup select.form-control,
-.blockr-rpt-rendergroup select.form-select { height: 28px; padding: 0 6px;
-  font-size: 0.75rem; border-radius: 6px 0 0 6px; border-right: 0;
-  border-color: var(--blockr-color-border, #e5e7eb);
-  color: var(--blockr-grey-700, #374151); background-color: #fff;
-  box-shadow: none; cursor: pointer; }
-.blockr-rpt-rendergroup select.form-control:hover,
-.blockr-rpt-rendergroup select.form-select:hover {
-  background-color: var(--blockr-grey-50, #f9fafb); }
+/* One button, no picker fused to it: the format moved into the gear with
+   the rest of the YAML, so there is nothing left on this row to choose --
+   only something to state. Rounded on all four corners again, which is
+   what the split group's shared radius was hiding. */
+.blockr-rpt-rendergroup { display: inline-flex; align-items: stretch; }
 
 .blockr-rpt-renderbtn { display: inline-flex; align-items: center; gap: 5px;
   height: 28px; padding: 0 11px; font-size: 0.75rem; font-weight: 500;
-  border-radius: 0 6px 6px 0; border: 1px solid #86efac; background: #f0fdf4;
+  border-radius: 6px; border: 1px solid #86efac; background: #f0fdf4;
   color: #166534; box-shadow: none; white-space: nowrap; }
 .blockr-rpt-renderbtn:hover { border-color: #4ade80; background: #dcfce7;
   color: #14532d; }
@@ -434,6 +427,38 @@
   color: var(--bb-grey-400); }
 
 /* ---- the code views ------------------------------------------------ */
+
+/* Copy and Download, in blockr.viz's download chrome (.blockr-dl-xlsx /
+   .dd-chart-dl): icon-only bordered squares, input-grey, white on hover,
+   at the 26px icon-button tier. No words -- the filename beside them is
+   the label both share, and the tooltip carries each one's own.
+   Restated rather than imported for the reason the gear is: an unscoped
+   .blockr-dl-xlsx rule here would reach every download button in the app.
+   The `a` in the selector outranks Bootstrap's link colour, which is what
+   the downloadLink otherwise arrives wearing. */
+.blockr-rpt-fileblock a.blockr-rpt-fbtn,
+.blockr-rpt-fileblock button.blockr-rpt-fbtn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; padding: 0; flex: 0 0 auto;
+  border: 1px solid var(--blockr-color-border, #e5e7eb); border-radius: 4px;
+  background-color: var(--blockr-grey-50, #f9fafb);
+  color: var(--blockr-grey-500, #6b7280); line-height: 1; cursor: pointer;
+  box-shadow: none; text-decoration: none;
+  transition: border-color 0.12s, background-color 0.12s, color 0.12s; }
+.blockr-rpt-fileblock a.blockr-rpt-fbtn:hover,
+.blockr-rpt-fileblock button.blockr-rpt-fbtn:hover {
+  background-color: #fff; border-color: var(--blockr-grey-300, #d1d5db);
+  color: var(--blockr-grey-700, #374151); text-decoration: none; }
+.blockr-rpt-fileblock a.blockr-rpt-fbtn:focus-visible,
+.blockr-rpt-fileblock button.blockr-rpt-fbtn:focus-visible {
+  outline: none; border-color: var(--blockr-color-primary, #2563eb);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12); }
+.blockr-rpt-fbtn svg { display: block; }
+
+/* The header is now filename + a pair of squares, so the filename takes
+   the slack rather than space-between spreading two buttons apart. */
+.blockr-rpt-fileblock .blockr-otl-filehead { gap: 6px; padding-right: 8px; }
+.blockr-rpt-fileblock .blockr-otl-filename { margin-right: auto; }
 
 .blockr-rpt-codebody { padding: 4px 0; }
 .blockr-rpt-coderow { display: grid; grid-template-columns: 34px 1fr;

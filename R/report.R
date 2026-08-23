@@ -112,16 +112,45 @@ new_report_extension <- function(items = list(),
 # source forms -- the source IS a deliverable here: a runnable, readable
 # document in canonical R is half the point of this extension. No deck:
 # report makes documents, the slides extension makes decks.
-report_dl_formats <- function() {
+# The RENDER targets, and only those. `qmd` and `r` used to sit in this
+# list, which put the two code views in the toolbar a second time under
+# different words -- and lied besides: picking "Quarto source" handed over
+# a file whose own YAML said `format: html`, because report_yaml() wrote
+# that regardless. The source is not a format, it is the view; it is
+# downloaded from the view's own header now (report_code_ui()), and what
+# stays here is the one question this control was ever asking: which
+# document does Render produce.
+#
+# NOT report_formats(): render.R already owns that name for the retired
+# outline extension's html/revealjs/pptx list. Two definitions in one
+# package is one definition -- the later collation wins silently -- and
+# this list is the report's, not that one's.
+#
+# html and docx, and nothing else until a deployment is shown to render
+# it. That rule is render.R's, argued there at length: pdf was once
+# offered off a PATH probe for a toolchain quarto does not use, so it
+# reached users as a download that simply failed. Offering a format is a
+# promise. docx joins html because it is pandoc's reference-doc path, the
+# same one pptx was trusted on. pdf and typst are exactly the promises
+# that could not be kept, so they are a deployment question, not a
+# vector-literal question -- and answering it here is adding a line.
+report_render_formats <- function() {
   c(
     "HTML" = "html",
-    "Quarto source" = "qmd",
-    "R script" = "r"
+    "Word" = "docx"
   )
 }
 
+# The button says what the gear decided, so it needs the label back.
+report_format_name <- function(fmt) {
+  fmts <- report_render_formats()
+  coal(names(fmts)[match(coal(fmt, "html"), fmts)], "HTML")
+}
+
+# typst renders THROUGH typst TO a pdf; the file the reader receives is a
+# pdf and must be named one.
 report_dl_ext <- function(fmt) {
-  switch(fmt, r = "R", fmt)
+  switch(fmt, typst = "pdf", fmt)
 }
 
 # ---- items -------------------------------------------------------------
@@ -209,6 +238,10 @@ legacy_report_items <- function(blocks, annotations, intro) {
 
 report_settings_default <- function() {
   list(
+    # First, because it gates: the format decides which of the keys below
+    # quarto will even read.
+    format = "html",
+    embed_resources = TRUE,
     block_titles = "headings",
     fig_width = 8,
     fig_height = 4.5,
@@ -240,6 +273,18 @@ sanitize_settings <- function(settings) {
 
   out <- def
 
+  if (!is.null(settings$format)) {
+    val <- as.character(settings$format)[[1L]]
+    if (!val %in% report_render_formats()) {
+      stop(
+        "`format` must be one of ",
+        paste0("\"", report_render_formats(), "\"", collapse = ", "), ".",
+        call. = FALSE
+      )
+    }
+    out$format <- val
+  }
+
   if (!is.null(settings$block_titles)) {
     val <- as.character(settings$block_titles)[[1L]]
     if (!val %in% c("headings", "captions", "none")) {
@@ -260,7 +305,8 @@ sanitize_settings <- function(settings) {
     }
   }
 
-  for (f in c("toc", "number_sections", "code_fold", "warnings")) {
+  for (f in c("embed_resources", "toc", "number_sections", "code_fold",
+              "warnings")) {
     if (!is.null(settings[[f]])) {
       out[[f]] <- isTRUE(settings[[f]])
     }
@@ -676,6 +722,14 @@ report_ext_srv <- function(items, title, settings) {
           }
         }
 
+        observeEvent(input$rpt_set_format,
+          set_setting("format", input$rpt_set_format),
+          ignoreInit = TRUE
+        )
+        observeEvent(input$rpt_set_embed,
+          set_setting("embed_resources", input$rpt_set_embed),
+          ignoreInit = TRUE
+        )
         observeEvent(input$rpt_set_titles,
           set_setting("block_titles", input$rpt_set_titles),
           ignoreInit = TRUE
@@ -708,6 +762,8 @@ report_ext_srv <- function(items, title, settings) {
         # Seed the band's inputs from the restored settings, once.
         local({
           s <- isolate(rv_settings())
+          updateSelectInput(session, "rpt_set_format", selected = s$format)
+          updateCheckboxInput(session, "rpt_set_embed", value = s$embed_resources)
           updateSelectInput(session, "rpt_set_titles", selected = s$block_titles)
           updateNumericInput(session, "rpt_set_figw", value = s$fig_width)
           updateNumericInput(session, "rpt_set_figh", value = s$fig_height)
@@ -716,6 +772,20 @@ report_ext_srv <- function(items, title, settings) {
           updateCheckboxInput(session, "rpt_set_fold", value = s$code_fold)
           updateCheckboxInput(session, "rpt_set_warnings", value = s$warnings)
         })
+
+        # The button reports the gear's decision. Not a picker and not a
+        # second place to change it -- the toolbar's job here is to say what
+        # pressing it will produce, which is the one thing the old format
+        # select was good for.
+        observeEvent(
+          rv_settings()$format,
+          updateActionButton(
+            session,
+            "rpt_go",
+            label = paste("Render", report_format_name(rv_settings()$format)),
+            icon = icon("play")
+          )
+        )
 
         # ---- the projection, on demand -------------------------------
         #
@@ -1051,43 +1121,47 @@ report_ext_srv <- function(items, title, settings) {
           }
         )
 
+        dl_stem <- function() {
+          stem <- if (nzchar(trimws(rv_title()))) rv_title() else "report"
+          paste0(
+            deck_filename(stem), "-",
+            format(Sys.time(), "%Y-%m-%d_%H-%M-%S")
+          )
+        }
+
         output$rpt_dl <- downloadHandler(
           filename = function() {
-            stem <- if (nzchar(trimws(rv_title()))) rv_title() else "report"
-            fmt <- coal(input$rpt_format, "html")
-            paste0(
-              deck_filename(stem),
-              "-",
-              format(Sys.time(), "%Y-%m-%d_%H-%M-%S"),
-              ".",
-              report_dl_ext(fmt)
-            )
+            paste0(dl_stem(), ".", report_dl_ext(rv_settings()$format))
           },
           content = function(file) {
-            fmt <- coal(input$rpt_format, "html")
-
-            # The source formats ARE the document: no render, just the text
-            # the code views show.
-            if (identical(fmt, "qmd")) {
-              writeLines(qmd_txt(), file)
-              return(invisible(file))
-            }
-
-            if (identical(fmt, "r")) {
-              writeLines(spin_txt(), file)
-              return(invisible(file))
-            }
-
+            # No source branch: the format is a RENDER target now, and the
+            # source leaves by its own view's header (rpt_src below).
             with_render_guard(
               render_report(
                 qmd_txt(),
                 spin_txt(),
-                fmt,
+                rv_settings()$format,
                 file,
                 rv_title(),
                 sects = sections()
               )
             )
+          }
+        )
+
+        # The source, from the code view's own header. One handler for both
+        # views because only one is ever on screen, and the same reactives
+        # the view reads -- so the file and the panel cannot disagree, which
+        # is the property the old format-picker route quietly lacked.
+        output$rpt_src <- downloadHandler(
+          filename = function() {
+            qmd <- identical(coal(input$rpt_view, "builder"), "qmd")
+            paste0(dl_stem(), if (qmd) ".qmd" else ".R")
+          },
+          content = function(file) {
+            qmd <- identical(coal(input$rpt_view, "builder"), "qmd")
+            writeLines(if (qmd) qmd_txt() else spin_txt(), file)
+            invisible(file)
           }
         )
 
