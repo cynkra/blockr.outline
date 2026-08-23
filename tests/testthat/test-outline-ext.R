@@ -101,6 +101,32 @@ test_that("reveal delta targets the active view", {
   expect_identical(ops$select, pid)
 })
 
+test_that("clicking an extension row mounts it on the active view", {
+
+  board <- blockr.dock::new_dock_board(
+    blocks = c(d1 = blockr.core::new_dataset_block("iris")),
+    extensions = list(mini = new_outline_extension())
+  )
+
+  view <- blockr.dock::active_view(blockr.dock::board_views(board))
+  pid <- as.character(blockr.dock::as_ext_panel_id("mini"))
+
+  delta <- outline_reveal_delta(board, extension = "mini")
+  ops <- delta$views$mod[[view]]
+
+  expect_identical(ops$select, pid)
+  # the outline extension itself is not on the default view, so the click has
+  # to add it there rather than only ask for focus
+  if (!pid %in% blockr.dock::view_members(
+    blockr.dock::board_views(board)[[view]]
+  )) {
+    expect_named(ops$add, pid)
+  }
+
+  # an id that is not an extension is not a panel to reveal
+  expect_null(outline_reveal_delta(board, extension = "nosuchext"))
+})
+
 test_that("block callback generator returns a server function", {
   cb <- extension_block_callback(new_outline_extension())
   expect_true(is.function(cb))

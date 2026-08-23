@@ -88,7 +88,10 @@ view: "send it there" in one click.
 
 The quick pair does not need the menu at all: \strong{clicking a row} shows it on
 the current view, adding it if the view does not hold it, and \strong{clicking a
-view's tag} drops the row from the view that tag names. The current view is
+view's tag} drops the row from the view that tag names. That holds for the
+extension rows too: an extension is a panel like any other, and one sitting
+on another view -- or on no view at all -- comes to the view you are on
+rather than sending you to it. The current view is
 named first whenever the row is on it and tinted, because it is the one whose
 panel you can watch go; any other view's tag does the same thing to the view
 it points at. The \code{x} on hover is the mark saying the tag is clickable, not a

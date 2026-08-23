@@ -67,7 +67,10 @@
 #'
 #' The quick pair does not need the menu at all: **clicking a row** shows it on
 #' the current view, adding it if the view does not hold it, and **clicking a
-#' view's tag** drops the row from the view that tag names. The current view is
+#' view's tag** drops the row from the view that tag names. That holds for the
+#' extension rows too: an extension is a panel like any other, and one sitting
+#' on another view -- or on no view at all -- comes to the view you are on
+#' rather than sending you to it. The current view is
 #' named first whenever the row is on it and tinted, because it is the one whose
 #' panel you can watch go; any other view's tag does the same thing to the view
 #' it points at. The `x` on hover is the mark saying the tag is clickable, not a
@@ -463,10 +466,15 @@ outline_membership_delta <- function(board, blocks = character(),
   list(views = list(mod = ops))
 }
 
-# Reveal a block's panel in the *current* view: focus it if the view already
-# holds it, otherwise add it there -- never switch to another view that
-# happens to hold it (same semantics as blockr.dag's node click).
-outline_reveal_delta <- function(board, block) {
+# Reveal a panel in the *current* view: focus it if the view already holds it,
+# otherwise add it there -- never switch to another view that happens to hold
+# it (same semantics as blockr.dag's node click).
+#
+# Blocks and extensions differ only in how the panel id is spelled. Clicking an
+# extension row is the same gesture as clicking a block row, and an extension
+# on NO view has no other way back onto a page, so the click has to be able to
+# mount it rather than only focus it.
+outline_reveal_delta <- function(board, block = NULL, extension = NULL) {
 
   views <- blockr.dock::board_views(board)
   view <- blockr.dock::active_view(views)
@@ -475,7 +483,14 @@ outline_reveal_delta <- function(board, block) {
     return(NULL)
   }
 
-  pid <- as.character(blockr.dock::as_block_panel_id(block))
+  if (length(extension)) {
+    if (!all(extension %in% blockr.dock::dock_ext_ids(board))) {
+      return(NULL)
+    }
+    pid <- as.character(blockr.dock::as_ext_panel_id(extension))
+  } else {
+    pid <- as.character(blockr.dock::as_block_panel_id(block))
+  }
 
   ops <- if (pid %in% blockr.dock::view_members(views[[view]])) {
     list(select = pid)

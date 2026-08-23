@@ -135,6 +135,20 @@ outline_ext_srv <- function(id, board, update, actions, ...) {
         }
       })
 
+      # An extension row answers the click the same way a block row does: the
+      # panel appears on the view you are on, mounted there first if the view
+      # did not hold it. The row menu stays the surface for putting it on the
+      # views you are NOT looking at.
+      shiny::observeEvent(input$ext_select, {
+        delta <- outline_reveal_delta(
+          board$board,
+          extension = as.character(input$ext_select$id)
+        )
+        if (!is.null(delta)) {
+          update(delta)
+        }
+      })
+
       # Drag released on empty canvas: open the block browser, wired from
       # the drag source (the outline's drop-on-canvas append, same flow the
       # DAG extension triggers for an edge dropped on the canvas).

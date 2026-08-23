@@ -411,11 +411,24 @@
 
       const nm = el('md-name');
       nm.textContent = t.name;
-      nm.title = t.name + (t.self ? ' \u00b7 this panel' : '');
+      nm.title = t.name +
+        (t.self ? ' \u00b7 this panel' : ' \u00b7 click to show it here');
       row.appendChild(nm);
 
       const mem = membershipEl([t.id], 'extensions');
       if (mem) row.appendChild(mem);
+
+      // Same gesture as a block row, and the same answer: show it HERE. An
+      // extension on no view has no other way back onto a page, and one on
+      // another view should not take you off the one you are working on -- so
+      // the click mounts it on the current view when the view does not hold
+      // it, and focuses it when it does. Its own row is the exception: the
+      // panel you are clicking in is already in front of you.
+      if (!t.self) {
+        row.addEventListener('click', () => push('ext_select', { id: t.id }));
+      } else {
+        row.style.cursor = 'default';
+      }
 
       return row;
     };
