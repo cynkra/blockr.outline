@@ -143,6 +143,24 @@ board <- new_dock_board(
       ),
       title = "Composer table deck",
       template = bms_template
+    ),
+    # The SLIDES tab, on the same board. It is the half this example is
+    # really for: pick "Composer demographics" and download. The block is a
+    # function_block -- registry category "transform", not "table" -- so the
+    # document's narrow renderer rule says "print it bare", and a bare print
+    # of a composed_table is not a table. The deck passes the "static"
+    # renderer style instead, which wraps every non-figure exhibit in
+    # blockr.viz::static_exhibit(), and that is what draws the composer table
+    # as a real table (a flextable in pptx, the HTML table in an HTML deck).
+    #
+    # Both arms are pre-picked, so the deck opens with the raw composed_table
+    # on slide 1 and the same table through the render block on slide 2. They
+    # have to come out identical -- the render block is the dashboard's
+    # search / sort / drill widget, not a report requirement.
+    blockr.outline::new_slides_extension(
+      slides = c("composer", "viz"),
+      title = "Composer table deck",
+      template = bms_template
     )
   )
 )

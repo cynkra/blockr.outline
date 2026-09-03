@@ -1018,7 +1018,18 @@ slides_ext_srv <- function(slides, title, format = "pptx") {
           }
         )
 
-        sections <- reactive(slide_sections(board_exprs(), board$board, rv_slides()))
+        # "static" is the deck's renderer style, not the document's: every
+        # non-figure exhibit goes through blockr.viz::static_exhibit(), so a
+        # function or code block returning a composer table lands on the
+        # slide as a table rather than a bare print. See slide_sections().
+        sections <- reactive(
+          slide_sections(
+            board_exprs(),
+            board$board,
+            rv_slides(),
+            renderer = getOption("blockr.outline.report_renderer", "static")
+          )
+        )
 
         qmd_txt <- reactive(export_deck_qmd(sections(), rv_title()))
 

@@ -241,3 +241,42 @@ test_that("figure blocks are not wrapped", {
   class(blk) <- c("plot_block", class(blk))
   expect_identical(block_report_renderer(blk), "")
 })
+
+test_that("a deck wraps every non-figure exhibit, a document does not", {
+  # The blocks this exists for are the function and code blocks: registry
+  # category "transform", so the document's display-table test says no, but
+  # their result is routinely a composer table that a bare print does not
+  # draw as a table. A deck's qmd is a temp file, so the canonical-script
+  # argument that keeps the document narrow does not apply to it.
+  skip_if_not_installed("blockr.viz")
+
+  blocks <- blockr.core::blocks(
+    data = blockr.core::new_dataset_block("iris"),
+    fn = blockr.core::new_head_block()
+  )
+  class(blocks[["fn"]]) <- c("function_block", class(blocks[["fn"]]))
+
+  board <- blockr.core::new_board(
+    blocks = blocks,
+    links = blockr.core::links(from = "data", to = "fn")
+  )
+  exprs <- structure(
+    list(data = quote(datasets::iris), fn = quote(utils::head(data, 3))),
+    pending = character()
+  )
+
+  deck <- slide_sections(exprs, board, slides = "fn", renderer = "static")
+  expect_identical(unname(deck$renderers[deck$ids == "fn"]),
+                   "blockr.viz::static_exhibit")
+  expect_match(export_deck_qmd(deck, "T"),
+               "blockr.viz::static_exhibit(fn)", fixed = TRUE)
+
+  doc <- slide_sections(exprs, board, slides = "fn", renderer = "auto")
+  expect_identical(unname(doc$renderers[doc$ids == "fn"]), "")
+
+  # A figure stays bare on a slide too: static_exhibit() passes a ggplot
+  # through, so the wrap would be noise.
+  plt <- blockr.core::new_head_block()
+  class(plt) <- c("plot_block", class(plt))
+  expect_identical(block_report_renderer(plt, "static"), "")
+})

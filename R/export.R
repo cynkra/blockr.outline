@@ -519,12 +519,25 @@ block_exhibit_kind <- function(b) {
 # blanket wrap (every non-figure block), for deployments whose documents
 # leaned on static_exhibit's annotated-df coercion of plain results.
 #
+# `style` is that option's value, passed in rather than read here, because a
+# DECK wants the blanket wrap unconditionally (see slide_sections): nobody
+# reads a deck's qmd, so the argument for a bare variable -- the emitted
+# script has to be canonical R -- does not apply to it, while the argument
+# for the wrap does. The blocks that made this matter are the function and
+# code blocks: their registry category is "transform", so the display-table
+# test below is FALSE for them, yet their result is routinely a composer
+# table. A bare print of one is not a table.
+#
 # Resolved defensively (same pattern as block_report_call_str): blockr.viz need
 # not be installed to project the sections, and a blockr.viz older than 0.2.38
 # has no static_exhibit(), so the previous class-gated static_table() wrap
 # stands in. The emitted call self-qualifies; the render session loads
 # blockr.viz anyway (the block's own code calls it).
-block_report_renderer <- function(blk) {
+block_report_renderer <- function(blk,
+                                  style = getOption(
+                                    "blockr.outline.report_renderer",
+                                    "auto"
+                                  )) {
 
   if (identical(block_exhibit_kind(blk), "fig")) {
     return("")
@@ -533,8 +546,6 @@ block_report_renderer <- function(blk) {
   if (!requireNamespace("blockr.viz", quietly = TRUE)) {
     return("")
   }
-
-  style <- getOption("blockr.outline.report_renderer", "auto")
 
   if (!identical(style, "static")) {
 

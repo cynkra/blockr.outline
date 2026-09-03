@@ -30,8 +30,25 @@
 # because the deck emits every block's code up front, hidden, and each slide
 # carries only its exhibit expression (see export_deck_qmd; the officer path
 # has always worked this way).
+#
+# `renderer` is the report-renderer style (see block_report_renderer), and it
+# is the one place the deck and the report projection disagree. The deck's
+# caller passes "static": every non-figure block's exhibit expression is
+# wrapped in blockr.viz::static_exhibit(), which draws a data frame, a
+# composer table, a gtsummary table or anything else with an
+# as_annotated_df() method as a real table and returns everything else
+# untouched. The narrow default exists to keep an EXPORTED SCRIPT canonical R
+# -- a bare variable, no blockr call. A deck exports no script (its qmd is a
+# temp file nobody reads), so there the narrow rule buys nothing and costs a
+# function block's composer table printed as a bare object. The report keeps
+# the default, because its script download is real; splitting the document
+# and the script apart is the follow-up.
 slide_sections <- function(expressions, board, slides = character(),
-                           annotations = list()) {
+                           annotations = list(),
+                           renderer = getOption(
+                             "blockr.outline.report_renderer",
+                             "auto"
+                           )) {
 
   # Read before any subsetting: `[` drops non-standard attributes.
   pending_ids <- coal(attr(expressions, "pending"), character())
@@ -78,7 +95,7 @@ slide_sections <- function(expressions, board, slides = character(),
     report = report,
     exported = export_closure(ids, report, dag_reaches(lnks, ids)),
     kinds = chr_ply(blks, block_exhibit_kind),
-    renderers = chr_ply(blks, block_report_renderer),
+    renderers = chr_ply(blks, block_report_renderer, renderer),
     report_calls = chr_ply(
       seq_along(blks),
       function(i) block_report_call_str(blks[[i]], ids[[i]])
