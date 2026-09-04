@@ -354,6 +354,24 @@ slide_pptx_slot <- function(doc, s, x, fnt, template = NULL,
 # nothing here styles anything.
 slide_pptx_exhibit <- function(doc, val, r, fnt, template = NULL) {
 
+  if (inherits(val, "chart_capture")) {
+    # A picture the browser drew for this slot: fit it to the slot, keeping
+    # the shape it was captured at, and centre it like everything else here.
+    img <- blockr.viz::chart_capture_img(val, max_width = r$w,
+                                         max_height = r$h)
+    w <- attr(img, "pptx_width")
+    h <- attr(img, "pptx_height")
+    return(tryCatch(
+      officer::ph_with(
+        doc, img,
+        location = officer::ph_location(
+          left = r$x + (r$w - w) / 2, top = r$y, width = w, height = h
+        )
+      ),
+      error = function(e) doc
+    ))
+  }
+
   if (inherits(val, c("gg", "ggplot"))) {
     # A chart that states its own size (static_chart's pptx_width/height)
     # keeps it, centred in the slot; capped at the slot, never stretched.

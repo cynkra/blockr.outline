@@ -876,10 +876,12 @@ format_markdown <- function(md, fmt, dir) {
 # already IN the qmd/spin text (export_qmd/export_spin emit it), while the
 # officer path renders from the sections projection, which does not carry it.
 render_report <- function(qmd_txt, spin_txt, fmt, file, title,
-                          template = NULL, sects = NULL, intro = "") {
+                          template = NULL, sects = NULL, intro = "",
+                          captures = NULL) {
 
   if (identical(fmt, "pptx")) {
-    return(render_pptx_officer(sects, file, title, template, intro = intro))
+    return(render_pptx_officer(sects, file, title, template, intro = intro,
+                               captures = captures))
   }
 
   dir <- tempfile("blockr-outline-")
@@ -1117,7 +1119,8 @@ deck_eval_env <- function(sects, render_err) {
 }
 
 render_pptx_officer <- function(sects, file, title, template = NULL,
-                                title_slide = TRUE, intro = "") {
+                                title_slide = TRUE, intro = "",
+                                captures = NULL) {
 
   if (!requireNamespace("officer", quietly = TRUE)) {
     stop("Rendering a pptx deck needs the 'officer' package.", call. = FALSE)
@@ -1268,13 +1271,30 @@ render_pptx_officer <- function(sects, file, title, template = NULL,
     # without a single error anywhere.
     why <- NULL
 
-    exhibit <- tryCatch(
-      eval(parse(text = sect_output(sects, i)), envir = env),
-      error = function(e) {
-        why <<- conditionMessage(e)
-        NULL
-      }
-    )
+    # A chart the browser already drew for this deck wins over anything the
+    # renderers here would build: it IS the picture on the screen, at the box
+    # this slide gives it. `captures` is keyed by block id and only carries
+    # the charts whose capture came back.
+    exhibit <- captures[[sects$ids[i]]]
+
+    if (!is.null(exhibit)) {
+      # Worth saying out loud: two renderers can put a chart on a slide and
+      # they do not draw the same picture, so which one drew this deck is
+      # the first thing to know when a slide looks wrong.
+      cat("[deck] ", lab(sects$ids[i], id_labels(sects)),
+          ": browser capture
+", sep = "", file = stderr())
+    }
+
+    if (is.null(exhibit)) {
+      exhibit <- tryCatch(
+        eval(parse(text = sect_output(sects, i)), envir = env),
+        error = function(e) {
+          why <<- conditionMessage(e)
+          NULL
+        }
+      )
+    }
 
     if (is.null(exhibit)) {
       cat(
@@ -2190,6 +2210,18 @@ place_exhibit <- function(doc, exhibit) {
     loc <- officer::ph_location(left = left, top = top,
                                 width = dim$widths, height = dim$heights)
     return(officer::ph_with(doc, exhibit, location = loc))
+  }
+
+  if (inherits(exhibit, "chart_capture")) {
+    # A picture the BROWSER drew, at the box this deck asked for. It is
+    # already the right shape, so placement is only where to put it.
+    img <- blockr.viz::chart_capture_img(exhibit, max_width = 11.9,
+                                         max_height = 5.5)
+    loc <- officer::ph_location(
+      left = left, top = top,
+      width = attr(img, "pptx_width"), height = attr(img, "pptx_height")
+    )
+    return(officer::ph_with(doc, img, location = loc))
   }
 
   if (inherits(exhibit, c("gg", "ggplot"))) {

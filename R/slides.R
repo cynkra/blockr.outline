@@ -1037,6 +1037,79 @@ slides_ext_srv <- function(slides, title, format = "pptx") {
 
         awaiting <- reactiveVal(FALSE)
         wait_note <- reactiveVal(NULL)
+
+        # The browser draws the charts for this deck (blockr.viz's capture
+        # service): a picture of what is on the screen, at the box a slide
+        # gives it, for every chart block on the deck whether or not its
+        # panel was ever opened. It crosses the websocket, so the download
+        # asks first and writes the file once the pictures are in -- the
+        # same shape as the block-evaluation wait above it.
+        cap_tokens <- reactiveVal(NULL)
+        captures <- reactiveVal(NULL)
+
+        # 11.9in x 5.5in of slide at 96dpi, the box a default slide gives an
+        # exhibit. The chart lays itself out for THIS, not for its panel.
+        cap_box <- c(1142, 528)
+
+        capture_charts <- function(sects) {
+
+          if (!requireNamespace("blockr.viz", quietly = TRUE) ||
+                !length(sects$ids)) {
+            return(FALSE)
+          }
+
+          # A chart that cannot be captured falls back to the server-side
+          # renderer, which draws a DIFFERENT picture -- so say which chart
+          # and why, rather than letting a deck come back quietly mixed.
+          ask <- function(bid) {
+            key <- tryCatch(blockr.viz::chart_capture_for(bid),
+                            error = function(e) NULL)
+            if (is.null(key)) {
+              return(NA_character_)
+            }
+            tryCatch(
+              blockr.viz::chart_capture_request(key, cap_box[[1L]],
+                                                cap_box[[2L]]),
+              error = function(e) {
+                cat("[deck] no capture for '", bid, "': ",
+                    conditionMessage(e), "
+", sep = "", file = stderr())
+                NA_character_
+              }
+            )
+          }
+
+          on_deck <- vapply(
+            seq_along(sects$ids),
+            function(i) isTRUE(sects$report[i]) && !isTRUE(sects$pending[i]),
+            logical(1L)
+          )
+
+          tok <- vapply(sects$ids[on_deck], ask, character(1L))
+          tok <- tok[!is.na(tok)]
+
+          if (!length(tok)) {
+            return(FALSE)
+          }
+
+          cap_tokens(tok)
+          TRUE
+        }
+
+        # NULL until every requested picture has landed; the named list of
+        # exhibits once they have. A chart the browser could not draw stops
+        # the deck, rather than quietly falling back to a different picture.
+        collected <- reactive({
+          tok <- cap_tokens()
+          if (is.null(tok)) {
+            return(NULL)
+          }
+          out <- lapply(tok, blockr.viz::chart_capture_collect)
+          if (any(vapply(out, is.null, logical(1L)))) {
+            return(NULL)
+          }
+          out
+        })
         demanded <- reactiveVal(list())
 
         demand_blocks <- function(pending) {
@@ -1101,6 +1174,17 @@ slides_ext_srv <- function(slides, title, format = "pptx") {
           )
         }
 
+        # The last step before the file is written: ask the browser to draw
+        # the deck's charts. Nothing to draw (no chart blocks, no capture
+        # service) goes straight to the download, so a deck of tables is
+        # exactly as it was.
+        capture_then_fire <- function(sects) {
+          if (identical(rv_format(), "pptx") && capture_charts(sects)) {
+            return(invisible(NULL))
+          }
+          fire_download()
+        }
+
         observeEvent(
           input$sld_go,
           {
@@ -1125,7 +1209,7 @@ slides_ext_srv <- function(slides, title, format = "pptx") {
             pending <- pending_exported(sects)
 
             if (!length(pending)) {
-              fire_download()
+              capture_then_fire(sects)
               return()
             }
 
@@ -1171,9 +1255,20 @@ slides_ext_srv <- function(slides, title, format = "pptx") {
             awaiting(FALSE)
             restore_demanded()
             drop_wait_note()
-            fire_download()
+            capture_then_fire(sections())
           }
         )
+
+        # The pictures land one by one; the deck goes when the set is
+        # complete.
+        observe({
+          req(!is.null(cap_tokens()))
+          caps <- collected()
+          req(!is.null(caps))
+          captures(caps)
+          cap_tokens(NULL)
+          fire_download()
+        })
 
         output$sld_dl <- downloadHandler(
           filename = function() {
@@ -1211,7 +1306,8 @@ slides_ext_srv <- function(slides, title, format = "pptx") {
                 file,
                 rv_title(),
                 template = effective_template(),
-                sects = sections()
+                sects = sections(),
+                captures = captures()
               )
             )
           }
