@@ -79,9 +79,6 @@ lgl_ply <- function(x, fun, ...) {
 # explaining once the user starts to wonder whether it registered, which is
 # not immediately. Three seconds sits above the first and below the second:
 # an ordinary demand, served in the next flush, shows nothing at all.
-#
-# options(blockr.outline.wait_notice_delay = 0) restores the immediate
-# notification, which is also what the tests use.
 wait_note_delay <- function() {
-  as.numeric(coal(getOption("blockr.outline.wait_notice_delay"), 3))
+  3
 }

@@ -510,9 +510,9 @@ test_that("the wait notification is withheld until the wait is long", {
     args = list(board = pending_plot_board(), update = reactiveVal())
   )
 
-  # With no delay it draws immediately, which is the same code path a slow
-  # board reaches once its timer elapses.
-  withr::local_options(blockr.outline.wait_notice_delay = 0)
+  # With the threshold at zero it draws immediately, which is the same code
+  # path a slow board reaches once its timer elapses.
+  local_mocked_bindings(wait_note_delay = function() 0)
 
   testServer(
     slides_ext_srv("plot", "Deck"),
