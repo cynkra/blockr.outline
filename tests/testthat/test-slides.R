@@ -463,10 +463,13 @@ test_that("an unrecognised format falls back to PowerPoint", {
 })
 
 test_that("downloading demands the picked blocks and their ancestors", {
-  # The two-stage download: on a deferred board a picked block may not be
-  # constructed, so the click demands the export closure through core's
-  # visibility channel and waits for its code.
-  vis <- fake_visibility(c("data", "sub", "plot", "audit"))
+  # The two-stage download: on a deferred board a picked block may not have
+  # run, so the click asks core to evaluate the export closure and waits for
+  # its code. The request rides the board-update channel -- `evaluate`, a
+  # one-off core drops once the block has run -- because that is the handle
+  # an extension actually holds. The front-end `visibility` channel is not
+  # passed to extension servers.
+  upd <- reactiveVal()
 
   testServer(
     slides_ext_srv("plot", "Deck"),
@@ -478,12 +481,12 @@ test_that("downloading demands the picked blocks and their ancestors", {
 
       # `plot` is pending, so it and its ancestors are demanded -- and
       # `audit`, on the branch nothing picked depends on, is NOT.
-      expect_true(isolate(vis$required[["plot"]]()))
+      asked <- isolate(upd())[["evaluate"]]
+      expect_true("plot" %in% asked)
+      expect_false("audit" %in% asked)
       expect_true(awaiting())
-      expect_identical(isolate(vis$required[["audit"]]()), NA)
     },
-    args = list(board = pending_plot_board(), update = reactiveVal(),
-                visibility = vis)
+    args = list(board = pending_plot_board(), update = upd)
   )
 })
 
@@ -491,12 +494,11 @@ test_that("an expression survives the block going quiet after the demand", {
   # The bug this pins, found by downloading a deck in a browser and getting
   # one slide fewer than was picked, with nothing anywhere saying why.
   #
-  # The wait observer withdraws its demand as soon as the closure reports
-  # (restore_demanded -- the dock overloads `required` as its card-build
-  # ledger, so a TRUE left behind blanks a panel later) and only THEN fires
-  # the download. The block falls quiet in between, so the projection the
-  # download handler builds for itself saw the block pending again -- and a
-  # pending block is SKIPPED, not raised. The deck came back short, quietly.
+  # Core drops an `evaluate` request as soon as the block it names has run,
+  # and only THEN does the wait observer fire the download. The block falls
+  # quiet in between, so the projection the download handler builds for
+  # itself saw the block pending again -- and a pending block is SKIPPED,
+  # not raised. The deck came back short, quietly.
   #
   # The expression cache is what carries the expression across that gap.
   reporting <- reactiveVal(FALSE)

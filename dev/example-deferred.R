@@ -8,9 +8,15 @@
 #     for them -- except `aud`, which is excluded from the report and has
 #     no reported dependent, so it is pruned from the document entirely,
 #   * click Download: the reported pending blocks are demanded through
-#     core's visibility channel, their code streams in, the rows resolve,
+#     core's `evaluate` request, their code streams in, the rows resolve,
 #     and the download fires once the document is complete. `aud` is never
 #     constructed -- the independent excluded branch stays lazy.
+#   * the Slides tab is the same thing on a deck, and it is the sharper
+#     test: "Cars head" lives on the EXTRA view, so from the Main view it
+#     has never run. Click Download while sitting on Main. Before core's
+#     evaluate request reached the extension this refused with "some slide
+#     blocks are not initialized yet", and opening the Extra view did not
+#     help -- coming back to Main took the block off the eval set again.
 #
 # Run from the workspace root:
 #   Rscript blockr.outline/dev/example-deferred.R [port]
@@ -54,7 +60,7 @@ board <- new_dock_board(
     to = c("sub", "ex_head", "aud")
   ),
   views = list(
-    Main = c("data", "sub", "outline", "dag"),
+    Main = c("data", "sub", "outline", "slides", "dag"),
     Extra = c("ex_data", "ex_head", "aud")
   ),
   active = "Main",
@@ -76,6 +82,10 @@ board <- new_dock_board(
           report = FALSE
         )
       )
+    ),
+    blockr.outline::new_slides_extension(
+      slides = c("sub", "ex_head"),
+      title = "Deferred deck"
     )
   )
 )

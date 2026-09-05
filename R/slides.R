@@ -648,8 +648,7 @@ slides_js <- function(ns) {
 
 slides_ext_srv <- function(slides, title, format = "pptx") {
 
-  function(id, board, update, session, parent, actions = NULL,
-           visibility = NULL, ...) {
+  function(id, board, update, session, parent, actions = NULL, ...) {
     moduleServer(
       id,
       function(input, output, session) {
@@ -957,16 +956,13 @@ slides_ext_srv <- function(slides, title, format = "pptx") {
         # dock panel is not the visible tab stops reporting altogether.
         #
         # It is load-bearing for the DOWNLOAD specifically, which is the only
-        # thing here that reads expressions at all. The wait observer
-        # withdraws its demand the moment the closure reports (see
-        # restore_demanded -- the dock overloads `required` as its card-build
-        # ledger, so a TRUE left behind blanks a panel later), and only THEN
-        # clicks the link. The block goes quiet again in between, so by the
-        # time the download handler builds its own projection the expression
-        # that was just waited for is gone -- and the deck renders without
-        # the slide it was waiting for, silently, because a pending block is
-        # skipped rather than raised. The cache is what carries the
-        # expression across that gap.
+        # thing here that reads expressions at all. Core drops an `evaluate`
+        # request once the block it names has run, so the block goes quiet
+        # again between the wait observer seeing the expression and the
+        # download handler building its own projection -- and the deck would
+        # render without the slide it had just waited for, silently, because
+        # a pending block is skipped rather than raised. The cache is what
+        # carries the expression across that gap.
         expr_cache <- new.env(parent = emptyenv())
 
         board_exprs <- reactive(
@@ -1110,49 +1106,32 @@ slides_ext_srv <- function(slides, title, format = "pptx") {
           }
           out
         })
-        demanded <- reactiveVal(list())
 
+        # Ask core to bring the pending blocks up to date.
+        #
+        # `evaluate` is core's one-off evaluation request (see the "Evaluation
+        # requests" section of blockr.core::board_server): it names blocks,
+        # core joins them and their upstream closure to the eval set, and
+        # drops the request once each has run or reported why it cannot. It
+        # travels on the board-update channel every extension already holds,
+        # needs no handle the dock does not hand out, and is orthogonal to the
+        # front-end's `required` visibility axis -- so it neither competes
+        # with the dock's card-build ledger nor leaves anything behind to put
+        # back. A locked board still accepts it, because it carries no state
+        # change.
+        #
+        # This is what makes the download work on a block whose panel is not
+        # the visible tab. Without it a picked block on another view reports
+        # no expression, stays pending forever, and the click can only refuse.
         demand_blocks <- function(pending) {
 
-          slots <- if (!is.null(visibility)) visibility$required
-
-          if (is.null(slots)) {
+          if (!is.function(update)) {
             return(FALSE)
           }
 
-          snap <- demanded()
-
-          for (blk_id in pending) {
-            slot <- slots[[blk_id]]
-            if (is.function(slot)) {
-              if (!blk_id %in% names(snap)) {
-                snap[[blk_id]] <- isolate(slot())
-              }
-              slot(TRUE)
-            }
-          }
-
-          demanded(snap)
+          update(list(evaluate = pending))
 
           TRUE
-        }
-
-        # The dock overloads `required` as its card-build ledger, so a TRUE
-        # left behind on a block whose card was never built would make the
-        # first visit to its view skip the build -- a blank panel. Put the
-        # prior value back once the demand is served.
-        restore_demanded <- function() {
-
-          snap <- demanded()
-
-          for (blk_id in names(snap)) {
-            slot <- visibility$required[[blk_id]]
-            if (is.function(slot)) {
-              slot(snap[[blk_id]])
-            }
-          }
-
-          demanded(list())
         }
 
         drop_wait_note <- function() {
@@ -1253,7 +1232,6 @@ slides_ext_srv <- function(slides, title, format = "pptx") {
             }
 
             awaiting(FALSE)
-            restore_demanded()
             drop_wait_note()
             capture_then_fire(sections())
           }
