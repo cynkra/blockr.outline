@@ -1059,12 +1059,62 @@ report_ext_srv <- function(items, title, settings) {
         }
 
         drop_wait_note <- function() {
+          wait_since(NULL)
           note <- wait_note()
           if (!is.null(note)) {
             removeNotification(note)
             wait_note(NULL)
           }
         }
+
+        # When the demand went out, and over how many blocks. NULL = no
+        # demand in flight.
+        #
+        # The notification below is a LATENESS report, not a progress bar.
+        # Almost every demand is served in the flush after the click, and a
+        # notification that appears and disappears within one frame reads as
+        # something having gone wrong -- it is on screen too briefly to be
+        # read, so all it conveys is that something flashed. Nobody needs to
+        # be told that a click they just made is being worked on; they need
+        # to be told when it is taking longer than they expect. So the click
+        # records the wait and this observer shows the note only once the
+        # wait has actually got long, which on a deferred board with slow
+        # blocks is exactly when it earns its place.
+        wait_since <- reactiveVal(NULL)
+
+        observe({
+
+          held <- wait_since()
+
+          req(awaiting(), held)
+
+          if (!is.null(isolate(wait_note()))) {
+            return()
+          }
+
+          left <- wait_note_delay() -
+            as.numeric(difftime(Sys.time(), held$at, units = "secs"))
+
+          if (left > 0) {
+            invalidateLater(ceiling(left * 1000), session)
+            return()
+          }
+
+          wait_note(
+            showNotification(
+              sprintf(
+                paste(
+                  "Evaluating %d block%s\u2026 the download starts when",
+                  "the report is ready."
+                ),
+                held$n,
+                if (held$n == 1L) "" else "s"
+              ),
+              duration = NULL,
+              closeButton = FALSE
+            )
+          )
+        })
 
         pending_exported <- function(sects) {
           sects$ids[sects$exported & sects$pending]
@@ -1117,22 +1167,9 @@ report_ext_srv <- function(items, title, settings) {
               return()
             }
 
-            awaiting(TRUE)
             drop_wait_note()
-            wait_note(
-              showNotification(
-                sprintf(
-                  paste(
-                    "Evaluating %d block%s… the download starts when",
-                    "the report is ready."
-                  ),
-                  length(pending),
-                  if (length(pending) == 1L) "" else "s"
-                ),
-                duration = NULL,
-                closeButton = FALSE
-              )
-            )
+            awaiting(TRUE)
+            wait_since(list(at = Sys.time(), n = length(pending)))
           }
         )
 

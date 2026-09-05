@@ -490,6 +490,43 @@ test_that("downloading demands the picked blocks and their ancestors", {
   )
 })
 
+test_that("the wait notification is withheld until the wait is long", {
+  # Almost every demand is served in the flush after the click, so a
+  # notification drawn at click time appears and vanishes within one frame --
+  # unreadable, and it reads as an error rather than as progress. It is a
+  # lateness report: nothing shows until the wait has actually got long.
+  testServer(
+    slides_ext_srv("plot", "Deck"),
+    {
+      session$flushReact()
+      session$setInputs(sld_go = 1L)
+      session$flushReact()
+
+      # The demand is in flight -- `plot` never reports on this board -- and
+      # the note is still not on screen.
+      expect_true(awaiting())
+      expect_null(wait_note())
+    },
+    args = list(board = pending_plot_board(), update = reactiveVal())
+  )
+
+  # With no delay it draws immediately, which is the same code path a slow
+  # board reaches once its timer elapses.
+  withr::local_options(blockr.outline.wait_notice_delay = 0)
+
+  testServer(
+    slides_ext_srv("plot", "Deck"),
+    {
+      session$flushReact()
+      session$setInputs(sld_go = 1L)
+      session$flushReact()
+
+      expect_false(is.null(wait_note()))
+    },
+    args = list(board = pending_plot_board(), update = reactiveVal())
+  )
+})
+
 test_that("an expression survives the block going quiet after the demand", {
   # The bug this pins, found by downloading a deck in a browser and getting
   # one slide fewer than was picked, with nothing anywhere saying why.

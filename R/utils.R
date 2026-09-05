@@ -71,3 +71,17 @@ chr_ply <- function(x, fun, ...) {
 lgl_ply <- function(x, fun, ...) {
   vapply(x, fun, logical(1L), ...)
 }
+
+# How long a download demand may run before the deck / report extension says
+# so, in seconds. Two things set the floor. Below about a second a
+# notification is on screen too briefly to read, so it conveys nothing except
+# that something flashed. And a click whose effect is invisible only needs
+# explaining once the user starts to wonder whether it registered, which is
+# not immediately. Three seconds sits above the first and below the second:
+# an ordinary demand, served in the next flush, shows nothing at all.
+#
+# options(blockr.outline.wait_notice_delay = 0) restores the immediate
+# notification, which is also what the tests use.
+wait_note_delay <- function() {
+  as.numeric(coal(getOption("blockr.outline.wait_notice_delay"), 3))
+}
