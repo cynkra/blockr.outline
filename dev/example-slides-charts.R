@@ -2,12 +2,13 @@
 # capture can be judged on the shapes it was built for rather than on one
 # bar chart.
 #
-#   BLOCKR_CANVAS_CAPTURE=1 Rscript blockr.outline/dev/example-slides-charts.R [port]
+#   Rscript blockr.outline/dev/example-slides-charts.R [port]
+#   BLOCKR_CANVAS_CAPTURE=0 Rscript ...   # the ggplot deck, to compare
 #
-# With the flag on, the deck's chart slides are pictures the browser drew:
+# The deck's chart slides are pictures the browser drew:
 # each chart is mounted offscreen at the slide's box and composed there, so a
 # slide carries what the panel would show at that size, whether or not the
-# panel was ever opened. Without the flag the same deck goes through
+# panel was ever opened. With the kill switch the same deck goes through
 # static_chart() and you get the ggplot rebuild to compare against.
 #
 # What to try
@@ -18,7 +19,7 @@
 #     the offscreen mount does not need the panel.
 #   * Then open "Age by arm", change something in its gear (turn it
 #     horizontal, switch the sort), and download again. The slide follows.
-#   * Restart without BLOCKR_CANVAS_CAPTURE=1 for the ggplot deck.
+#   * Restart with BLOCKR_CANVAS_CAPTURE=0 for the ggplot deck.
 #
 # The arm labels are long on purpose: at slide width they are what the two
 # renderers used to disagree about.
