@@ -889,9 +889,15 @@ report_ext_srv <- function(items, title, settings) {
         # One emission, two consumers: the pieces feed the gutter views, and
         # the downloads join the SAME pieces -- what is on screen and what
         # is in the file cannot drift.
-        qmd_pieces <- reactive(
+        #
+        # One deliberate difference: the DOWNLOAD builds from a projection
+        # carrying the browser's captures, so a chart lands in the document
+        # as the picture the canvas drew. The code view has no captures to
+        # show (none have been asked for while nobody is downloading), so it
+        # keeps showing the call that would draw one.
+        qmd_for <- function(sects) {
           export_qmd(
-            sections(),
+            sects,
             rv_title(),
             block_level = report_block_level(rv_settings()),
             collapse = FALSE,
@@ -899,11 +905,11 @@ report_ext_srv <- function(items, title, settings) {
             items = rv_items(),
             settings = rv_settings()
           )
-        )
+        }
 
-        spin_pieces <- reactive(
+        spin_for <- function(sects) {
           export_spin(
-            sections(),
+            sects,
             block_level = report_block_level(rv_settings()),
             title = rv_title(),
             collapse = FALSE,
@@ -911,7 +917,11 @@ report_ext_srv <- function(items, title, settings) {
             items = rv_items(),
             settings = rv_settings()
           )
-        )
+        }
+
+        qmd_pieces <- reactive(qmd_for(sections()))
+
+        spin_pieces <- reactive(spin_for(sections()))
 
         qmd_txt <- reactive(paste0(qmd_pieces(), collapse = "\n\n"))
 
@@ -1120,12 +1130,36 @@ report_ext_srv <- function(items, title, settings) {
           sects$ids[sects$exported & sects$pending]
         }
 
+        # The browser draws the report's charts, at the box a FIGURE gets
+        # rather than a slide (R/captures.R). Same two-step as the deck: ask,
+        # then write when the pictures are in.
+        caps <- capture_exchange("report")
+        captures <- reactiveVal(NULL)
+
         fire_download <- function() {
           session$sendCustomMessage(
             "blockr-report-download",
             list(id = session$ns("rpt_dl"))
           )
         }
+
+        capture_then_fire <- function(sects) {
+          if (caps$request(sects)) {
+            return(invisible(NULL))
+          }
+          fire_download()
+        }
+
+        # The pictures land one by one; the document goes when the set is
+        # complete.
+        observe({
+          req(caps$pending())
+          got <- caps$value()
+          req(!is.null(got))
+          captures(got)
+          caps$clear()
+          fire_download()
+        })
 
         observeEvent(
           input$rpt_go,
@@ -1151,7 +1185,7 @@ report_ext_srv <- function(items, title, settings) {
             pending <- pending_exported(sects)
 
             if (!length(pending)) {
-              fire_download()
+              capture_then_fire(sects)
               return()
             }
 
@@ -1183,7 +1217,7 @@ report_ext_srv <- function(items, title, settings) {
 
             awaiting(FALSE)
             drop_wait_note()
-            fire_download()
+            capture_then_fire(sections())
           }
         )
 
@@ -1202,14 +1236,16 @@ report_ext_srv <- function(items, title, settings) {
           content = function(file) {
             # No source branch: the format is a RENDER target now, and the
             # source leaves by its own view's header (rpt_src below).
+            sects <- sections_with_captures(sections(), captures())
             with_render_guard(
               render_report(
-                qmd_txt(),
-                spin_txt(),
+                paste0(qmd_for(sects), collapse = "\n\n"),
+                paste0(spin_for(sects), collapse = "\n\n"),
                 rv_settings()$format,
                 file,
                 rv_title(),
-                sects = sections()
+                sects = sects,
+                captures = captures()
               )
             )
           }

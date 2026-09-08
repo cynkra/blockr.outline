@@ -626,10 +626,23 @@ block_report_call_str <- function(blk, var) {
   paste(deparse(cl), collapse = "\n")
 }
 
-# The output line of a reported chunk: the block's own report call when it
-# states one, else the result variable, wrapped in the block's report
-# renderer when it has one.
+# The output line of a reported chunk: the picture the browser already drew
+# when there is one, else the block's own report call, else the result
+# variable wrapped in the block's report renderer.
+#
+# A chart the canvas has drawn goes into the document AS THAT PICTURE. The
+# alternative is emitting code that redraws it through a second renderer,
+# which is how a report came to disagree with the screen it was made from.
+# The block's own code still runs above it, because downstream blocks read
+# the result; only the figure is substituted.
 sect_output <- function(sects, i) {
+
+  cap <- sects$captures[[sects$ids[i]]]
+
+  if (is.character(cap) && length(cap) == 1L && file.exists(cap)) {
+    return(paste0("knitr::include_graphics(", deparse(cap), ")"))
+  }
+
   rc <- coal(sects$report_calls[i], "")
   if (nzchar(rc)) {
     return(rc)
