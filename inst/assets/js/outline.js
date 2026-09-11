@@ -27,11 +27,28 @@
 
   const getInst = (elId) => {
     let inst = registry.get(elId);
+    // A dock panel that was closed and reopened puts a NEW element under the
+    // same id, and the cached instance still points at the detached one.
+    // Rebuild against what is on screen.
+    if (inst && inst.el && !document.body.contains(inst.el)) {
+      registry.delete(elId);
+      inst = null;
+    }
     if (!inst) {
       const el = document.getElementById(elId);
       if (!el) return null;
       inst = createInstance(el);
       registry.set(elId, inst);
+      // Announce a mount that happens after the socket is up. The server
+      // skips a push whose model equals the last one it sent, so a panel
+      // remounted mid-session has to ask, or it stays empty until the next
+      // real board edit. At boot `announceAll` is the one that fires and
+      // this is a no-op, since the socket is not connected yet.
+      const app = window.Shiny && Shiny.shinyapp;
+      if (app && typeof app.isConnected === 'function' && app.isConnected()) {
+        inst.announced = true;
+        Shiny.setInputValue(inst.ns + 'ready', true, { priority: 'event' });
+      }
     }
     return inst;
   };
@@ -1269,6 +1286,7 @@
 
     return {
       ns,
+      el: rootEl,
       announced: false,
       setData,
       setRegistry,

@@ -16,13 +16,38 @@ outline_ext_srv <- function(id, board, update, actions, ...) {
 
       ready <- shiny::reactive(isTRUE(input$ready))
 
-      shiny::observeEvent(
-        list(board$board, input$ready),
-        {
-          shiny::req(isTRUE(input$ready))
-          send("data", outline_payload(board$board))
+      # The model, sent once per change of the model. `board$board`
+      # invalidates on any board touch, and a dock tab switch commits a views
+      # delta, so this used to re-send the whole payload for a gesture that
+      # changed nothing the outline draws: 103 pushes and 2.6 MB over a ten
+      # minute session on the CDEx board, the largest single thing on that
+      # board's websocket. Shiny does not compress the socket
+      # (reference_shiny_ws_uncompressed_deflate_seam), so an unchanged
+      # payload is bytes for nothing and 13-17 ms of toJSON on top.
+      last_data <- NULL
+
+      push_data <- function(force = FALSE) {
+        payload <- outline_payload(board$board)
+        if (!force && identical(payload, last_data)) {
+          return(invisible(FALSE))
         }
-      )
+        last_data <<- payload
+        send("data", payload)
+        invisible(TRUE)
+      }
+
+      # A client that just announced holds nothing, so it always gets a copy.
+      # The announce repeats when the panel is remounted (outline.js's
+      # getInst), which is the case the skip below cannot see.
+      shiny::observeEvent(input$ready, {
+        shiny::req(isTRUE(input$ready))
+        push_data(force = TRUE)
+      })
+
+      shiny::observeEvent(board$board, {
+        shiny::req(isTRUE(input$ready))
+        push_data()
+      })
 
       # The catalogue does not depend on the board, so it travels once, when
       # the client announces itself -- not on every board change with the

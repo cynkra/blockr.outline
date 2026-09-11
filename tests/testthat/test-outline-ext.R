@@ -620,3 +620,65 @@ test_that("a NULL state field survives the clipboard as NULL", {
   )
   expect_null(back$payload$blocks$payload$a$payload$state$row_color)
 })
+
+test_that("the model is pushed once per change, and always to a client that announces", {
+  # `board$board` changes on any board touch, and a dock tab switch commits a
+  # views delta, so the payload used to go out again for a gesture the
+  # outline does not draw. 25 kB a time on a socket that does not compress.
+  # A board edit the outline's model cannot see, modelled here by swapping a
+  # block's state (the payload carries id, name, type and inputs, never
+  # state), stands in for that.
+  brd <- otl_dock_board()
+  # A reactiveValues bundle, the way a plugin server gets it: `board$board`
+  # reads the committed board and takes the dependency.
+  rv <- otl_board_args(brd)
+
+  same_model_edit <- function(board, dataset) {
+    blks <- blockr.core::board_blocks(board)
+    blks[["data"]] <- blockr.core::new_dataset_block(dataset)
+    blockr.core::board_blocks(board) <- blks
+    board
+  }
+
+  testServer(
+    outline_ext_srv,
+    {
+      sent <- new.env(parent = emptyenv())
+      sent$msgs <- list()
+      root <- session$rootScope()
+      root$sendCustomMessage <- function(type, message) {
+        sent$msgs <- c(sent$msgs, list(list(type = type, message = message)))
+        invisible(NULL)
+      }
+
+      n_data <- function() {
+        length(Filter(function(m) identical(m$type, "outline-data"), sent$msgs))
+      }
+
+      session$setInputs(ready = TRUE)
+      session$flushReact()
+      expect_identical(n_data(), 1L)
+
+      # Board changes the outline's model cannot see.
+      for (ds in c("mtcars", "airquality", "faithful")) {
+        rv$board <- same_model_edit(rv$board, ds)
+        session$flushReact()
+      }
+      expect_identical(n_data(), 1L)
+
+      # A remounted panel announces again and is answered, unchanged model or
+      # not (outline.js getInst; the announce is event-priority).
+      session$setInputs(ready = TRUE)
+      session$flushReact()
+      expect_identical(n_data(), 2L)
+
+      # A change the model does carry goes out.
+      rv$board <- blockr.dock::new_dock_board(
+        blocks = c(data = blockr.core::new_dataset_block("mtcars"))
+      )
+      session$flushReact()
+      expect_identical(n_data(), 3L)
+    },
+    args = list(board = rv, update = shiny::reactiveVal(), actions = list())
+  )
+})
