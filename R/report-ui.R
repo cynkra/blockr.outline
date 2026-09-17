@@ -91,7 +91,7 @@ report_ext_ui <- function(id, board, ...) {
         tags$input(
           type = "search",
           class = "blockr-block-browser-search blockr-rpt-searchinput",
-          placeholder = "Search or add a block…",
+          placeholder = "Search or add a block\u2026",
           `aria-label` = "Search blocks",
           autocomplete = "off",
           spellcheck = "false"
@@ -291,7 +291,7 @@ report_settings_band <- function(ns) {
             step = 0.5,
             width = "64px"
           ),
-          span("×"),
+          span("\u00d7"),
           numericInput(
             ns("rpt_set_figh"),
             label = NULL,
@@ -415,7 +415,7 @@ report_text_row <- function(item, k, editing, ns) {
       HTML(commonmark::markdown_html(item$text))
     )
   } else {
-    div(class = "blockr-rpt-prose is-empty", "Empty text — click to write")
+    div(class = "blockr-rpt-prose is-empty", "Empty text \u2014 click to write")
   }
 
   div(
@@ -490,7 +490,7 @@ report_menu <- function(item, k, meta) {
           if (is.null(w) && is.null(h)) {
             "document default"
           } else {
-            paste0(coal(w, "–"), " × ", coal(h, "–"), " in")
+            paste0(coal(w, "\u2013"), " \u00d7 ", coal(h, "\u2013"), " in")
           }
         )
       ),
@@ -572,7 +572,7 @@ report_desc_editor <- function(ns, key, value) {
     tags$textarea(
       class = "blockr-rpt-mdedit",
       rows = max(3L, length(strsplit(coal(value, ""), "\n")[[1L]]) + 1L),
-      placeholder = "Write in markdown…",
+      placeholder = "Write in markdown\u2026",
       spellcheck = "false",
       value
     ),

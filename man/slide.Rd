@@ -50,7 +50,7 @@ The value a slide block evaluates to: a layout id, the authored strings
 (title, subtitle, footnote and the layout's own text field) and the linked
 exhibit values, in slot order. The object is inert data -- painting it is
 the painters' job (the HTML preview and the officer pptx writer consume
-the same \code{\link[=slide_slots]{slide_slots()}} geometry), which is what keeps the block's
+the same \code{slide_slots()} geometry), which is what keeps the block's
 preview and its download the same slide.
 }
 \details{

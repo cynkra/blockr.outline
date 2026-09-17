@@ -246,14 +246,18 @@ test_that("uncollapsed pieces join into exactly the collapsed document", {
   s <- rpt_sects(picked = c("sub", "head"))
 
   for (emit in list(
-    function(...) export_qmd(
-      s, "T", block_level = "##",
-      flags = rpt_flags(), items = rpt_items(), settings = rpt_settings(), ...
-    ),
-    function(...) export_spin(
-      s, block_level = "##", title = "T",
-      flags = rpt_flags(), items = rpt_items(), settings = rpt_settings(), ...
-    )
+    function(...) {
+      export_qmd(
+        s, "T", block_level = "##",
+        flags = rpt_flags(), items = rpt_items(), settings = rpt_settings(), ...
+      )
+    },
+    function(...) {
+      export_spin(
+        s, block_level = "##", title = "T",
+        flags = rpt_flags(), items = rpt_items(), settings = rpt_settings(), ...
+      )
+    }
   )) {
     pieces <- emit(collapse = FALSE)
     ids <- attr(pieces, "ids")

@@ -274,7 +274,10 @@ test_that("a split table is collected by the guard and still reaches the log", {
 
   # Collecting must not swallow the render's own value.
   expect_identical(suppressMessages(
-    with_render_guard({ message(split_note()); "the deck" })
+    with_render_guard({
+      message(split_note())
+      "the deck"
+    })
   ), "the deck")
 })
 
