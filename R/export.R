@@ -1194,11 +1194,12 @@ weave_text_items <- function(pieces, ids, items, spin = FALSE) {
     }
   }
 
-  out_p <- character()
-  out_i <- character()
+  out <- new.env(parent = emptyenv())
+  out$p <- character()
+  out$i <- character()
   put <- function(p, i) {
-    out_p <<- c(out_p, p)
-    out_i <<- c(out_i, i)
+    out$p <- c(out$p, p)
+    out$i <- c(out$i, i)
   }
 
   for (txt in top) {
@@ -1214,7 +1215,7 @@ weave_text_items <- function(pieces, ids, items, spin = FALSE) {
     }
   }
 
-  list(pieces = out_p, ids = out_i)
+  list(pieces = out$p, ids = out$i)
 }
 
 # `title` / `intro` head the script as spin prose (spin has no YAML, so the
