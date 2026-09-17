@@ -14,7 +14,12 @@ fit_board <- function() {
   )
 }
 
-fit_exprs <- function(n = 26L) {
+# 22 rows: split at 13pt, and one slide at the 11pt the note suggests with
+# room to spare under every face tried (Arial, Helvetica, DejaVu Sans,
+# Liberation Sans, Courier New, an unknown family). At 26 rows the suggested
+# 10pt table was within 1% of the slide, so a runner's font metrics decided
+# whether the note carried a size at all.
+fit_exprs <- function(n = 22L) {
   structure(
     list(
       tbl = bquote(
