@@ -44,11 +44,11 @@ output should become slides, order them, download a PowerPoint file or an
 HTML deck. One block, one slide.
 }
 \details{
-The lightweight counterpart to \code{\link[=new_outline_extension]{new_outline_extension()}}. The outline
-builds a whole Quarto document -- prose, chapters, the generated code, an
-inverted reading order -- and can render it as a deck among other things.
-This does only the deck, and the difference shows in what it asks of the
-user: a picker and a list, no writing surface and nothing to read.
+The lightweight counterpart to a full document renderer: a report builds
+a whole Quarto document -- prose, chapters, the generated code -- and can
+render it as a deck among other things. This does only the deck, and the
+difference shows in what it asks of the user: a picker and a list, no
+writing surface and nothing to read.
 
 Two consequences worth knowing about, both of which follow from having no
 document:

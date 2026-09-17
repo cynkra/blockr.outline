@@ -14,9 +14,10 @@ slide_layout_thumb <- function(layout) {
   cw <- slide_content_width(fr)
   bare <- identical(spec$chrome, "none")
 
-  rects <- list()
+  acc <- new.env(parent = emptyenv())
+  acc$rects <- list()
   add <- function(x, y, w, h, fill, rx = 1.5) {
-    rects[[length(rects) + 1L]] <<- sprintf(
+    acc$rects[[length(acc$rects) + 1L]] <- sprintf(
       '<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" rx="%.1f" fill="%s"/>',
       x * 10, y * 10, w * 10, h * 10, rx, fill
     )
@@ -63,7 +64,7 @@ slide_layout_thumb <- function(layout) {
   htmltools::HTML(paste0(
     '<svg class="slb-thumb" viewBox="0 0 ', sz[["w"]] * 10, " ",
     sz[["h"]] * 10, '" preserveAspectRatio="none" aria-hidden="true">',
-    paste0(unlist(rects), collapse = ""),
+    paste0(unlist(acc$rects), collapse = ""),
     "</svg>"
   ))
 }

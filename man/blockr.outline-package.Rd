@@ -6,7 +6,7 @@
 \alias{blockr.outline-package}
 \title{blockr.outline: Board Outline, Code, Report and Workflow Extensions for 'blockr'}
 \description{
-A dock extension that renders a blockr board as a linked outline: block chips aligned with generated code sections, per-block markdown descriptions and report inclusion stored as extension state, a user-sortable block order (applied as the tie-break of the topological sort), and rendering of the inverted document to html, pptx or pdf via quarto with an rmarkdown fallback. Also carries the outline workflow editor: the same list-shaped reading of a board, made editable (connect, append, remove) as a compact alternative to the blockr.dag canvas, with its list+rail renderer exported as an html dependency for other hosts. Uses only exported blockr.core and blockr.dock API; no forks required.
+A dock extension that renders a blockr board as a linked outline: block chips aligned with generated code sections, per-block markdown descriptions and report inclusion stored as extension state, a user-sortable block order (applied as the tie-break of the topological sort), and rendering of the inverted document to html, pptx or pdf via quarto with an rmarkdown fallback. Also carries the minidag workflow editor: the same list-shaped reading of a board, made editable (connect, append, remove) as a compact alternative to the blockr.dag canvas, with its list+rail renderer exported as an html dependency for other hosts. Uses only exported blockr.core and blockr.dock API; no forks required.
 }
 \seealso{
 Useful links:

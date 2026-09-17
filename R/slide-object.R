@@ -4,7 +4,7 @@
 #' (title, subtitle, footnote and the layout's own text field) and the linked
 #' exhibit values, in slot order. The object is inert data -- painting it is
 #' the painters' job (the HTML preview and the officer pptx writer consume
-#' the same [slide_slots()] geometry), which is what keeps the block's
+#' the same `slide_slots()` geometry), which is what keeps the block's
 #' preview and its download the same slide.
 #'
 #' `text` is the chosen layout's one authored field; what it means depends on
@@ -77,7 +77,7 @@ format.blockr_slide <- function(x, ...) {
   spec <- slide_layout_spec(x$layout)
   paste0(
     "<blockr_slide> ", spec$name,
-    if (nzchar(x$title)) paste0(": “", x$title, "”"),
+    if (nzchar(x$title)) paste0(": \u201c", x$title, "\u201d"),
     " (", length(x$exhibits), "/", spec$inputs, " exhibits)"
   )
 }

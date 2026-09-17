@@ -111,14 +111,14 @@ new_slide_block <- function(layout = "exhibit-full", title = "",
 
           label <- if (want == 0L) {
             if (n > 0L) {
-              paste(n, "linked — this layout draws none")
+              paste(n, "linked \u2014 this layout draws none")
             } else {
               "no inputs"
             }
           } else {
             paste0(
               n, " of ", want, " linked",
-              if (n > want) paste0(" — ", n - want, " not drawn")
+              if (n > want) paste0(" \u2014 ", n - want, " not drawn")
             )
           }
 
