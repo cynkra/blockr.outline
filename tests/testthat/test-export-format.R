@@ -280,3 +280,14 @@ test_that("a deck wraps every non-figure exhibit, a document does not", {
   class(plt) <- c("plot_block", class(plt))
   expect_identical(block_report_renderer(plt, "static"), "")
 })
+
+test_that("a report call that chart_code() cannot format is deparsed", {
+  # chart_code() rewrote a `{ ... }` body (the composer block's report call)
+  # as a pipe that does not parse, and the deck dropped the slide.
+  cl <- quote({
+    .d <- as.data.frame(x)
+    nrow(.d)
+  })
+  expect_false(same_call_text(".d |> as.data.frame(x) <- NULL |> {nrow(.d)}", cl))
+  expect_true(same_call_text("x |> head(3)", quote(head(x, 3))))
+})

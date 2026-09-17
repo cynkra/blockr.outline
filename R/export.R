@@ -611,6 +611,12 @@ block_report_call_str <- function(blk, var) {
   # pipeline and ships chart_code(), which formats any report call one
   # pipeline stage / layer per line (nested data-threading rendered in pipe
   # form). Older blockr.viz: plain deparse, as before.
+  #
+  # chart_code() is written for chart pipelines. Other report calls go
+  # through it too, and it can get them wrong: the composer block's call is
+  # a `{ ... }` body, which it rewrote as `.d |> as.data.frame(x) <- NULL |>
+  # { ... }`, a parse error, so every composer table left the deck without a
+  # slide. Its text is used only if it parses back to the same call.
   fmt <- tryCatch(
     getExportedValue("blockr.viz", "chart_code"),
     error = function(e) NULL
@@ -618,12 +624,27 @@ block_report_call_str <- function(blk, var) {
 
   if (is.function(fmt)) {
     out <- tryCatch(fmt(cl), error = function(e) NULL)
-    if (is.character(out) && length(out) == 1L && nzchar(out)) {
+    if (is.character(out) && length(out) == 1L && nzchar(out) &&
+        same_call_text(out, cl)) {
       return(out)
     }
   }
 
   paste(deparse(cl), collapse = "\n")
+}
+
+# TRUE when `txt` parses to exactly the call `cl`. The native pipe is resolved
+# at parse time, so a correct pipe-form rendering compares equal.
+same_call_text <- function(txt, cl) {
+  parsed <- tryCatch(
+    parse(text = txt, keep.source = FALSE),
+    error = function(e) NULL
+  )
+  length(parsed) == 1L &&
+    identical(
+      paste(deparse(parsed[[1L]]), collapse = "\n"),
+      paste(deparse(cl), collapse = "\n")
+    )
 }
 
 # The output line of a reported chunk: the picture the browser already drew
