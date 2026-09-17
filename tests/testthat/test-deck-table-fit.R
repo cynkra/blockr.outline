@@ -57,7 +57,27 @@ test_that("a lower floor keeps a deck's table on one slide", {
     tryCatch(getExportedValue("blockr.viz", "new_exhibit_font_option"),
              error = function(e) NULL)))
 
+  # TEMP CI DIAGNOSTIC
+  diag <- character()
+  m <- systemfonts::match_fonts(c("Arial", "Inter", "sans"))
+  diag <- c(diag, paste("match", m$path, collapse = "; "))
+  suppressMessages(trace("pptx_fit_size", where = asNamespace("blockr.viz"),
+    exit = quote({
+      d <- paste("size", size, "budget", budget, "h", h,
+                 "est", if (exists("est")) est else NA)
+      if (exists("est") && est >= hard && est < size) {
+        for (s in est:5) d <- c(d, paste("  s", s, "h",
+          pptx_table_height(build(s)), "fits", pptx_fits(build(s), budget)))
+      }
+      assign("diag", c(get("diag", globalenv()), d), globalenv())
+    }), print = FALSE))
+  assign("diag", diag, globalenv())
   house <- deck_slides(13)
+  untrace("pptx_fit_size", where = asNamespace("blockr.viz"))
+  message(paste(get("diag", globalenv()), collapse = "\n"))
+  message("fonts: ", paste(blockr.viz:::pptx_body_font(
+    system.file("templates", "widescreen-default.pptx",
+                package = "blockr.outline")), collapse = ","))
   small <- deck_slides(8)
 
   expect_gt(house$slides, 1L)
