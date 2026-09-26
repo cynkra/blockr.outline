@@ -1,640 +1,94 @@
-/* Board outline extension (gutter layout).
-   Decision records: blockr.docs/design-system/target/
-   board-outline-proposals.html (variant A) refined by
-   board-outline-gutter-proposals.html. Self-contained: token fallbacks
-   inline so the panel styles hold with or without blockr.dock's token
-   layer. */
+/* The report's code views: one frame around a file, a sticky header naming
+   it, the code below. Also the notes a rendered exhibit can carry
+   (outline_output_map() in R/render.R). Meaning tokens only (blockr.ui
+   design system); the syntax colours are syntax-highlight.css. */
 
-.blockr-otl-panel { padding: 12px 16px; }
-.blockr-otl-toolbar { display: flex; align-items: flex-start; justify-content: space-between;
-                          gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
-.blockr-otl-toolbar-right { display: flex; align-items: center; gap: 8px; }
-.blockr-otl-toolbar-right .form-group,
-.blockr-otl-toolbar-right .shiny-input-container { margin-bottom: 0; }
-/* Code preview: ONE frame. The panel is already a card, so the old
-   grey rounded box inside it read as a box in a box. Decision record:
-   design-system/target/outline-code-preview-proposals.html (C + the
-   header). The block bleeds to the panel edges -- hence the negative
-   margins cancelling .blockr-otl-panel's padding -- and carries a sticky
-   header naming the file, with copy on the code rather than up in the
-   toolbar. */
-/* Inset, NOT bled to the panel edge. The dock paints its own light grey
-   (#f6f5f9) behind the panel, so a grey surface running to the margin
-   meets a grey background and the panel's boundary disappears -- the
-   mockup only read well because the page behind it was white. Keeping
-   the panel's padding as a white gutter, plus a border of its own, is
-   what makes this a defined surface rather than a flood fill. Still one
-   frame: the header lives inside that same border. */
-.blockr-otl-fileblock { margin: 4px 0 0;
-                        border: 1px solid var(--blockr-grey-200, #e5e7eb);
-                        border-radius: 8px; }
-/* No overflow:hidden on the block -- it would become the scroll
-   container and the sticky header would stop sticking. The two ends
-   carry the rounding instead. */
-.blockr-otl-filehead { position: sticky; top: 0; z-index: 2;
-                       display: flex; align-items: center;
-                       justify-content: space-between; gap: 10px;
-                       padding: 7px 14px;
-                       background: var(--blockr-grey-100, #f3f4f6);
-                       border-radius: 7px 7px 0 0;
-                       border-bottom: 1px solid var(--blockr-grey-200, #e5e7eb); }
-.blockr-otl-filename { font-family: var(--blockr-font-mono, 'SF Mono', Consolas, monospace);
-                       font-size: 0.75rem; color: var(--blockr-grey-500, #6b7280); }
-.blockr-otl-headbtn { display: inline-flex; align-items: center; gap: 5px;
-                      font: inherit; font-size: 0.75rem; cursor: pointer;
-                      border: 1px solid transparent; border-radius: 6px;
-                      padding: 3px 8px; background: transparent;
-                      color: var(--blockr-grey-500, #6b7280); }
-.blockr-otl-headbtn:hover { background: #fff;
-                            border-color: var(--blockr-grey-200, #e5e7eb);
-                            color: var(--blockr-grey-900, #111827); }
-
-.blockr-otl-raw { font-size: 0.78rem; padding: 14px 16px;
-                      background: var(--blockr-grey-50, #f9fafb);
-                      border-radius: 0 0 7px 7px;
-                      white-space: pre-wrap; word-break: break-word; }
-/* downlit's wrapper paints its own chroma background, which on top of
-   the surface tint reads as one more nested box -- the very thing this
-   layout removes. The surface owns the tint; the wrapper only carries
-   token colors. */
-.blockr-otl-raw pre.chroma { background: none; margin: 0; padding: 0;
-                             border: 0; border-radius: 0; }
-
-/* Toolbar. The segmented view switcher is the ecosystem's control,
-   copied from blockr.ggplot's .dd-cfg-types / .dd-type-btn (chart-type
-   strip): white segments divided by hairlines, blue-50 fill and primary
-   text on the active one. Every control on the row is --otl-ctrl-h tall
-   so the switcher, the format picker and Render share a baseline.
-
-   The active selector must be `.btn-check:checked + label`: shinyWidgets
-   renders the radio as a SIBLING of its label, so neither `.active` nor
-   `label:has(input:checked)` ever matches, which is why the active
-   segment was invisible. */
-.blockr-otl-panel { --otl-ctrl-h: 30px; }
-.blockr-otl-toolbar { align-items: center; }
-/* The switcher is a shinyWidgets input, so it ships in a .form-group
-   wrapper with a 16px bottom margin. Under align-items:center that
-   margin box centres, lifting the switcher 8px above the right group's
-   centre line. Zero it so both groups share the toolbar centre. */
-.blockr-otl-toolbar > .shiny-input-container { margin: 0; }
-.blockr-otl-toolbar .btn-group {
-  height: var(--otl-ctrl-h);
-  border: 1px solid var(--blockr-color-border, #e5e7eb);
-  border-radius: 6px; overflow: hidden; }
-.blockr-otl-toolbar .btn-group > .btn.radiobtn {
-  display: inline-flex; align-items: center;   /* centres the label, so the
-                                                  padding reads even */
-  height: 100%; margin: 0; border: 0; border-radius: 0;
-  border-right: 1px solid var(--blockr-color-border, #e5e7eb);
-  background: #fff; box-shadow: none;
-  padding: 0 12px; font-size: var(--blockr-font-size-xs, 0.75rem);
-  color: var(--blockr-grey-500, #6b7280); }
-.blockr-otl-toolbar .btn-group > .btn.radiobtn:last-of-type { border-right: 0; }
-.blockr-otl-toolbar .btn-group > .btn.radiobtn:hover {
-  background: var(--blockr-grey-50, #f9fafb); }
-.blockr-otl-toolbar .btn-check:checked + .btn.radiobtn {
-  background: var(--blockr-blue-50, #eff6ff);
-  color: var(--blockr-color-primary, #2563eb);
-  font-weight: var(--blockr-font-weight-medium, 500); }
-
-/* Split render group: the format picker (neutral) fused to the
-   Download action (green), one bordered pill divided by a hairline.
-   Both halves are --otl-ctrl-h tall; the shiny-input-container the
-   selectInput wraps the <select> in carries a default bottom margin,
-   which is what pushed this group below the left switcher's centre --
-   zero it and both groups share the toolbar's centre line. */
-.blockr-otl-rendergroup { display: inline-flex; align-items: stretch;
-  height: var(--otl-ctrl-h); }
-.blockr-otl-rendergroup > .shiny-input-container {
-  margin: 0; width: auto !important; }
-
-.blockr-otl-rendergroup select.form-control,
-.blockr-otl-rendergroup select.form-select {
-  height: var(--otl-ctrl-h); width: 88px; padding: 0 26px 0 11px;
-  font-size: var(--blockr-font-size-xs, 0.75rem);
-  color: var(--blockr-grey-700, #374151);
-  border: 1px solid var(--blockr-color-border, #e5e7eb);
-  border-right: 0; border-radius: 6px 0 0 6px;
-  background-color: #fff; box-shadow: none;
-  -webkit-appearance: none; appearance: none;
-  background-repeat: no-repeat; background-position: right 9px center;
-  background-size: 9px 6px;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='6' viewBox='0 0 9 6'%3E%3Cpath d='M1 1l3.5 3.5L8 1' fill='none' stroke='%236b7280' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E"); }
-.blockr-otl-rendergroup select.form-control:hover,
-.blockr-otl-rendergroup select.form-select:hover {
-  background-color: var(--blockr-grey-50, #f9fafb); }
-
-.blockr-otl-renderbtn { display: inline-flex; align-items: center; gap: 5px;
-  height: var(--otl-ctrl-h); font: inherit;
-  font-size: var(--blockr-font-size-xs, 0.75rem);
-  font-weight: var(--blockr-font-weight-medium, 500);
-  cursor: pointer; padding: 0 12px; margin: 0;
-  border: 1px solid #86efac; border-radius: 0 6px 6px 0;
-  background: #f0fdf4; color: #166534; box-shadow: none; }
-.blockr-otl-renderbtn:hover { border-color: #4ade80; background: #dcfce7;
-  color: #166534; }
-
-.blockr-otl { display: grid; grid-template-columns: 168px 1fr; column-gap: 14px; }
-.blockr-otl-grow { display: contents; }
-.blockr-otl-gutter { grid-column: 1; padding: 3px 0; position: relative; }
-.blockr-otl-gsect { grid-column: 2; margin: 3px 0; min-width: 0; }
-.blockr-otl-gutter::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0;
-                                 width: 3px; background: var(--accent); opacity: 0.35; }
-.blockr-otl-gutter.nospine::before { display: none; }
-.blockr-otl-gutter.spine-start::before { top: 3px; border-radius: 2px 2px 0 0; }
-.blockr-otl-gutter.spine-end::before { bottom: 3px; border-radius: 0 0 2px 2px; }
-.blockr-otl-gutter.spine-only::before { top: 3px; bottom: 3px; border-radius: 2px; }
-.blockr-otl-chip { position: sticky; top: 8px; display: flex; align-items: center; gap: 6px;
-                       margin-left: 10px; padding: 4px 6px; border-radius: 6px; cursor: pointer;
-                       border: 1px solid transparent;
-                       transition: background 0.12s ease, border-color 0.12s ease; }
-.blockr-otl-chip:hover, .blockr-otl-chip.hot { background: var(--blockr-blue-50, #eff6ff);
-                                                       border-color: var(--blockr-blue-100, #dbeafe); }
-.blockr-otl-tile { width: 22px; height: 22px; border-radius: 5px; display: flex;
-                       align-items: center; justify-content: center; flex-shrink: 0;
-                       font-size: 11px; font-weight: 600;
-                       color: var(--blockr-grey-500, #6b7280);
-                       background: color-mix(in srgb, var(--accent) 12%, white);
-                       border: 1px solid color-mix(in srgb, var(--accent) 30%, white); }
-.blockr-otl-rname { flex: 1; min-width: 0; font-size: 0.75rem; line-height: 1.25;
-                        color: var(--blockr-grey-900, #111827); overflow: hidden;
-                        display: -webkit-box; -webkit-line-clamp: 2;
-                        -webkit-box-orient: vertical; }
-.blockr-otl-sw { position: relative; width: 26px; height: 15px; border-radius: 999px;
-                 flex-shrink: 0; background: var(--blockr-grey-300, #d1d5db);
-                 transition: background 0.15s ease; }
-.blockr-otl-sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 11px;
-                            height: 11px; border-radius: 50%; background: #fff;
-                            transition: left 0.15s ease;
-                            box-shadow: 0 1px 2px rgb(0 0 0 / 0.25); }
-.blockr-otl-grow.on .blockr-otl-sw { background: var(--accent, #2563eb); }
-.blockr-otl-grow.on .blockr-otl-sw::after { left: 13px; }
-.blockr-otl-grow:not(.on) .blockr-otl-rname { color: var(--blockr-grey-400, #9ca3af); }
-.blockr-otl-grow:not(.on) .blockr-otl-tile { filter: grayscale(1); opacity: 0.65; }
-.blockr-otl-grow:not(.on) .blockr-otl-sect { opacity: 0.55; }
-.blockr-otl-sect { position: relative; border: 1px solid transparent; border-radius: 6px;
-                       padding: 6px 10px; cursor: pointer;
-                       transition: background 0.12s ease, border-color 0.12s ease; }
-.blockr-otl-sect:hover, .blockr-otl-sect.hot { background: var(--blockr-blue-50, #eff6ff);
-                                                       border-color: var(--blockr-blue-100, #dbeafe); }
-.blockr-otl-pencil { position: absolute; top: 5px; right: 7px; opacity: 0; border: none;
-                         background: none; font-size: 10px;
-                         color: var(--blockr-grey-400, #9ca3af); cursor: pointer;
-                         transition: opacity 0.15s ease; }
-.blockr-otl-sect:hover .blockr-otl-pencil { opacity: 1; }
-.blockr-otl-pencil:hover { color: var(--blockr-grey-700, #374151); }
-.blockr-otl-editor { cursor: default; }
-.blockr-otl-offchip { display: inline-flex; align-items: center; gap: 4px;
-                          font-size: 9px; font-weight: 500;
-                          letter-spacing: 0.04em; text-transform: uppercase;
-                          color: var(--blockr-grey-500, #6b7280);
-                          background: var(--blockr-grey-100, #f3f4f6); border-radius: 999px;
-                          padding: 1px 7px; margin-bottom: 5px;
-                          cursor: pointer; transition: color 0.15s ease; }
-.blockr-otl-offchip:hover { color: var(--blockr-blue-600, #2563eb); }
-/* The twisty: the badge IS the control for the collapsed code cell. */
-.blockr-otl-offcaret { font-size: 9px; line-height: 1; }
-.blockr-otl-prose { font-size: 0.8125rem; color: var(--blockr-grey-700, #374151);
-                        margin-bottom: 6px; }
-.blockr-otl-prose p { margin: 0 0 5px; }
-.blockr-otl-prose p:last-child { margin-bottom: 0; }
-.blockr-otl-prose ul, .blockr-otl-prose ol { margin: 3px 0 0; padding-left: 18px; }
-.blockr-otl-sect pre { margin: 0; font-size: 0.72rem; line-height: 1.5;
-                           background: var(--blockr-grey-50, #f9fafb); border-radius: 5px;
-                           padding: 7px 10px; overflow-x: auto; white-space: pre-wrap;
-                           word-break: break-word; }
-
-/* drag-to-reorder feedback + inline rename input */
-.blockr-otl-grow.drop-before .blockr-otl-gutter,
-.blockr-otl-grow.drop-before .blockr-otl-gsect { box-shadow: 0 -2px 0 0 var(--accent, #2563eb); }
-.blockr-otl-grow.drop-after .blockr-otl-gutter,
-.blockr-otl-grow.drop-after .blockr-otl-gsect { box-shadow: 0 2px 0 0 var(--accent, #2563eb); }
-/* Overlay grip (reorder decision, variant B): floats in the column gap
-   outside the chip, occupying NO flex space, so the switch column aligns
-   identically on movable and pinned rows. Hover-revealed, drag source. */
-.blockr-otl-grip { position: absolute; right: -16px; top: 50%; transform: translateY(-50%);
-                   width: 16px; height: 20px; display: flex; align-items: center;
-                   justify-content: center; color: var(--blockr-grey-400, #9ca3af);
-                   opacity: 0; transition: opacity 0.12s ease; cursor: grab; }
-.blockr-otl-grip:active { cursor: grabbing; }
-.blockr-otl-grow:hover .blockr-otl-grip { opacity: 1; }
-.blockr-otl-rname-input { width: 100%; font-size: 0.75rem; border: 1px solid var(--blockr-blue-100, #dbeafe);
-                          border-radius: 4px; padding: 1px 4px; outline: none; font-family: inherit; }
-
-/* Milkdown editor inside a description section: hide the "+ Block" embed
-   toolbar (blockr:// chips are a blockr.md document concept; the outline's
-   render pipeline does not resolve them yet) and keep the editor compact. */
-.blockr-otl-editor .blockr-md-toolbar { display: none; }
-.blockr-otl-editor .blockr-md-editor-host .ProseMirror { outline: none; }
-
-/* text-commit convention: Enter chip while dirty; no buttons, no raw
-   source view (R script / Document views show the markdown). */
-.blockr-otl-editor .blockr-md-source { display: none; }
-.blockr-otl-placeholder { color: var(--blockr-grey-400, #9ca3af); font-style: italic; }
-
-/* chapters, revised: chevron hangs LEFT of the text (titles stay aligned
-   with the sections below, viz structured-table style); collapse is
-   client-only; intro = soft stack-tinted box aligned with the title text,
-   no border line. */
-.blockr-otl-chevwrap { position: absolute; left: -22px; top: 50%; transform: translateY(-50%);
-                       width: 20px; height: 20px; display: flex; align-items: center;
-                       justify-content: center; color: var(--blockr-grey-400, #9ca3af);
-                       cursor: pointer; border-radius: 5px;
-                       transition: background 0.12s ease, color 0.12s ease; }
-.blockr-otl-chap:hover .blockr-otl-chevwrap { color: var(--blockr-grey-700, #374151); }
-.blockr-otl-chevwrap:hover { background: var(--blockr-grey-100, #f3f4f6);
-                             color: var(--blockr-grey-900, #111827); }
-.blockr-otl-chev { width: 14px; height: 14px; transition: transform 0.15s ease; }
-.blockr-otl-chap.collapsed .blockr-otl-chev { transform: rotate(-90deg); }
-.blockr-otl-hidden { display: none !important; }
-
-/* Search box (decision record: outline-search-proposals.html, variant A,
-   restyled onto the block browser). ONE full-width control over the whole
-   board: the document it lists and the pool it does not are two sections
-   of one menu, a listed block is a "go to" and an unlisted one an "add".
-   It replaced both the 168px row filter and the include picker under the
-   list.
-
-   The field, the menu and its rows wear blockr.dock's block-browser
-   classes, so picking a block looks the same here as in the add-block
-   sidebar and this file owns no row styling. sidebar-block.css is already
-   on the page (the dock pre-renders that sidebar on every board). What is
-   left below is only what the browser cannot know: the menu is a dropdown
-   rather than a sidebar column, and the field carries the pool count. */
-/* The card classes read blockr.dock's private --bb-* tokens, which that
-   stylesheet declares on its own roots. Wearing one of those roots would
-   also opt into the browser's input binding and search JS, so the tokens
-   are mapped here instead -- onto the --blockr-* scale, which is where
-   the design system wants them to end up anyway. */
-.blockr-otl-search {
-  position: relative; margin: 16px 0 2px;
-  --bb-grey-50: var(--blockr-grey-50, #f9fafb);
-  --bb-grey-100: var(--blockr-grey-100, #f3f4f6);
-  --bb-grey-200: var(--blockr-grey-200, #e5e7eb);
-  --bb-grey-300: var(--blockr-grey-300, #d1d5db);
-  --bb-grey-400: var(--blockr-grey-400, #9ca3af);
-  --bb-grey-500: var(--blockr-grey-500, #6b7280);
-  --bb-grey-600: var(--blockr-grey-600, #4b5563);
-  --bb-grey-700: var(--blockr-grey-700, #374151);
-  --bb-grey-900: var(--blockr-grey-900, #111827);
-  --bb-blue-100: var(--blockr-blue-100, #dbeafe);
-  --bb-blue-500: var(--blockr-blue-500, #3b82f6);
-  --bb-blue-600: var(--blockr-blue-600, #2563eb);
-  --bb-blue-700: var(--blockr-blue-700, #1d4ed8);
-  --bb-icon: 32px;
-  --bb-gap: 12px;
-}
-/* Room for the count, which the browser's own field has no slot for. */
-.blockr-otl-search .blockr-otl-searchinput { padding-right: 108px; }
-.blockr-otl-searchcount { position: absolute; right: 12px; top: 50%;
-  transform: translateY(-50%); pointer-events: none; font-size: 0.75rem;
-  color: var(--blockr-grey-400, #9ca3af); }
-/* Gone once there is a query: the native search clear sits there. */
-.blockr-otl-search.has-value .blockr-otl-searchcount { display: none; }
-.blockr-otl-search.has-value .blockr-otl-searchinput { padding-right: 12px; }
-
-/* The menu overlays the document rather than pushing it down: the
-   question the search answers is usually "what is this document still
-   missing", and the answer reads better with the document left in place.
-   The block-browser root is a full-height sidebar column, so its box
-   model is the one thing overridden here. */
-.blockr-otl-search .blockr-otl-searchmenu { display: none; position: absolute;
-  left: 0; right: 0; top: calc(100% + 4px); z-index: 30; margin: 0;
-  padding: 6px 0; height: auto; max-height: 320px; gap: 0;
-  background: var(--blockr-color-bg, #fff);
-  border: 1px solid var(--blockr-color-border, #e5e7eb); border-radius: 8px;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12); }
-.blockr-otl-search.open .blockr-otl-searchmenu { display: flex; }
-.blockr-otl-searchmenu .blockr-block-browser-categories { gap: 6px; }
-/* The browser toggles its empty state from its root; this menu is its
-   own root, so the same two rules are restated for it. */
-.blockr-otl-searchmenu.is-empty .blockr-block-browser-categories {
-  display: none; }
-.blockr-otl-searchmenu.is-empty .blockr-block-browser-empty { display: flex; }
-/* The icons the outline projects are self-contained tinted tiles (the
-   dock's data-uri form), so the wrapper carries no tint of its own and
-   the glyph fills it. */
-.blockr-otl-searchmenu .blockr-block-browser-card-icon { background: none; }
-.blockr-otl-searchmenu .blockr-block-browser-card-icon svg,
-.blockr-otl-searchmenu .blockr-block-browser-card-icon img {
-  width: 32px; height: 32px; }
-.blockr-otl-searchmenu mark { background: #fef08a; color: inherit;
-  border-radius: 2px; padding: 0 1px; }
-/* What the row does when chosen, in the browser's trailing slot. */
-.blockr-otl-optact { flex: 0 0 auto; font-size: 0.75rem; font-weight: 500;
-  color: var(--blockr-grey-400, #9ca3af); }
-.blockr-block-browser-card:hover .blockr-otl-optact,
-.blockr-block-browser-card.card-selected .blockr-otl-optact {
-  color: var(--blockr-blue-600, #2563eb); }
-/* The description, where the browser puts the package name: on a report
-   board it is what tells two similar tables apart. */
-.blockr-otl-optdesc { margin: 1px 0 0; font-size: 0.75rem; line-height: 1.35;
-  color: var(--blockr-grey-500, #6b7280); white-space: nowrap;
-  overflow: hidden; text-overflow: ellipsis; }
-
-/* Landing mark for a "go to": the jumped-to row fades from a blue wash. */
-.blockr-otl-flash .blockr-otl-gsect { animation: blockr-otl-flash 1.1s ease; }
-@keyframes blockr-otl-flash {
-  0% { background: var(--blockr-blue-50, #eff6ff); }
-  100% { background: transparent; }
+.blockr-otl-fileblock {
+  margin: 4px 0 0;
+  border: 1px solid var(--blockr-color-border-default);
+  border-radius: var(--blockr-radius-lg);
+  background: var(--blockr-color-bg-surface);
 }
 
-/* chapters, variant B revised (outline-document-styling-proposals.html +
-   feedback): ONE thread on the far left from chapter title to the run's
-   last block; title = real heading; lead = plain body prose; collapsed
-   chapters reveal their blocks' mini icons. */
-.blockr-otl-chapgutter { padding: 24px 0 0; }
-.blockr-otl-chap { grid-column: 2; display: flex; align-items: center; gap: 8px;
-                   padding: 24px 0 2px 11px; position: relative; }
-.blockr-otl-chlabel { font-size: 1.1rem; font-weight: 600; letter-spacing: -0.01em;
-                      color: var(--blockr-grey-900, #111827); }
-.blockr-otl-chevwrap { position: absolute; left: -22px; bottom: 4px; top: auto; transform: none;
-                       width: 20px; height: 20px; display: flex; align-items: center;
-                       justify-content: center; color: var(--blockr-grey-400, #9ca3af); }
-.blockr-otl-chap:hover .blockr-otl-chevwrap { color: var(--blockr-grey-700, #374151); }
-/* Pinned to the row's right edge, not trailed after the title: the
-   heading text and the hover actions ("exclude all" / "include all")
-   are both variable width, so flowing the icons behind them left every
-   collapsed chapter's preview at a different x. Right-aligned they
-   share one edge and fill leftwards, and hovering a chapter no longer
-   shifts them. `auto` margin only consumes free space, so in a narrow
-   panel they simply sit next to the actions instead of overlapping. */
-.blockr-otl-chapicons { display: none; align-items: center; gap: 4px;
-  margin-left: auto; padding-left: 10px; }
-.blockr-otl-chap.collapsed .blockr-otl-chapicons { display: inline-flex; }
-.blockr-otl-minitile { width: 18px; height: 18px; border-radius: 4px; display: flex;
-                       align-items: center; justify-content: center; overflow: hidden;
-                       font-size: 9px; font-weight: 600; color: var(--blockr-grey-500, #6b7280);
-                       background: var(--blockr-grey-100, #f3f4f6);
-                       border: 1px solid var(--blockr-grey-200, #e5e7eb); opacity: 0.85; }
-.blockr-otl-minitile img, .blockr-otl-minitile svg { max-width: 100%; max-height: 100%; }
-.blockr-otl-chapintro { padding-top: 2px; }
-
-/* The chapter's thread segment: starts beside the title (below the
-   chapter's top padding) and runs to the cell's bottom edge, meeting the
-   intro / row cells so the line is continuous through the whole stack.
-   Collapsing hides the cells below, leaving a title-height stub. */
-.blockr-otl-chapgutter::before { top: 26px; bottom: 0; height: auto;
-                                 border-radius: 2px 2px 0 0; }
-
-/* Edit mode, calm: no section wash, the content area gets the same small
-   border the inline rename inputs use. */
-.blockr-otl-editor, .blockr-otl-editor:hover, .blockr-otl-editor.hot {
-  background: none; border-color: transparent; cursor: default; }
-.blockr-otl-editor .blockr-md-editor-host { min-height: 60px; max-height: 320px; overflow-y: auto;
-                                            border: 1px solid var(--blockr-blue-100, #dbeafe);
-                                            border-radius: 4px; padding: 4px 8px; background: #fff; }
-
-/* While dragging: legal landing rows get a soft dashed guide so the drag
-   shows where it may go; the hovered edge turns solid (drop-before /
-   drop-after). Illegal rows stay untouched and refuse the drop. */
-.blockr-otl-grow.drop-legal .blockr-otl-gsect {
-  outline: 1px dashed color-mix(in srgb, var(--accent, #2563eb) 45%, white);
-  outline-offset: 2px; border-radius: 6px; }
-
-/* Insert affordance (outline-insert-proposals.html variant A, revised):
-   revealed on the block's own hover, sitting BELOW its section, styled
-   like blockr.dplyr's add links (grey text link, primary on hover). */
-.blockr-otl-addrow { display: flex; align-items: center; min-height: 22px; padding: 2px 0 0 10px;
-                     font-size: 13px; user-select: none; color: var(--blockr-grey-400, #9ca3af);
-                     opacity: 0; transition: opacity 0.12s ease; }
-.blockr-otl-grow:hover .blockr-otl-addrow { opacity: 1; }
-.blockr-otl-addlink { display: inline-flex; align-items: center; gap: 4px; cursor: pointer;
-                      font-size: 0.75rem; transition: color 0.15s ease; }
-.blockr-otl-addlink:hover { color: var(--blockr-blue-600, #2563eb); }
-.blockr-otl-addicon { display: inline-flex; align-items: center; }
-
-/* Remove button, blockr.dplyr row-remove style: hover-revealed x that
-   turns danger-red. Sits inside the chip, so it reserves its own space
-   consistently on every row. */
-.blockr-otl-rm { display: flex; align-items: center; justify-content: center;
-                 width: 18px; height: 18px; padding: 0; background: none; border: none;
-                 border-radius: 4px; color: var(--blockr-grey-400, #9ca3af); cursor: pointer;
-                 opacity: 0; flex-shrink: 0;
-                 transition: opacity 0.15s ease, color 0.15s ease, background 0.15s ease; }
-.blockr-otl-grow:hover .blockr-otl-rm { opacity: 1; }
-.blockr-otl-rm:hover { color: var(--blockr-color-danger, #dc2626);
-                       background: rgba(220, 53, 69, 0.08); }
-
-/* Hide-from-view button: same hover-revealed chrome as the remove x, but
-   neutral -- it condenses the row, it does not destroy anything. */
-.blockr-otl-eyeoff { display: flex; align-items: center; justify-content: center;
-                     width: 18px; height: 18px; padding: 0; background: none; border: none;
-                     border-radius: 4px; color: var(--blockr-grey-400, #9ca3af); cursor: pointer;
-                     opacity: 0; flex-shrink: 0;
-                     transition: opacity 0.15s ease, color 0.15s ease, background 0.15s ease; }
-.blockr-otl-grow:hover .blockr-otl-eyeoff { opacity: 1; }
-.blockr-otl-eyeoff:hover { color: var(--blockr-grey-700, #374151);
-                           background: var(--blockr-grey-100, #f3f4f6); }
-
-/* Dormant rows: blocks outside the active view condense to one line --
-   title on the chip, description beside it, no code cell. Clicking the
-   row opens the block's panel (the standard row click), which expands it. */
-.blockr-otl-grow.dormant .blockr-otl-sect.blockr-otl-dormant { padding: 4px 10px; }
-.blockr-otl-dormline { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
-.blockr-otl-dormline .blockr-otl-offchip { margin-bottom: 0; flex-shrink: 0; }
-.blockr-otl-dormdesc { flex: 1; min-width: 0; font-size: 0.8125rem;
-                       color: var(--blockr-grey-500, #6b7280);
-                       white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-/* section management: chapter actions on hover, chapter as drop target */
-.blockr-otl-chapacts { display: inline-flex; align-items: center; gap: 10px; margin-left: 10px;
-                       opacity: 0; transition: opacity 0.12s ease; }
-.blockr-otl-chap:hover .blockr-otl-chapacts { opacity: 1; }
-.blockr-otl-chapact { font-size: 0.7rem; color: var(--blockr-grey-400, #9ca3af);
-                      cursor: pointer; transition: color 0.15s ease; }
-.blockr-otl-chapact:hover { color: var(--blockr-blue-600, #2563eb); }
-.blockr-otl-chap.drop-chap { background: var(--blockr-blue-50, #eff6ff);
-                             border-radius: 6px;
-                             box-shadow: inset 0 0 0 1px var(--blockr-blue-100, #dbeafe); }
-.blockr-otl-newchap { margin-left: 14px; }
-
-/* chapter drag: grip on the heading, headings as landing targets */
-.blockr-otl-chapgrip { position: absolute; left: -38px; bottom: 5px; width: 14px; height: 16px;
-                       display: flex; align-items: center; justify-content: center;
-                       color: var(--blockr-grey-300, #d1d5db);
-                       opacity: 0; transition: opacity .12s ease, color .12s ease;
-                       cursor: grab; }
-.blockr-otl-chapgrip:hover { color: var(--blockr-grey-500, #6b7280); }
-.blockr-otl-chapgrip:active { cursor: grabbing; }
-.blockr-otl-chap:hover .blockr-otl-chapgrip { opacity: 1; }
-.blockr-otl-chap.chap-legal::before,
-.blockr-otl-chap.chap-hot::before { content: ""; position: absolute; left: -166px; right: 0;
-                                    top: 6px; pointer-events: none; }
-.blockr-otl-chap.chap-legal::before { border-top: 1px dashed var(--blockr-grey-300, #d1d5db); }
-.blockr-otl-chap.chap-hot::before { border-top: 2px solid var(--accent); }
-.blockr-otl-grow.chap-endlegal .blockr-otl-gsect,
-.blockr-otl-grow.chap-endhot .blockr-otl-gsect { position: relative; }
-.blockr-otl-grow.chap-endlegal .blockr-otl-gsect::after,
-.blockr-otl-grow.chap-endhot .blockr-otl-gsect::after { content: ""; position: absolute;
-                                                       left: -166px; right: 0; bottom: -5px;
-                                                       pointer-events: none; }
-.blockr-otl-grow.chap-endlegal .blockr-otl-gsect::after {
-  border-top: 1px dashed var(--blockr-grey-300, #d1d5db); }
-.blockr-otl-grow.chap-endhot .blockr-otl-gsect::after {
-  border-top: 2px solid var(--accent, #2563eb); }
-
-/* The empty-document hint. Aligned with the search box above it, not with
-   the section column: there are no rows to line up with, and the box is
-   what the hint points at. A fresh board opens on this, since the report
-   flag defaults off. */
-.blockr-otl-emptydoc { margin: 16px 0 4px 2px; font-size: 0.8125rem;
-                       font-style: italic;
-                       color: var(--blockr-grey-400, #9ca3af); }
-
-/* Placeholder for a block that has not reported an expression yet. */
-.blockr-otl-pending {
-  padding: 0.5rem 0.75rem;
-  font-size: 0.8125rem;
-  font-style: italic;
-  color: var(--bs-secondary-color, #6c757d);
-  opacity: 0.7;
+/* No overflow:hidden on the frame: it would become the scroll container
+   and the header would stop sticking. The header carries the rounding. */
+.blockr-otl-filehead {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 36px;
+  padding: 4px 6px 4px 12px;
+  box-sizing: border-box;
+  background: var(--blockr-color-bg-subtle);
+  border-bottom: 1px solid var(--blockr-color-border-default);
+  border-radius: var(--blockr-radius-lg) var(--blockr-radius-lg) 0 0;
 }
 
-/* Code view, presentation line: an activated block's cell ends with the
-   same line its qmd chunk ends with (report_call / renderer / variable,
-   see sect_output). Dimmed so the transform reads as the substance and
-   the exhibit call as its footer -- Output mode shows this line's
-   evaluated result. */
+.blockr-otl-filename {
+  font-family: var(--blockr-font-mono);
+  font-size: var(--blockr-font-size-xs);
+  color: var(--blockr-color-text-muted);
+}
+
+.blockr-otl-raw {
+  padding: 14px 16px;
+  font-size: var(--blockr-font-size-sm);
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--blockr-color-bg-field);
+  border-radius: 0 0 var(--blockr-radius-lg) var(--blockr-radius-lg);
+}
+
+/* downlit's wrapper paints its own background, which on the frame reads as
+   one more nested box; the frame owns the fill. */
+.blockr-otl-raw pre.chroma,
+.blockr-otl-fileblock pre.chroma {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+
+/* A presentation line (the exhibit call a chunk ends with), quieter than
+   the transform above it. */
 .blockr-otl-exline { opacity: 0.55; }
 .blockr-otl-exline pre,
 .blockr-otl-exline pre.chroma { margin: 0; }
 
-/* Output mode: the block body holds a rendered exhibit (flextable, plot,
-   table) instead of code, so drop the code cell's monospace wrapping and
-   let the exhibit size itself. The deck-builder view. */
+/* ---- rendered exhibits and their notes ---------------------------------- */
 
-/* The Code/Output strip rides in a conditionalPanel div, so the toolbar's
-   direct-child `> .shiny-input-container { margin: 0 }` never reaches its
-   form-group wrapper -- that leftover bottom margin is what floated the
-   strip above the switcher's centre line. Zero it here and match the
-   toolbar control height so both segmented strips share one baseline. */
-.blockr-otl-bodytoggle { display: inline-flex; align-items: center;
-  height: var(--otl-ctrl-h); margin-left: 8px; }
-.blockr-otl-bodytoggle .shiny-input-container { margin: 0; }
-/* Icon-only segments: square them off (the labelled switcher uses 12px
-   side padding for text) and centre the glyph. */
-.blockr-otl-bodytoggle .btn-group > .btn.radiobtn { padding: 0 9px; }
-.blockr-otl-bodyicon { display: inline-flex; align-items: center; }
-.blockr-otl-outwrap {
-  font-family: inherit;
-  white-space: normal;
-  padding: 0.35rem 0.25rem;
-  overflow-x: auto;
-}
 .blockr-otl-exhibit { max-width: 100%; }
-.blockr-otl-exhibit table { font-size: 0.8125rem; }
-.blockr-otl-outimg { display: block; border-radius: 4px; }
+.blockr-otl-exhibit table { font-size: var(--blockr-font-size-sm); }
+.blockr-otl-outimg { display: block; border-radius: var(--blockr-radius-sm); }
+
+.blockr-otl-pending,
 .blockr-otl-outnote {
-  padding: 0.5rem 0.75rem;
-  font-size: 0.8125rem;
+  padding: 8px 12px;
+  font-size: var(--blockr-font-size-sm);
   font-style: italic;
-  color: var(--bs-secondary-color, #6c757d);
-  opacity: 0.75;
+  color: var(--blockr-color-text-muted);
 }
-/* The version that wrote the note: small, quiet, and always there, so a
-   screenshot off a deployment says which build produced it. */
+
+/* The version that wrote the note, so a screenshot off a deployment says
+   which build produced it. */
 .blockr-otl-outver {
-  margin-top: 0.25rem;
-  font-size: 0.6875rem;
+  margin-top: 4px;
+  font-size: var(--blockr-font-size-xs);
   font-style: normal;
-  opacity: 0.6;
 }
-/* The R condition under the note's headline. Monospaced and wrapped: it is
-   an error message, often naming an upstream variable that never bound. */
+
+/* The R condition under the note's headline: an error message. */
 .blockr-otl-outerr {
-  margin-top: 0.2rem;
-  font-family: var(--bs-font-monospace, monospace);
+  margin-top: 4px;
+  font-family: var(--blockr-font-mono);
   font-style: normal;
-  font-size: 0.75rem;
+  font-size: var(--blockr-font-size-xs);
+  color: var(--blockr-color-text-danger);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-
-/* Gear + settings band (blockr.viz / blockr.dplyr settings-band pattern):
-   the gear sits at the toolbar's right edge; clicking it expands a
-   full-width, in-flow band under the toolbar (no popover, no overlay) so
-   the outline below simply moves down. Client-only toggle. */
-/* Gear + settings band: the blockr.dplyr selectors (.blockr-gear-btn,
-   .blockr-settings, __title / __grid / __field) verbatim -- the shared
-   layer bound for blockr.ui -- so the outline's gear matches every other
-   block's. Rules copied from blockr.dplyr's blockr-blocks.css +
-   settings-band.css; the only local touch is fitting the gear to the
-   toolbar control height. When the shared layer lands in blockr.ui this
-   block is deleted and the classes come from there.
-
-   EVERY selector here is scoped to .blockr-otl-panel. Unscoped, they are
-   page-wide restatements of classes every block also uses, and this sheet
-   loads AFTER blockr-blocks.css -- so the copy won. The damage was the
-   local touch: `width/height: var(--otl-ctrl-h)` with the variable defined
-   only on .blockr-otl-panel is invalid at computed-value time everywhere
-   else, so it fell back to `auto` and collapsed each block's 26px gear to
-   the bare 14px icon (with padding:0 taken along for the ride). Blocks that
-   size their gear through a compound selector -- chart/table/rank via
-   `.dd-card .blockr-gear-header .blockr-gear-btn` -- outranked the copy and
-   were the ones that still looked right. Keep the scope. */
-.blockr-otl-panel .blockr-gear-btn { display: inline-flex; align-items: center;
-  justify-content: center; height: var(--otl-ctrl-h); width: var(--otl-ctrl-h);
-  margin-left: 4px; flex-shrink: 0; padding: 0; cursor: pointer;
-  background: transparent; color: var(--blockr-grey-400, #9ca3af);
-  border: 1px solid var(--blockr-color-border, #e5e7eb); border-radius: 4px;
-  transition: color .15s ease, border-color .15s ease, background .15s ease; }
-.blockr-otl-panel .blockr-gear-btn:hover,
-.blockr-otl-panel .blockr-gear-btn.blockr-gear-active {
-  color: var(--blockr-color-primary, #2563eb);
-  border-color: rgba(37, 99, 235, 0.3); background: rgba(37, 99, 235, 0.04); }
-.blockr-otl-panel .blockr-gear-btn.blockr-gear-active {
-  background: rgba(37, 99, 235, 0.08); }
-
-.blockr-otl-panel .blockr-settings { display: none; position: relative;
-  margin: 0 0 10px;
-  border: 1px solid var(--blockr-color-border, #e5e7eb); border-radius: 8px;
-  padding: 12px 14px 16px; background: #fff; box-sizing: border-box; }
-.blockr-otl-panel .blockr-settings.blockr-settings--open { display: flex;
-  flex-wrap: wrap; align-items: flex-start; gap: 0 14px; }
-.blockr-otl-panel .blockr-settings--beak.blockr-settings--open::before {
-  content: ""; position: absolute; top: -6px; right: 13px;
-  width: 10px; height: 10px; background: #fff;
-  border-left: 1px solid var(--blockr-color-border, #e5e7eb);
-  border-top: 1px solid var(--blockr-color-border, #e5e7eb);
-  transform: rotate(45deg); }
-
-.blockr-otl-panel .blockr-settings__title { flex: 1 1 100%;
-  font-size: var(--blockr-font-size-xs, 0.75rem); font-weight: 500;
-  color: var(--blockr-color-text-muted, #6b7280); text-transform: uppercase;
-  letter-spacing: 0.05em; margin-bottom: 10px; }
-.blockr-otl-panel .blockr-settings__title:not(:first-child) { margin-top: 6px; }
-.blockr-otl-panel .blockr-settings__grid { flex: 1 1 100%; display: flex;
-  flex-wrap: wrap; align-items: flex-end; gap: 6px 12px; margin-bottom: 6px; }
-.blockr-otl-panel .blockr-settings__field { flex: 1 1 190px; min-width: 0;
-  display: flex; flex-direction: column; }
-.blockr-otl-panel .blockr-settings__field--full { flex: 1 1 100%; }
-.blockr-otl-panel .blockr-settings__field > label {
-  font-size: var(--blockr-font-size-xs, 0.75rem);
-  color: var(--blockr-grey-700, #374151); margin: 0 0 4px; }
-.blockr-otl-panel .blockr-settings__field .shiny-input-container {
-  margin: 0; width: 100% !important; }
-.blockr-otl-panel .blockr-settings select.form-control {
-  height: 34px; font-size: 0.8125rem; color: var(--blockr-grey-700, #374151);
-  border: 1px solid var(--blockr-color-border, #e5e7eb); border-radius: 6px;
-  box-shadow: none; padding: 0 9px; }
-.blockr-otl-panel .blockr-settings__hint { font-size: 0.7rem;
-  color: var(--blockr-grey-400, #9ca3af); margin-top: 4px; }
-
-/* The report title as the top-level chapter: document title on the left,
-   board-wide include / exclude on the right, revealed on hover of the row
-   (mirror of the per-chapter actions). The master rules every block switch. */
-.blockr-otl-doctitle-row { grid-column: 1 / -1; display: flex;
-  align-items: baseline; gap: 12px; padding: 4px 11px 14px; margin-bottom: 4px;
-  border-bottom: 1px solid var(--blockr-color-border, #e5e7eb); }
-.blockr-otl-doctitle { font-size: 1.35rem; font-weight: 700;
-  letter-spacing: -0.01em; color: var(--blockr-grey-900, #111827);
-  cursor: text; }
-/* Actions inline right after the title, revealed on hover -- same treatment
-   as the per-chapter include/exclude actions (.blockr-otl-chapacts). */
-.blockr-otl-docacts { display: inline-flex; align-items: center; gap: 12px;
-  opacity: 0; transition: opacity 0.12s ease; }
-.blockr-otl-doctitle-row:hover .blockr-otl-docacts { opacity: 1; }
-.blockr-otl-bulk { font-size: 0.75rem; color: var(--blockr-grey-400, #9ca3af);
-  cursor: pointer; white-space: nowrap; transition: color 0.12s ease; }
-.blockr-otl-bulk:hover { color: var(--blockr-blue-600, #2563eb); }

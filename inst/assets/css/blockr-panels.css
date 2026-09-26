@@ -1,0 +1,508 @@
+/* The report and slides panels and the slide block: what they share on top
+   of blockr.ui's controls (controls_dep()): the header row, the name that
+   renames in place, buttons with words, list rows with a block's mark, the
+   drop caret. Meaning tokens only (blockr.ui design system). */
+
+.blockr-otl-pnl {
+  padding: 12px 16px;
+  font-size: var(--blockr-font-size-base);
+  color: var(--blockr-color-text-default);
+}
+
+/* ---- the header row ------------------------------------------------------
+   The name on the left, taking the width the tools leave and wrapping down;
+   the tools on the right, 26px, gear last. */
+/* A name squeezed below 8em lets the tools drop to a line of their own
+   (a narrow sidebar), rather than breaking the name letter by letter. */
+.blockr-otl-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px;
+  min-height: var(--blockr-control-h-xs);
+  margin-bottom: 12px;
+}
+
+.blockr-otl-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+/* ---- renaming in place ---------------------------------------------------
+   Plain text at rest, the hover wash (radius 6, 4px 8px, pulled back by the
+   padding so the text does not move); a field at its own size while
+   editing. */
+.blockr-otl-name {
+  flex: 1 1 8em;
+  min-width: 0;
+  margin: -4px -8px;
+  padding: 4px 8px;
+  border-radius: var(--blockr-radius-md);
+  font-size: var(--blockr-font-size-lg);
+  font-weight: var(--blockr-font-weight-semibold);
+  line-height: 1.35;
+  color: var(--blockr-color-text-default);
+  overflow-wrap: break-word;
+  transition: background-color var(--blockr-transition);
+}
+
+.blockr-otl-name:hover:not(.is-editing) {
+  background: var(--blockr-color-bg-hover);
+}
+
+.blockr-otl-name:focus-visible {
+  outline: var(--blockr-focus-outline);
+  outline-offset: var(--blockr-focus-offset);
+}
+
+.blockr-otl-name.is-empty {
+  color: var(--blockr-color-text-muted);
+}
+
+.blockr-otl-name.is-editing {
+  padding: 0;
+  margin: -4px -8px;
+}
+
+.blockr-otl-name__input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 3px 7px;
+  font: inherit;
+  color: var(--blockr-color-text-default);
+  background: var(--blockr-color-bg-surface);
+  border: 1px solid var(--blockr-color-border-accent);
+  border-radius: var(--blockr-radius-md);
+  box-shadow: var(--blockr-focus-ring);
+  outline: none;
+}
+
+.blockr-otl-name__input.is-invalid {
+  border-color: var(--blockr-color-border-danger);
+}
+
+.blockr-otl-name__error {
+  margin: 4px 8px 0;
+  font-size: var(--blockr-font-size-xs);
+  font-weight: var(--blockr-font-weight-normal);
+  color: var(--blockr-color-text-danger);
+}
+
+/* ---- buttons with words --------------------------------------------------
+   Main (the accent tint, at most one per view), secondary, quiet; 26px (xs)
+   or 30px (s). There is no solid accent button. */
+.blockr-otl-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  font: inherit;
+  font-weight: var(--blockr-font-weight-medium);
+  white-space: nowrap;
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  transition: background-color var(--blockr-transition),
+              border-color var(--blockr-transition),
+              color var(--blockr-transition);
+}
+
+.blockr-otl-btn--xs {
+  height: var(--blockr-control-h-xs);
+  padding: 0 9px;
+  font-size: var(--blockr-font-size-xs);
+  border-radius: var(--blockr-radius-sm);
+}
+
+.blockr-otl-btn--s {
+  height: var(--blockr-control-h-sm);
+  padding: 0 11px;
+  font-size: var(--blockr-font-size-sm);
+  border-radius: var(--blockr-radius-md);
+}
+
+.blockr-otl-btn--main {
+  color: var(--blockr-color-text-accent);
+  background: var(--blockr-color-bg-accent-subtle);
+  border-color: var(--blockr-color-border-accent-subtle);
+}
+
+.blockr-otl-btn--main:hover {
+  background: var(--blockr-color-bg-accent-subtle-hover);
+  border-color: var(--blockr-color-border-accent);
+}
+
+.blockr-otl-btn--secondary {
+  color: var(--blockr-color-text-default);
+  background: var(--blockr-color-bg-surface);
+  border-color: var(--blockr-color-border-default);
+}
+
+.blockr-otl-btn--secondary:hover {
+  background: var(--blockr-color-bg-hover);
+  border-color: var(--blockr-color-border-strong);
+}
+
+.blockr-otl-btn--quiet {
+  color: var(--blockr-color-text-muted);
+  padding: 0 8px;
+}
+
+.blockr-otl-btn--quiet:hover {
+  color: var(--blockr-color-text-default);
+  background: var(--blockr-color-bg-hover);
+}
+
+.blockr-otl-btn:focus-visible {
+  outline: var(--blockr-focus-outline);
+  outline-offset: var(--blockr-focus-offset);
+}
+
+.blockr-otl-btn:disabled {
+  color: var(--blockr-color-text-disabled);
+  background: transparent;
+  border-color: var(--blockr-color-border-default);
+  cursor: default;
+}
+
+.blockr-otl-btn__icon {
+  display: inline-flex;
+}
+
+.blockr-otl-btn--xs .blockr-otl-btn__icon svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* "Add block" under the list: a quiet button whose words start on the
+   rows' edge. */
+.blockr-otl-add {
+  margin: 6px 0 0 -2px;
+}
+
+/* ---- list rows -------------------------------------------------------------
+   Plain rows with a hover fill, as in a menu: the whole row drags (the grab
+   cursor), Alt+Up / Alt+Down moves the focused one. Number, the block's
+   mark, its name, then the row's tools. */
+.blockr-otl-list {
+  position: relative;
+}
+
+.blockr-otl-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 4px 4px 4px 6px;
+  box-sizing: border-box;
+  border-radius: var(--blockr-radius-md);
+  cursor: grab;
+  user-select: none;
+  transition: background-color var(--blockr-transition);
+}
+
+.blockr-otl-row:hover {
+  background: var(--blockr-color-bg-hover);
+}
+
+.blockr-otl-row:focus-visible {
+  outline: var(--blockr-focus-outline);
+  outline-offset: calc(-1 * var(--blockr-focus-offset));
+}
+
+.blockr-otl-row.is-dragging {
+  opacity: 0.45;
+  cursor: grabbing;
+}
+
+.blockr-otl-row__num {
+  flex: 0 0 14px;
+  text-align: right;
+  font-size: var(--blockr-font-size-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--blockr-color-text-muted);
+}
+
+.blockr-otl-row__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* No muted text on a hover fill. */
+.blockr-otl-row:hover .blockr-otl-row__num,
+.blockr-otl-row:hover .blockr-tool {
+  color: var(--blockr-color-text-default);
+}
+
+/* What a row's switches are set to, at rest: small muted glyphs. */
+.blockr-otl-row__state {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  color: var(--blockr-color-text-muted);
+}
+
+.blockr-otl-row__state:empty {
+  display: none;
+}
+
+/* The row's tools lie over its end on hover or keyboard focus, on the
+   row's own hover fill, so a narrow panel keeps the name readable at rest.
+   Remove turns red on its own hover. */
+.blockr-otl-row__tools {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  display: flex;
+  align-items: center;
+  padding-left: 6px;
+  border-radius: var(--blockr-radius-md);
+  background-color: var(--blockr-color-bg-surface);
+  background-image: linear-gradient(var(--blockr-color-bg-hover), var(--blockr-color-bg-hover));
+  transform: translateY(-50%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--blockr-transition);
+}
+
+.blockr-otl-row:hover .blockr-otl-row__tools,
+.blockr-otl-row:focus-within .blockr-otl-row__tools,
+.blockr-otl-row.is-menu-open .blockr-otl-row__tools {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.blockr-otl-row .blockr-otl-row__rm:hover {
+  color: var(--blockr-color-text-danger);
+}
+
+/* A pressed tool: on, in the accent tint. */
+.blockr-tool.blockr-otl-press[aria-pressed="true"],
+.blockr-otl-row:hover .blockr-tool.blockr-otl-press[aria-pressed="true"] {
+  color: var(--blockr-color-text-accent);
+  background: var(--blockr-color-bg-accent-subtle);
+  border-color: var(--blockr-color-border-accent-subtle);
+}
+
+.blockr-tool.blockr-otl-press[aria-pressed="true"]:hover {
+  background: var(--blockr-color-bg-accent-subtle-hover);
+  border-color: var(--blockr-color-border-accent);
+}
+
+/* A block's mark in a row: 24px, its glyph in the category colour on an 18%
+   tint of it, as in blockr.ui's menus. */
+.blockr-otl-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--blockr-radius-md);
+  color: var(--blockr-outline-mark, var(--blockr-color-text-muted));
+  background: color-mix(in srgb, var(--blockr-outline-mark, var(--blockr-color-text-muted)) 18%, var(--blockr-color-bg-surface));
+}
+
+.blockr-otl-mark svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* The drop caret: a 2px line with an open notch, in the gap the drop
+   targets. One per list, moved by the panel's script. */
+.blockr-otl-caret {
+  position: absolute;
+  left: 8px;
+  right: 0;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--blockr-color-border-accent);
+  transform: translateY(-50%);
+  z-index: 5;
+  pointer-events: none;
+}
+
+.blockr-otl-caret::before {
+  content: "";
+  position: absolute;
+  left: -8px;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  box-sizing: border-box;
+  transform: translateY(-50%);
+  border: 2px solid var(--blockr-color-border-accent);
+  border-radius: 50%;
+  background: var(--blockr-color-bg-surface);
+}
+
+.blockr-otl-caret[hidden] {
+  display: none;
+}
+
+/* ---- fields ----------------------------------------------------------------
+   blockr.ui draws them; what is left: a field that a layout or a format
+   hides, numbers without spinner arrows, several lines. */
+.blockr-settings__field[hidden] {
+  display: none;
+}
+
+.blockr-otl-field input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.blockr-otl-field input[type="number"]::-webkit-inner-spin-button,
+.blockr-otl-field input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.blockr-otl-textarea {
+  display: block;
+  font-family: inherit;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.blockr-otl-field.blockr-segmented {
+  width: 100%;
+}
+
+.blockr-otl-field.blockr-segmented--xs {
+  width: auto;
+}
+
+.blockr-segmented__seg svg {
+  display: block;
+  margin: 0 auto;
+}
+
+/* ---- the tray, restated for these panels ----------------------------------
+   blockr.ui draws the gear tray (blockr-settings-band.css). An older,
+   unscoped copy of those rules still ships with blockr.ggplot
+   (settings-band.css: a white bordered band, a flex grid, 13px labels), and
+   on a board with a ggplot block it loads after blockr.ui's and wins. These
+   rules put blockr.ui's values back inside the three surfaces this package
+   draws; they go once blockr.ggplot loads the tray from blockr.ui. */
+:is(.blockr-otl-pnl, .slb-root) .blockr-settings {
+  border: none;
+  border-radius: var(--blockr-radius-lg);
+  padding: 12px 14px 16px;
+  margin-bottom: 16px;
+  background: var(--blockr-color-bg-subtle);
+  container-type: inline-size;
+}
+
+[data-bs-theme="dark"] :is(.blockr-otl-pnl, .slb-root) .blockr-settings {
+  background: var(--blockr-color-bg-page);
+}
+
+:is(.blockr-otl-pnl, .slb-root) .blockr-settings--beak.blockr-settings--open::before {
+  background: inherit;
+  border: none;
+}
+
+:is(.blockr-otl-pnl, .slb-root) .blockr-settings__title {
+  font-weight: var(--blockr-font-weight-semibold);
+}
+
+:is(.blockr-otl-pnl, .slb-root) .blockr-settings__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: end;
+  gap: 16px 12px;
+}
+
+:is(.blockr-otl-pnl, .slb-root) .blockr-settings__field {
+  grid-column: span 2;
+  min-width: 0;
+}
+
+:is(.blockr-otl-pnl, .slb-root) .blockr-settings__field--small {
+  grid-column: span 1;
+}
+
+:is(.blockr-otl-pnl, .slb-root) .blockr-settings__field--full {
+  grid-column: 1 / -1;
+}
+
+@container (max-width: 289.98px) {
+  :is(.blockr-otl-pnl, .slb-root) .blockr-settings__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  :is(.blockr-otl-pnl, .slb-root) .blockr-settings__field {
+    grid-column: 1 / -1;
+  }
+}
+
+@container (min-width: 560px) {
+  :is(.blockr-otl-pnl, .slb-root) .blockr-settings__grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@container (min-width: 840px) {
+  :is(.blockr-otl-pnl, .slb-root) .blockr-settings__grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+}
+
+@container (min-width: 1110px) {
+  :is(.blockr-otl-pnl, .slb-root) .blockr-settings__grid {
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+  }
+}
+
+:is(.blockr-otl-pnl, .slb-root) .blockr-label {
+  font-size: var(--blockr-font-size-xs);
+  font-weight: var(--blockr-font-weight-normal);
+  color: var(--blockr-color-text-muted);
+  margin-bottom: 4px;
+}
+
+:is(.blockr-otl-pnl, .slb-root) .blockr-checkbox {
+  gap: 9px;
+  font-size: var(--blockr-font-size-base);
+  color: var(--blockr-color-text-default);
+}
+
+:is(.blockr-otl-pnl, .slb-root) .blockr-checkbox__box {
+  border-color: var(--blockr-color-border-strong);
+  background: var(--blockr-color-bg-surface);
+  color: var(--blockr-color-text-on-accent);
+}
+
+:is(.blockr-otl-pnl, .slb-root) .blockr-checkbox:hover .blockr-checkbox__box {
+  border-color: var(--blockr-color-text-muted);
+}
+
+:is(.blockr-otl-pnl, .slb-root) .blockr-checkbox input:checked + .blockr-checkbox__box {
+  background: var(--blockr-color-bg-accent);
+  border-color: var(--blockr-color-bg-accent);
+}
+
+:is(.blockr-otl-pnl, .slb-root) .blockr-checkbox input:focus-visible + .blockr-checkbox__box {
+  box-shadow: none;
+  outline: var(--blockr-focus-outline);
+  outline-offset: var(--blockr-focus-offset);
+}
+
+/* A one-line field is 42px, border included (blockr.ui's min-height lets
+   the line height push it to 43). */
+:is(.blockr-otl-pnl, .slb-root) .blockr-otl-field > input.blockr-text-input {
+  height: var(--blockr-control-h);
+  padding-top: 0;
+  padding-bottom: 0;
+}

@@ -1,1516 +1,442 @@
+# The UI the report and slides panels and the slide block share, built from
+# R on blockr.ui's design system: the fields of a gear tray, buttons, block
+# marks and the icons they carry. blockr-panels.js binds the fields to Shiny
+# (see its header for why a field reports NULL until it is used or set).
+
+# The report's code views: the file frame and the syntax colours.
 outline_dep <- function() {
   htmlDependency(
     "blockr-outline",
     pkg_version(),
     src = pkg_file("assets", "css"),
-    stylesheet = c("blockr-outline.css", "syntax-highlight.css", "md-editor.css")
+    stylesheet = c("blockr-outline.css", "syntax-highlight.css")
   )
 }
 
-# The Milkdown WYSIWYG markdown editor, vendored from blockr.md's
-# feat/milkdown-editor prototype (commit d72f9e2; markdown stays canonical,
-# auto-inits .blockr-md-editor[data-input-id] nodes via MutationObserver,
-# debounced commit to the named Shiny input). Recorded follow-up: extract
-# it as a shared markdown-input component consumed by blockr.md, the
-# prose-block and this package, instead of three vendored copies.
-md_editor_dep <- function() {
-  htmlDependency(
-    "blockr-outline-md-editor",
-    pkg_version(),
-    src = pkg_file("js"),
-    script = "md-editor.js"
+# blockr.ui's controls, then this package's binding and shared styles.
+panels_dep <- function() {
+  tagList(
+    blockr.ui::controls_dep(),
+    htmlDependency(
+      "blockr-outline-panels",
+      pkg_version(),
+      src = pkg_file("assets"),
+      script = "js/blockr-panels.js",
+      stylesheet = "css/blockr-panels.css",
+      all_files = FALSE
+    )
   )
 }
 
-# Delegated client logic: hover pairs a row's chip and section; clicks are
-# routed by target -- switch = include-in-report toggle, pencil = edit
-# description, anything else = reveal the block's dock panel (dag-node
-# semantics). Chips are draggable to reorder (drop before a target row;
-# drop on the last row's lower half appends). Double-clicking a block name
-# turns it into an inline rename input committing on Enter/blur (Escape
-# cancels), matching the text-commit decision record. Delegation on
-# document stays valid across renderUI re-renders; the script is part of
-# the static extension UI and runs once.
-outline_js <- function(ns) {
-  # The id constants are the only dynamic part; the body stays a plain
-  # string (sprintf caps its format at 8192 chars).
-  consts <- sprintf(
+# ---- fields ---------------------------------------------------------------
+
+# A field in the gear tray's grid: its label, 12px muted and 4px above, and
+# the control. `size` is the grid's: small takes one column, large two, full
+# the row.
+otl_field <- function(label, control, size = c("large", "small", "full"),
+                      ...) {
+
+  size <- match.arg(size)
+
+  div(
+    class = paste(
+      "blockr-settings__field",
+      if (!identical(size, "large")) paste0("blockr-settings__field--", size)
+    ),
+    ...,
+    if (!is.null(label)) div(class = "blockr-label", label),
+    control
+  )
+}
+
+# A text or number field that commits on Enter or blur.
+otl_text_input <- function(id, label, value = "", placeholder = NULL,
+                           type = c("text", "number"), min = NULL,
+                           step = NULL) {
+
+  type <- match.arg(type)
+
+  div(
+    id = id,
+    class = "blockr-otl-field blockr-commit-field",
+    `data-kind` = type,
+    tags$input(
+      type = type,
+      class = "blockr-text-input",
+      value = value,
+      placeholder = placeholder,
+      min = min,
+      step = step,
+      `aria-label` = label,
+      autocomplete = "off",
+      spellcheck = "false"
+    )
+  )
+}
+
+otl_text_field <- function(id, label, value = "", placeholder = NULL,
+                           size = "large", ...) {
+  otl_field(
+    label,
+    otl_text_input(id, label, value, placeholder, ...),
+    size = size
+  )
+}
+
+# Several lines: commits on blur, or Ctrl/Cmd+Enter.
+otl_textarea_field <- function(id, label, value = "", rows = 3L,
+                               placeholder = NULL) {
+  otl_field(
+    label,
+    div(
+      id = id,
+      class = "blockr-otl-field",
+      `data-kind` = "textarea",
+      tags$textarea(
+        class = "blockr-text-input blockr-otl-textarea",
+        rows = rows,
+        placeholder = placeholder,
+        `aria-label` = label,
+        value
+      )
+    ),
+    size = "full"
+  )
+}
+
+# Four or more values: Blockr.Select. `choices` is named by label, as in
+# selectInput(); the list shows the labels, the input reports the values.
+otl_select_field <- function(id, label, choices, selected) {
+  otl_field(
+    label,
+    div(
+      id = id,
+      class = "blockr-otl-field",
+      `data-kind` = "select",
+      `data-options` = otl_options_json(choices),
+      `data-value` = selected
+    )
+  )
+}
+
+otl_options_json <- function(choices) {
+
+  labs <- names(choices)
+
+  if (is.null(labs)) {
+    labs <- rep("", length(choices))
+  }
+
+  q <- function(x) {
+    paste0("\"", gsub("([\"\\\\])", "\\\\\\1", x), "\"")
+  }
+
+  paste0(
+    "[",
     paste0(
-      "var TOGGLE = '%s', OPEN = '%s', MOVE = '%s', EDIT = '%s', ",
-      "REN = '%s', RENSTACK = '%s', SAVE = '%s', CANCEL = '%s', ",
-      "ADD = '%s', RM = '%s', CHAP = '%s', NEWCHAP = '%s', ",
-      "TOSTACK = '%s', MOVECHAP = '%s', GEAR = '%s', SETTINGS = '%s', ",
-      "PANEL = '%s', VISIBLE = '%s', BULK = '%s', RENTITLE = '%s', ",
-      "HIDE = '%s', INCLUDE = '%s', SHOWCODE = '%s';"
+      "{\"value\":", q(unname(choices)), ",\"label\":", q(labs), "}",
+      collapse = ","
     ),
-    ns("outline_toggle"),
-    ns("outline_open"),
-    ns("outline_move"),
-    ns("outline_edit"),
-    ns("outline_rename"),
-    ns("outline_rename_stack"),
-    ns("desc_save"),
-    ns("desc_cancel"),
-    ns("outline_add"),
-    ns("outline_rm"),
-    ns("outline_chapter"),
-    ns("outline_newchapter"),
-    ns("outline_tostack"),
-    ns("outline_movechap"),
-    ns("otl_gear"),
-    ns("otl_settings"),
-    ns("otl_panel"),
-    ns("otl_visible"),
-    ns("outline_bulk"),
-    ns("outline_rename_title"),
-    ns("outline_hide"),
-    ns("otl_include"),
-    ns("otl_show_code")
-  )
-
-  tags$script(HTML(paste0(
-    "$(function() {",
-    consts,
-    "
-      // Incremental code updates: editing a block value changes only the
-      // generated code, never the outline's structure, so the server
-      // pushes the changed chunks instead of re-rendering the whole
-      // outline. Keeps the DOM (and any open editor, scroll and hover
-      // state) intact. Structural changes still go through renderUI.
-      // Latest code markup per node id. Held client-side because a push
-      // can arrive before the node it targets exists: at startup the
-      // server projects again as blocks report in, and that second push
-      // can beat the first renderUI insert. Applying blind would drop it
-      // silently with nothing to re-send it, leaving cells stuck on
-      // their placeholder. Same re-apply pattern as collapsedStacks.
-      var codeById = {};
-      function applyCode() {
-        Object.keys(codeById).forEach(function(id) {
-          var el = document.getElementById(id);
-          if (!el) return;
-          // Output mode: the cell holds an exhibit painted by renderUI
-          // (class set server-side), not code -- applying the cached code
-          // markup would stomp it. Pushes still land in codeById, so the
-          // cache stays current and flipping back to Code replays cleanly.
-          if (el.classList.contains('blockr-otl-outwrap')) return;
-          if (el.innerHTML !== codeById[id]) el.innerHTML = codeById[id];
-        });
-      }
-      Shiny.addCustomMessageHandler('blockr-outline-code', function(msg) {
-        (msg.items || []).forEach(function(it) { codeById[it.id] = it.html; });
-        applyCode();
-      });
-
-      // Row-level push: swap the rows that changed, leave the rest of the
-      // document alone. Clicking a row activates one block -- one row goes
-      // from condensed to code -- and re-rendering the whole outline for
-      // that read as a blank-then-repaint flash, on top of throwing away
-      // scroll and hover state. The row IS a self-contained grid element
-      // (div.blockr-otl-grow), so replacing it in place is enough.
-      //
-      // Every interaction in this file is delegated from `document`, so a
-      // swapped row keeps working with no rebinding. Rows carrying a
-      // Shiny-bound widget (the markdown editor) never travel this way --
-      // an open editor puts the outline in the full-render path, see
-      // outline_layout_key.
-      Shiny.addCustomMessageHandler('blockr-outline-rows', function(msg) {
-        var items = msg.items || [];
-        if (!items.length) return;
-        // Matched on the dataset rather than an attribute selector: a
-        // block id is free-form and may carry characters that would need
-        // escaping inside one.
-        var byId = {};
-        document.querySelectorAll('.blockr-otl-grow').forEach(function(el) {
-          byId[el.dataset.blk] = el;
-        });
-        // No local did-it-change check: the browser re-serializes
-        // outerHTML its own way (attribute order, indentation), so it would
-        // never match the server markup and would only ever cost a
-        // comparison. The server already sends nothing but changed rows.
-        items.forEach(function(it) {
-          var el = byId[it.id];
-          if (el) el.outerHTML = it.html;
-        });
-        // The row markup carries the code cell it was built with, so the
-        // cache has to follow it -- otherwise a later applyCode() would
-        // repaint the cell from a stale entry.
-        applyCode();
-      });
-
-      // Fire the real download. The visible Download button is an action
-      // button: on a deferred board the server first has to construct the
-      // reported blocks and wait for their code, so the browser-initiated
-      // GET a plain download button issues would race the render. The
-      // server sends this message once the document is complete.
-      //
-      // Not a.click(): the shiny-download-link is target=_blank, and by
-      // the time this message arrives (a websocket round trip later) the
-      // user activation from the button click has expired -- browsers
-      // popup-block the programmatic _blank click and the download dies
-      // silently. Navigate a same-tab throwaway anchor instead. No
-      // download attribute: it would override the handler's
-      // Content-Disposition filename with one derived from the URL; the
-      // attachment disposition alone already makes this a download, not
-      // a navigation.
-      Shiny.addCustomMessageHandler('blockr-outline-download', function(msg) {
-        var a = document.getElementById(msg.id);
-        if (!a) return;
-        var href = a.getAttribute('href');
-        if (!href || href === '#') return;
-        var tmp = document.createElement('a');
-        tmp.href = a.href;
-        document.body.appendChild(tmp);
-        tmp.click();
-        tmp.remove();
-      });
-
-      // Report whether the outline panel is on screen, so the server can
-      // gate its (O(n^2)) projection: idle while the panel is closed, live
-      // when it is shown. The dock parks an unshown extension in an
-      // offcanvas that hides it with `visibility: hidden` -- NOT
-      // display:none -- and moves the DOM into a dock panel when shown. So
-      // IntersectionObserver is no use (it ignores visibility:hidden); the
-      // reliable test is the visibility CSS property plus a client-rect
-      // check (which also catches display:none / detached). A light poll
-      // (cheap getComputedStyle, only pushes the input on CHANGE) covers
-      // the offcanvas move, dockview tab switches and view changes alike.
-      // Seeded server-side as TRUE, so a broken poll degrades to the old
-      // always-on cost rather than a blank panel.
-      (function() {
-        var last = null;
-        function tick() {
-          // Guard against Shiny not being initialised yet: the immediate
-          // tick() below runs at DOM ready, which can beat Shiny's own
-          // ready handler, so Shiny.setInputValue is not a function yet.
-          // Calling it there threw and aborted the whole outline_js body,
-          // taking every handler defined AFTER this poll (gear, drag, and
-          // the OPEN / ADD / chapter click handlers) with it -- the outline
-          // rendered but was completely inert. Skip until Shiny is up; the
-          // setInterval keeps trying.
-          if (!(window.Shiny && Shiny.setInputValue)) return;
-          // Resolve the panel inside the tick, not once at setup: at DOM
-          // ready the dock may not have mounted / moved the extension node
-          // yet, so a setup-time lookup can miss it and never recover. A
-          // per-tick lookup self-heals.
-          var panel = document.getElementById(PANEL);
-          if (!panel) return;
-          var vis = getComputedStyle(panel).visibility !== 'hidden' &&
-                    panel.getClientRects().length > 0;
-          if (vis === last) return;
-          last = vis;
-          Shiny.setInputValue(VISIBLE, vis, {priority: 'event'});
-        }
-        setInterval(tick, 400);
-        tick();
-      })();
-
-      // Gear toggles the settings band. Client-only, like the collapse:
-      // opening a settings panel is not board state, so no round trip.
-      var gear = document.getElementById(GEAR);
-      var settings = document.getElementById(SETTINGS);
-      if (gear && settings) {
-        gear.addEventListener('click', function() {
-          var open = settings.classList.toggle('blockr-settings--open');
-          gear.classList.toggle('blockr-gear-active', open);
-        });
-      }
-
-      var dragId = null;
-      var openTimer = null;
-      // Collapse is CLIENT-ONLY: no server round trip, no redraw. The set
-      // survives renderUI re-renders via the shiny:value re-apply below.
-      var collapsedStacks = new Set();
-      function applyCollapsed() {
-        document.querySelectorAll('.blockr-otl-chap[data-stack]')
-          .forEach(function(ch) {
-            ch.classList.toggle(
-              'collapsed', collapsedStacks.has(ch.dataset.stack)
-            );
-          });
-        document.querySelectorAll(
-          '.blockr-otl-grow[data-stack], .blockr-otl-introrow[data-stack]'
-        ).forEach(function(el) {
-          el.classList.toggle(
-            'blockr-otl-hidden', collapsedStacks.has(el.dataset.stack)
-          );
-        });
-      }
-      // ---- search: one box over the whole board -------------------------
-      // The catalogue (every block, the listed ones first) is pushed by the
-      // server; the menu is rendered HERE so the input never re-renders and
-      // never loses focus mid-query. A listed block is a \"go to\" -- its row
-      // is in the DOM -- and an unlisted one an \"add\", which writes
-      // otl_include, the same input the old include picker fed. The menu
-      // stays open after an add so building a document is type, Enter,
-      // type, Enter.
-      //
-      // The rows ARE the block browser's rows: same classes, same
-      // stylesheet (blockr.dock ships sidebar-block.css and the dock
-      // pre-renders the browser sidebar on every board, so it is already on
-      // the page). Picking a block looks the same everywhere in the app,
-      // and this file owns no row styling. Two deliberate divergences: the
-      // second line is the DESCRIPTION rather than the package name (on a
-      // report board that is what tells two similar tables apart), and the
-      // package pill carries the \"runs\" marker instead.
-      // The icon markup, keyed by block class and shipped once beside the
-      // catalogue: an inline SVG is up to 1.4KB and a board repeats each of
-      // them once per block of that type.
-      var catalog = [];
-      var icons = {};
-      var hot = 0;
-
-      function searchRoot() {
-        return document.querySelector('.blockr-otl-search');
-      }
-      function searchInput() {
-        return document.querySelector('.blockr-otl-searchinput');
-      }
-      function searchQuery() {
-        var inp = searchInput();
-        return (inp && inp.value ? inp.value : '').trim().toLowerCase();
-      }
-      function esc(s) {
-        return String(s == null ? '' : s).replace(/[&<>]/g, function(c) {
-          return {'&': '&amp;', '<': '&lt;', '>': '&gt;'}[c];
-        });
-      }
-      // Mark the matched substring, on escaped text.
-      function mark(text, q) {
-        var t = String(text == null ? '' : text);
-        if (!q) return esc(t);
-        var i = t.toLowerCase().indexOf(q);
-        if (i < 0) return esc(t);
-        return esc(t.slice(0, i)) + '<mark>' + esc(t.slice(i, i + q.length)) +
-          '</mark>' + esc(t.slice(i + q.length));
-      }
-      // Match on everything the entry shows plus the id, which is what
-      // disambiguates two blocks carrying the same name.
-      function searchHits(q) {
-        return catalog.filter(function(b) {
-          if (!q) return true;
-          return (b.name + ' ' + b.desc + ' ' + b.chapter + ' ' + b.id)
-            .toLowerCase().indexOf(q) >= 0;
-        });
-      }
-      function cardHtml(b, q, idx) {
-        var meta = [];
-        if (b.chapter) meta.push(mark(b.chapter, q));
-        meta.push(b.desc ? mark(b.desc, q) : esc(b.id));
-        return '<div class=\"blockr-block-browser-card\" data-blk=\"' +
-          esc(b.id) + '\" data-idx=\"' + idx + '\" data-listed=\"' +
-          (b.listed ? '1' : '0') + '\">' +
-          '<div class=\"blockr-block-browser-card-header\">' +
-            '<span class=\"blockr-block-browser-card-icon\">' +
-              (icons[b.icon_key] || '') + '</span>' +
-            '<div class=\"blockr-block-browser-card-body\">' +
-              '<div class=\"blockr-block-browser-card-titles\">' +
-                '<span class=\"blockr-block-browser-card-name\">' +
-                  mark(b.name, q) + '</span>' +
-                (b.runs ?
-                  '<span class=\"blockr-block-browser-card-package\">' +
-                  'code only</span>' : '') +
-                '<span class=\"blockr-otl-optact\">' +
-                  (b.listed ? 'Go to' : 'Add') + '</span>' +
-              '</div>' +
-              '<p class=\"blockr-otl-optdesc\">' + meta.join(' \\u00b7 ') +
-                '</p>' +
-            '</div>' +
-          '</div>' +
-        '</div>';
-      }
-      function sectionHtml(title, items, q, start) {
-        if (!items.length) return '';
-        var html = '<div class=\"blockr-block-browser-category\"><h3>' +
-          title + '</h3><div class=\"blockr-block-browser-cards\">';
-        items.forEach(function(b, k) { html += cardHtml(b, q, start + k); });
-        return html + '</div></div>';
-      }
-      // Keyboard selection, the browser's own marker class. Scrolls only
-      // when the arrows moved it, so a re-render never jumps the panel.
-      function selectHot(scroll) {
-        var root = searchRoot();
-        if (!root) return;
-        root.querySelectorAll('.blockr-block-browser-card').forEach(
-          function(c, i) {
-            var on = i === hot;
-            c.classList.toggle('card-selected', on);
-            if (on && scroll) c.scrollIntoView({block: 'nearest'});
-          });
-      }
-      function renderMenu() {
-        var root = searchRoot();
-        var menu = root && root.querySelector('.blockr-otl-searchmenu');
-        if (!menu) return;
-
-        var q = searchQuery();
-        var all = searchHits(q);
-        var inn = all.filter(function(b) { return b.listed; });
-        var out = all.filter(function(b) { return !b.listed; });
-        if (hot >= all.length) hot = Math.max(0, all.length - 1);
-
-        var count = root.querySelector('.blockr-otl-searchcount');
-        if (count) {
-          var pool = catalog.filter(function(b) { return !b.listed; }).length;
-          count.textContent = pool ? pool + ' outside the document' : '';
-        }
-        root.classList.toggle('has-value', !!q);
-
-        menu.classList.toggle('is-empty', !all.length);
-        menu.innerHTML =
-          '<div class=\"blockr-block-browser-categories\">' +
-            sectionHtml('In the document', inn, q, 0) +
-            sectionHtml('Add to the report', out, q, inn.length) +
-          '</div>' +
-          '<div class=\"blockr-block-browser-empty\">' +
-            'No blocks match your search.</div>';
-        selectHot(false);
-      }
-      function searchOpen() {
-        var root = searchRoot();
-        if (!root) return;
-        root.classList.add('open');
-        renderMenu();
-      }
-      function searchClose() {
-        var root = searchRoot();
-        if (root) root.classList.remove('open');
-      }
-      // Reveal a listed row: uncollapse its chapter if needed, scroll it
-      // into the middle of the panel and flash it, so a jump on a long
-      // document lands somewhere visible.
-      function gotoRow(id) {
-        var row = document.querySelector(
-          '.blockr-otl-grow[data-blk=\"' + id + '\"]'
-        );
-        if (!row) return;
-        if (row.dataset.stack && collapsedStacks.has(row.dataset.stack)) {
-          collapsedStacks.delete(row.dataset.stack);
-          applyCollapsed();
-        }
-        row.scrollIntoView({block: 'center', behavior: 'smooth'});
-        row.classList.remove('blockr-otl-flash');
-        void row.offsetWidth;
-        row.classList.add('blockr-otl-flash');
-      }
-      function searchChoose(idx) {
-        var q = searchQuery();
-        var all = searchHits(q);
-        var inn = all.filter(function(b) { return b.listed; });
-        var out = all.filter(function(b) { return !b.listed; });
-        var b = inn.concat(out)[idx];
-        if (!b) return;
-        if (b.listed) {
-          searchClose();
-          var inp = searchInput();
-          if (inp) inp.blur();
-          gotoRow(b.id);
-          return;
-        }
-        // Add: the server flips the report flag and pushes a new catalogue,
-        // which re-renders the menu with the entry moved to the first group.
-        Shiny.setInputValue(INCLUDE, b.id, {priority: 'event'});
-      }
-
-      Shiny.addCustomMessageHandler('blockr-outline-catalog', function(msg) {
-        catalog = msg.items || [];
-        icons = msg.icons || {};
-        renderMenu();
-      });
-
-      document.addEventListener('input', function(ev) {
-        if (ev.target && ev.target.classList &&
-            ev.target.classList.contains('blockr-otl-searchinput')) {
-          // Top hit selected on every keystroke, so Enter always does
-          // something (the block browser's behaviour).
-          hot = 0;
-          searchOpen();
-        }
-      });
-      document.addEventListener('focusin', function(ev) {
-        if (ev.target && ev.target.classList &&
-            ev.target.classList.contains('blockr-otl-searchinput')) {
-          searchOpen();
-        }
-      });
-      // mousedown, not click: click fires after blur, and blurring the
-      // input would have to close the menu first.
-      document.addEventListener('mousedown', function(ev) {
-        var card = ev.target.closest &&
-          ev.target.closest('.blockr-otl-searchmenu .blockr-block-browser-card');
-        if (!card) return;
-        ev.preventDefault();
-        searchChoose(parseInt(card.dataset.idx, 10));
-      });
-      // CAPTURE phase on purpose: choosing an entry re-renders the menu and
-      // detaches the clicked node, so a bubble-phase listener would see a
-      // target that is no longer inside the box and close it on every add.
-      document.addEventListener('mousedown', function(ev) {
-        var root = searchRoot();
-        if (root && !root.contains(ev.target)) searchClose();
-      }, true);
-      document.addEventListener('keydown', function(ev) {
-        if (!(ev.target && ev.target.classList &&
-              ev.target.classList.contains('blockr-otl-searchinput'))) {
-          return;
-        }
-        var n = searchHits(searchQuery()).length;
-        if (ev.key === 'ArrowDown') {
-          // Wrapping, like the block browser.
-          hot = n ? (hot + 1) % n : 0;
-          selectHot(true); ev.preventDefault();
-        } else if (ev.key === 'ArrowUp') {
-          hot = n ? (hot + n - 1) % n : 0;
-          selectHot(true); ev.preventDefault();
-        } else if (ev.key === 'Enter') {
-          searchChoose(hot); ev.preventDefault();
-        } else if (ev.key === 'Escape') {
-          // The browser leaves Escape to its sidebar; this box has no
-          // container to close it, so it clears first and closes second.
-          if (ev.target.value) {
-            ev.target.value = ''; hot = 0; searchOpen();
-          } else {
-            searchClose(); ev.target.blur();
-          }
-        }
-      });
-
-      $(document).on('shiny:value', function(ev) {
-        if (ev.name && /outline_out$/.test(ev.name)) {
-          setTimeout(applyCollapsed, 0);
-
-          // Fill in any push that landed before this render inserted its
-          // nodes. renderUI carries current code, so this is a no-op
-          // whenever the two are already in step.
-          setTimeout(applyCode, 0);
-        }
-      });
-      function fire(id) {
-        Shiny.setInputValue(id, Math.random(), {priority: 'event'});
-      }
-      function openEditor() {
-        return document.querySelector('.blockr-otl-editor');
-      }
-      // Dirty tracking: any edit inside the editor shows the Enter chip.
-      // ProseMirror handles some edits through beforeinput/transactions, so
-      // key/paste/cut are tracked alongside plain input events.
-      function markDirty(ev) {
-        var ed = ev.target.closest && ev.target.closest('.blockr-otl-editor');
-        if (ed) ed.classList.add('dirty');
-      }
-      document.addEventListener('input', markDirty);
-      document.addEventListener('paste', markDirty, true);
-      document.addEventListener('cut', markDirty, true);
-      document.addEventListener('keydown', function(ev) {
-        if (ev.key && (ev.key.length === 1 ||
-            ev.key === 'Backspace' || ev.key === 'Delete' ||
-            ev.key === 'Enter')) {
-          markDirty(ev);
-        }
-      }, true);
-      document.addEventListener('keydown', function(ev) {
-        if (ev.key !== 'Escape') return;
-        var ed = ev.target.closest && ev.target.closest('.blockr-otl-editor');
-        if (ed) {
-          ev.stopPropagation();
-          fire(CANCEL);
-        }
-      }, true);
-      function inlineRename(holder, cur, commit) {
-        if (holder.querySelector('input')) return;
-        holder.innerHTML = '';
-        var inp = document.createElement('input');
-        inp.className = 'blockr-otl-rname-input';
-        inp.value = cur;
-        holder.appendChild(inp);
-        inp.focus();
-        inp.select();
-        var done = false;
-        function fin(save) {
-          if (done) return;
-          done = true;
-          var val = inp.value.trim();
-          holder.textContent = save && val ? val : cur;
-          if (save && val && val !== cur) commit(val);
-        }
-        inp.addEventListener('keydown', function(e) {
-          if (e.key === 'Enter') fin(true);
-          if (e.key === 'Escape') fin(false);
-          e.stopPropagation();
-        });
-        inp.addEventListener('blur', function() { fin(true); });
-        inp.addEventListener('click', function(e) { e.stopPropagation(); });
-      }
-      function rowOf(el) {
-        return el.closest && el.closest('.blockr-otl-grow');
-      }
-      function cells(row) {
-        return [
-          row.querySelector('.blockr-otl-chip'),
-          row.querySelector('.blockr-otl-sect')
-        ];
-      }
-      function clearDrop() {
-        document.querySelectorAll('.blockr-otl-grow.drop-before, ' +
-          '.blockr-otl-grow.drop-after, .blockr-otl-chap.drop-chap')
-          .forEach(function(r) {
-            r.classList.remove('drop-before', 'drop-after', 'drop-chap');
-          });
-      }
-      document.addEventListener('mouseover', function(ev) {
-        var row = rowOf(ev.target);
-        if (!row) return;
-        cells(row).forEach(function(c) { if (c) c.classList.add('hot'); });
-      });
-      document.addEventListener('mouseout', function(ev) {
-        var row = rowOf(ev.target);
-        if (!row) return;
-        cells(row).forEach(function(c) { if (c) c.classList.remove('hot'); });
-      });
-      // Legal landing spots: the server hands each block the gap range it
-      // may occupy (after its last ancestor, before its first descendant).
-      // On dragstart every legal gap is marked, so the drag shows where it
-      // is allowed to go; illegal targets refuse the drop outright.
-      var legal = {before: new Set(), after: new Set()};
-      function rowsInOrder() {
-        return [].slice.call(
-          document.querySelectorAll('.blockr-otl-grow[data-blk]')
-        );
-      }
-      function computeLegal() {
-        legal = {before: new Set(), after: new Set()};
-        var rows = rowsInOrder();
-        var origPos = rows.findIndex(function(r) {
-          return r.dataset.blk === dragId;
-        });
-        var rest = rows.filter(function(r) { return r.dataset.blk !== dragId; });
-        var src = rows[origPos];
-        var lo = parseInt(src.dataset.droplo, 10);
-        var hi = parseInt(src.dataset.drophi, 10);
-        rest.forEach(function(r, k) {
-          // gap k = before this row, gap k+1 = after it; origPos is the
-          // no-op gap (the block's current place).
-          if (k >= lo && k <= hi && k !== origPos) {
-            legal.before.add(r.dataset.blk);
-          }
-          if (k + 1 >= lo && k + 1 <= hi && k + 1 !== origPos) {
-            legal.after.add(r.dataset.blk);
-          }
-        });
-        rest.forEach(function(r) {
-          if (legal.before.has(r.dataset.blk) || legal.after.has(r.dataset.blk)) {
-            r.classList.add('drop-legal');
-          }
-        });
-      }
-      function clearLegal() {
-        document.querySelectorAll('.blockr-otl-grow.drop-legal')
-          .forEach(function(r) { r.classList.remove('drop-legal'); });
-      }
-      function dropSide(row, ev) {
-        var r = row.querySelector('.blockr-otl-gutter').getBoundingClientRect();
-        var below = ev.clientY > r.top + r.height / 2;
-        var id = row.dataset.blk;
-        if (below && legal.after.has(id)) return 'after';
-        if (!below && legal.before.has(id)) return 'before';
-        // Fall back to the other side of the same row when only it is
-        // legal, so a near-miss still lands.
-        if (legal.after.has(id)) return 'after';
-        if (legal.before.has(id)) return 'before';
-        return null;
-      }
-      // Chapter drag: the heading's grip moves the WHOLE chapter. Only
-      // other chapter headings (and the end marker) are legal targets --
-      // a chapter cannot land inside a chapter. Legal targets come from
-      // the server as anchor block ids.
-      var dragChap = null;
-      document.addEventListener('dragstart', function(ev) {
-        var cgrip = ev.target.closest &&
-          ev.target.closest('.blockr-otl-chapgrip');
-        if (cgrip) {
-          var chap = cgrip.closest('.blockr-otl-chap');
-          dragChap = {
-            stack: chap.dataset.stack,
-            anchor: chap.dataset.anchor,
-            targets: (chap.dataset.targets || '').split(',').filter(Boolean)
-          };
-          ev.dataTransfer.effectAllowed = 'move';
-          ev.dataTransfer.setData('text/plain', dragChap.stack);
-          document.querySelectorAll('.blockr-otl-chap').forEach(function(c) {
-            if (dragChap.targets.indexOf(c.dataset.anchor) > -1) {
-              c.classList.add('chap-legal');
-            }
-          });
-          if (dragChap.targets.indexOf('__end__') > -1) {
-            var rows = rowsInOrder();
-            if (rows.length) {
-              rows[rows.length - 1].classList.add('chap-endlegal');
-            }
-          }
-          return;
-        }
-        var grip = ev.target.closest && ev.target.closest('.blockr-otl-grip');
-        if (!grip) return;
-        dragId = rowOf(grip).dataset.blk;
-        ev.dataTransfer.effectAllowed = 'move';
-        ev.dataTransfer.setData('text/plain', dragId);
-        computeLegal();
-      });
-      function clearChap() {
-        document.querySelectorAll('.chap-legal, .chap-hot, .chap-endlegal, ' +
-          '.chap-endhot').forEach(function(c) {
-          c.classList.remove('chap-legal', 'chap-hot', 'chap-endlegal',
-            'chap-endhot');
-        });
-      }
-      document.addEventListener('dragover', function(ev) {
-        if (dragChap) {
-          var tgt = ev.target.closest &&
-            ev.target.closest('.blockr-otl-chap.chap-legal');
-          var endRow = ev.target.closest &&
-            ev.target.closest('.blockr-otl-grow.chap-endlegal');
-          document.querySelectorAll('.chap-hot, .chap-endhot')
-            .forEach(function(c) { c.classList.remove('chap-hot', 'chap-endhot'); });
-          if (tgt) {
-            ev.preventDefault();
-            tgt.classList.add('chap-hot');
-          } else if (endRow) {
-            ev.preventDefault();
-            endRow.classList.add('chap-endhot');
-          }
-          return;
-        }
-        // A chapter heading is a membership target: dropping a chip on it
-        // moves the block into that chapter.
-        var chap = ev.target.closest && ev.target.closest('.blockr-otl-chap');
-        if (chap && dragId) {
-          ev.preventDefault();
-          clearDrop();
-          chap.classList.add('drop-chap');
-          return;
-        }
-        var row = rowOf(ev.target);
-        if (!row || !dragId) return;
-        clearDrop();
-        var side = dropSide(row, ev);
-        if (!side) return;
-        ev.preventDefault();
-        row.classList.add(side === 'after' ? 'drop-after' : 'drop-before');
-      });
-      document.addEventListener('drop', function(ev) {
-        if (dragChap) {
-          var hot = document.querySelector('.blockr-otl-chap.chap-hot');
-          var endHot = document.querySelector('.blockr-otl-grow.chap-endhot');
-          if (hot || endHot) {
-            ev.preventDefault();
-            Shiny.setInputValue(MOVECHAP, {
-              stack: dragChap.stack,
-              anchor: dragChap.anchor,
-              before: hot ? hot.dataset.anchor : '__end__'
-            }, {priority: 'event'});
-          }
-          clearChap();
-          dragChap = null;
-          return;
-        }
-        var chap = ev.target.closest && ev.target.closest('.blockr-otl-chap');
-        if (chap && dragId) {
-          ev.preventDefault();
-          clearDrop();
-          clearLegal();
-          Shiny.setInputValue(TOSTACK, {
-            id: dragId, stack: chap.dataset.stack
-          }, {priority: 'event'});
-          dragId = null;
-          return;
-        }
-        var row = rowOf(ev.target);
-        clearDrop();
-        if (!row || !dragId) return;
-        var side = dropSide(row, ev);
-        if (!side) return;
-        ev.preventDefault();
-        Shiny.setInputValue(MOVE, {
-          id: dragId, target: row.dataset.blk, after: side === 'after'
-        }, {priority: 'event'});
-        dragId = null;
-        clearLegal();
-      });
-      document.addEventListener('dragend', function() {
-        clearDrop();
-        clearLegal();
-        clearChap();
-        dragId = null;
-        dragChap = null;
-      });
-      document.addEventListener('dblclick', function(ev) {
-        clearTimeout(openTimer);
-        var dtl = ev.target.closest && ev.target.closest('.blockr-otl-doctitle');
-        if (dtl) {
-          inlineRename(dtl, dtl.textContent, function(val) {
-            Shiny.setInputValue(RENTITLE, {name: val}, {priority: 'event'});
-          });
-          return;
-        }
-        var name = ev.target.closest && ev.target.closest('.blockr-otl-rname');
-        if (name) {
-          var row = rowOf(name);
-          inlineRename(name, name.textContent, function(val) {
-            Shiny.setInputValue(REN, {
-              id: row.dataset.blk, name: val
-            }, {priority: 'event'});
-          });
-          return;
-        }
-        var chl = ev.target.closest && ev.target.closest('.blockr-otl-chlabel');
-        if (chl) {
-          var chap = chl.closest('.blockr-otl-chap');
-          // A split stack's later runs read 'Name (continued)'; rename
-          // edits the plain name.
-          var cur = chl.textContent.replace(/ \\(continued\\)$/, '');
-          inlineRename(chl, cur, function(val) {
-            Shiny.setInputValue(RENSTACK, {
-              stack: chap.dataset.stack, name: val
-            }, {priority: 'event'});
-          });
-          return;
-        }
-        if (ev.target.closest('.blockr-otl-editor')) return;
-        var intro = ev.target.closest &&
-          ev.target.closest('.blockr-otl-chapintro');
-        if (intro) {
-          Shiny.setInputValue(EDIT, {
-            id: 'stack:' + intro.dataset.stack
-          }, {priority: 'event'});
-          return;
-        }
-        var sect = ev.target.closest && ev.target.closest('.blockr-otl-sect');
-        if (sect) {
-          var row = rowOf(sect);
-          if (row) {
-            Shiny.setInputValue(EDIT, {
-              id: row.dataset.blk
-            }, {priority: 'event'});
-          }
-        }
-      });
-      document.addEventListener('click', function(ev) {
-        // Bulk include/exclude every block, from the settings band. The
-        // per-chapter version of this is .blockr-otl-chapact above.
-        var bulk = ev.target.closest && ev.target.closest('.blockr-otl-bulk');
-        if (bulk) {
-          Shiny.setInputValue(BULK, {
-            act: bulk.dataset.bulk
-          }, {priority: 'event'});
-          return;
-        }
-        var chapAct = ev.target.closest &&
-          ev.target.closest('.blockr-otl-chapact');
-        if (chapAct) {
-          Shiny.setInputValue(CHAP, {
-            stack: chapAct.closest('.blockr-otl-chap').dataset.stack,
-            act: chapAct.dataset.act
-          }, {priority: 'event'});
-          return;
-        }
-        var newChap = ev.target.closest &&
-          ev.target.closest('.blockr-otl-newchap');
-        if (newChap) {
-          Shiny.setInputValue(NEWCHAP, {
-            id: newChap.closest('.blockr-otl-addrow').dataset.blk
-          }, {priority: 'event'});
-          return;
-        }
-        var add = ev.target.closest && ev.target.closest('.blockr-otl-addrow');
-        if (add) {
-          Shiny.setInputValue(ADD, {
-            id: add.dataset.blk
-          }, {priority: 'event'});
-          return;
-        }
-        // Clicking outside an open editor commits (text-commit
-        // convention: blur applies); a pristine editor just closes.
-        var ed = openEditor();
-        if (ed && !ed.contains(ev.target)) {
-          // Push the editor's current text before asking the server to save
-          // it. The editor no longer streams every keystroke (it commits on
-          // focusout), and focusout does fire ahead of this click -- but a
-          // click that never moves focus would otherwise save a stale value.
-          if (window.blockrMdEditor && window.blockrMdEditor.flush) {
-            window.blockrMdEditor.flush();
-          }
-          fire(ed.classList.contains('dirty') ? SAVE : CANCEL);
-          return;
-        }
-        // Collapse is chevron-only: the twisty owns the toggle, the title owns
-        // rename (dblclick). Separate targets mean no single-vs-double
-        // ambiguity, so this fires instantly -- no debounce.
-        var chev = ev.target.closest && ev.target.closest('.blockr-otl-chevwrap');
-        if (chev) {
-          var chap = chev.closest('.blockr-otl-chap');
-          if (chap) {
-            var s = chap.dataset.stack;
-            if (collapsedStacks.has(s)) collapsedStacks.delete(s);
-            else collapsedStacks.add(s);
-            applyCollapsed();
-          }
-          return;
-        }
-        var row = rowOf(ev.target);
-        if (!row) return;
-        if (ev.target.closest('.blockr-otl-rname-input')) return;
-        var id = row.dataset.blk;
-        if (ev.target.closest('.blockr-otl-rm')) {
-          Shiny.setInputValue(RM, {id: id}, {priority: 'event'});
-          return;
-        }
-        if (ev.target.closest('.blockr-otl-eyeoff')) {
-          Shiny.setInputValue(HIDE, {id: id}, {priority: 'event'});
-          return;
-        }
-        // The include=FALSE badge is the code twisty: an excluded chunk's
-        // code is in the document for reproducibility, not for reading, so
-        // its cell is collapsed until asked for. Presentation only -- it
-        // stops here rather than falling through to the row's open.
-        if (ev.target.closest('.blockr-otl-offchip')) {
-          Shiny.setInputValue(SHOWCODE, {id: id}, {priority: 'event'});
-          return;
-        }
-        if (ev.target.closest('.blockr-otl-sw')) {
-          Shiny.setInputValue(TOGGLE, {
-            id: id, report: !row.classList.contains('on')
-          }, {priority: 'event'});
-          return;
-        }
-        if (ev.target.closest('.blockr-otl-editor')) return;
-        // Delay so a double-click (edit / rename) can cancel the open.
-        clearTimeout(openTimer);
-        openTimer = setTimeout(function() {
-          Shiny.setInputValue(OPEN, {id: id}, {priority: 'event'});
-        }, 250);
-      });
-    });"
-  )))
-}
-
-# The gutter outline: one grid where every block is a row of
-# [gutter chip | code section]; stacks render as colored spines with
-# chapter rows. `editing` holds the id of the block whose description is
-# currently in edit mode (or NULL).
-# Milkdown editor block shared by block descriptions and chapter intros.
-# Edit-mode chrome matches the inline rename inputs: a small border, no
-# wash. Clicking outside commits (blur applies, the way every text field
-# in blockr commits), Escape discards. No buttons, no raw source view
-# (the R script / Document views show the markdown). The element id
-# carries a nonce because the bundle keeps an instance registry keyed by
-# id (a reused id would be skipped).
-# Highlighted HTML for one section's chunk. Sole producer of block code
-# markup: the initial render calls it through outline_code_map(), and the
-# incremental push sends its output for the blocks whose code changed.
-# Depends on the chunk header too, so a report-flag flip regenerates the
-# markup (that flip also redraws the skeleton, which is what shows the
-# prose and the include=FALSE chip).
-sect_code_html <- function(sects, i, cache = NULL) {
-
-  # Not reported yet: hold the row with a muted placeholder rather than
-  # deparsing the stand-in expression, which would flash `x <- NULL`.
-  if (isTRUE(sects$pending[i])) {
-    return(
-      as.character(
-        div(class = "blockr-otl-pending", "Evaluating\u2026")
-      )
-    )
-  }
-
-  # Everything below is a pure function of these six fields, and producing
-  # it costs two downlit passes -- by far the most expensive thing the
-  # outline does per row. The map is recomputed whenever the board object
-  # is touched, which includes gestures that change no code at all (a dock
-  # tab flip commits a views delta), so without a memo every such gesture
-  # re-highlights the whole document to produce byte-identical markup.
-  # `cache` is an environment owned by the caller (one per extension
-  # server, like geometry_cache); NULL highlights fresh.
-  #
-  # One slot per block id, replaced when the key moves: the cache is then
-  # bounded by the board's block count rather than growing with every edit.
-  key <- list(
-    id = sects$ids[i], code = sects$code[i], report = sects$report[i],
-    report_call = sects$report_calls[i], renderer = sects$renderers[i]
-  )
-
-  if (!is.null(cache)) {
-    hit <- cache[[sects$ids[i]]]
-    if (!is.null(hit) && identical(hit$key, key)) {
-      return(hit$html)
-    }
-  }
-
-  hl_or_pre <- function(txt) {
-    hl <- highlight_r_code(txt)
-    if (is.null(hl)) as.character(tags$pre(txt)) else hl
-  }
-
-  chunk <- paste(
-    c(
-      paste0(
-        "#+ ", sects$ids[i],
-        if (!sects$report[i]) ", include=FALSE"
-      ),
-      sects$code[i]
-    ),
-    collapse = "\n"
-  )
-
-  # The cell mirrors the document chunk exactly: transform code, then --
-  # for a reported block -- the same presentation line the qmd chunk ends
-  # with (report_call / renderer / bare variable, see sect_output). It is
-  # highlighted separately so it can carry its own class and render
-  # dimmed: the transform is the substance, the exhibit call its footer.
-  # Code view is thus the chunk source; Output view its evaluated result.
-  html <- paste0(
-    hl_or_pre(chunk),
-    if (sects$report[i]) {
-      paste0(
-        "<div class=\"blockr-otl-exline\">",
-        hl_or_pre(sect_output(sects, i)),
-        "</div>"
-      )
-    }
-  )
-
-  if (!is.null(cache)) {
-    cache[[sects$ids[i]]] <- list(key = key, html = html)
-  }
-
-  html
-}
-
-# `ids` narrows the map to the blocks that render a code cell (the active
-# ones): dormant rows have no cell to fill, so highlighting their chunks
-# would be pure waste on a large board. `cache` memoises the highlighted
-# markup per block (see sect_code_html) so a redraw that changed no code
-# pays nothing.
-outline_code_map <- function(sects, ids = sects$ids, cache = NULL) {
-  keep <- match(intersect(ids, sects$ids), sects$ids)
-  setNames(
-    lapply(keep, function(i) sect_code_html(sects, i, cache = cache)),
-    sects$ids[keep]
+    "]"
   )
 }
 
-desc_editor_ui <- function(ns, key, value) {
-  div(
-    class = "blockr-otl-sect blockr-otl-editor",
-    title = "Click outside to apply; Esc discards",
-    div(
-      id = ns(paste0(
-        "desc_milkdown_", gsub("[^a-zA-Z0-9]", "_", key), "_",
-        format(Sys.time(), "%H%M%OS3")
-      )),
-      class = "blockr-md-editor",
-      `data-input-id` = ns("desc_edit"),
-      `data-initial` = value
-    )
-  )
-}
+# Two or three short values. `choices` is named by label; `icons`, when
+# given, draws icon-only segments whose names become their tooltips.
+otl_segmented <- function(id, choices, selected, label, xs = FALSE,
+                          icons = NULL) {
 
-# Collapse chevron, blockr.viz structured-table style (html-table.R
-# section_chevron_svg): rotation is purely CSS off the chapter's
-# .collapsed class; collapsing itself is client-side only.
-outline_chevron <- function() {
-  HTML(paste0(
-    "<svg class=\"blockr-otl-chev\" viewBox=\"0 0 24 24\" fill=\"none\" ",
-    "stroke=\"currentColor\" stroke-width=\"2.4\" stroke-linecap=\"round\" ",
-    "stroke-linejoin=\"round\" aria-hidden=\"true\">",
-    "<path d=\"M6 9l6 6 6-6\"/></svg>"
-  ))
-}
+  labs <- names(choices)
 
-# The grid, built once and handed back in two shapes: `el` for the whole
-# body, `rows` keyed by block id for the incremental push. A block row is a
-# single self-contained element (div.blockr-otl-grow), which is what makes
-# the push possible -- swapping one row in place beats re-rendering the
-# document to show that one row changed. Chapter and intro cells are NOT
-# rows: each is a pair of bare grid siblings with no wrapper to swap, so
-# they ride with the full render (see outline_layout_key).
-outline_grid <- function(sects, ns, editing = NULL) {
-
-  row_html <- new.env(parent = emptyenv())
-
-  # Older callers (and the qmd/script exporters' sections) carry no
-  # activation info: everything active, nothing gated -- the pre-dormancy
-  # rendering.
-  active <- coal(sects$active, rep(TRUE, length(sects$ids)))
-  gated <- isTRUE(sects$gated)
-
-  accent_of <- function(stk_id) {
-    if (is.na(stk_id) || !stk_id %in% names(sects$stack_colors)) {
-      return("#9ca3af")
-    }
-    sects$stack_colors[[stk_id]]
-  }
-
-  runs <- rle(ifelse(is.na(sects$stack_ids), "", sects$stack_ids))
-  starts <- cumsum(c(1L, head(runs$lengths, -1L)))
-
-  run_labels <- character(length(runs$values))
-  seen <- character()
-  for (r in seq_along(runs$values)) {
-    if (nzchar(runs$values[r])) {
-      nme <- sects$stack_names[starts[r]]
-      run_labels[r] <- if (runs$values[r] %in% seen) {
-        paste(nme, "(continued)")
-      } else {
-        nme
-      }
-      seen <- c(seen, runs$values[r])
-    }
-  }
-
-  chip_ui <- function(i) {
-
-    tile <- if (is.na(sects$icons[i])) {
-      toupper(substr(sects$names[i], 1L, 1L))
-    } else {
-      HTML(sects$icons[i])
-    }
-
-    div(
-      class = "blockr-otl-chip",
-      title = "Double-click the name to rename",
-      span(class = "blockr-otl-tile", tile),
-      span(class = "blockr-otl-rname", sects$names[i]),
-      span(class = "blockr-otl-sw"),
-      # Return the row to its condensed state by taking the block's panel
-      # out of the active view (the inverse of the row click). Only on
-      # gated boards -- without view gating there is no dormant state to
-      # return to.
-      if (gated && isTRUE(active[i])) {
-        tags$button(
-          class = "blockr-otl-eyeoff",
-          type = "button",
-          title = "Hide from this view (condenses the row)",
-          HTML(paste0(
-            "<svg viewBox=\"0 0 24 24\" width=\"12\" height=\"12\" ",
-            "fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" ",
-            "stroke-linecap=\"round\" stroke-linejoin=\"round\">",
-            "<path d=\"M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8",
-            "a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4",
-            "c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19\"/>",
-            "<path d=\"M14.12 14.12a3 3 0 1 1-4.24-4.24\"/>",
-            "<line x1=\"1\" y1=\"1\" x2=\"23\" y2=\"23\"/></svg>"
-          ))
-        )
-      },
+  segs <- lapply(
+    seq_along(choices),
+    function(i) {
+      val <- unname(choices[[i]])
+      ico <- if (!is.null(icons)) icons[[val]]
       tags$button(
-        class = "blockr-otl-rm",
         type = "button",
-        title = "Remove this block",
-        HTML(paste0(
-          "<svg viewBox=\"0 0 16 16\" width=\"11\" height=\"11\" fill=\"none\" ",
-          "stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\">",
-          "<path d=\"M4 4l8 8M12 4l-8 8\"/></svg>"
-        ))
-      ),
-      if (sects$movable[i]) span(
-        class = "blockr-otl-grip",
-        draggable = "true",
-        title = "Drag to reorder",
-        HTML(paste0(
-          "<svg viewBox=\"0 0 10 16\" width=\"8\" height=\"13\" ",
-          "fill=\"currentColor\" aria-hidden=\"true\">",
-          "<circle cx=\"2.5\" cy=\"3\" r=\"1.3\"/>",
-          "<circle cx=\"7.5\" cy=\"3\" r=\"1.3\"/>",
-          "<circle cx=\"2.5\" cy=\"8\" r=\"1.3\"/>",
-          "<circle cx=\"7.5\" cy=\"8\" r=\"1.3\"/>",
-          "<circle cx=\"2.5\" cy=\"13\" r=\"1.3\"/>",
-          "<circle cx=\"7.5\" cy=\"13\" r=\"1.3\"/></svg>"
-        ))
-      )
-    )
-  }
-
-  # The excluded-block badge, doubling as the twisty for its code cell.
-  # Two different exclusions: a block the report still depends on runs
-  # invisibly (include=FALSE); one nothing reported needs is pruned from
-  # the document and never evaluated.
-  offchip_ui <- function(i, open) {
-    span(
-      class = if (open) "blockr-otl-offchip open" else "blockr-otl-offchip",
-      title = if (open) "Hide the code" else "Show the code",
-      span(
-        class = "blockr-otl-offcaret",
-        if (open) "\u25be" else "\u25b8"
-      ),
-      if (isTRUE(sects$exported[i])) {
-        "include=FALSE \u00b7 runs, not shown"
-      } else {
-        "not in report \u00b7 not evaluated"
-      }
-    )
-  }
-
-  sect_ui <- function(i) {
-
-    if (identical(editing, sects$ids[i])) {
-      return(desc_editor_ui(ns, sects$ids[i], sects$descriptions[i]))
-    }
-
-    output_mode <- identical(coal(sects$body_mode, "code"), "output")
-
-    # Dormant: not in the active view, so no code cell, no prose block --
-    # one condensed line of description next to the chip. Clicking the row
-    # opens the block's panel in the view (the standard row click), which
-    # activates it. Output mode is exempt: the preview is the document,
-    # and the document does not care which panels are open.
-    if (!output_mode && !isTRUE(active[i])) {
-      desc <- sects$descriptions[i]
-
-      return(
-        div(
-          class = "blockr-otl-sect blockr-otl-dormant",
-          title = paste(
-            "Click to open this block in the view and show its code;",
-            "double-click to edit the description"
-          ),
-          div(
-            class = "blockr-otl-dormline",
-            if (!sects$report[i]) {
-              offchip_ui(i, open = FALSE)
-            },
-            span(
-              class = "blockr-otl-dormdesc",
-              if (nzchar(desc)) {
-                # One plain-text line; the markdown structure belongs to
-                # the expanded row.
-                desc_oneline(desc)
-              } else {
-                span(
-                  class = "blockr-otl-placeholder",
-                  "No description"
-                )
-              }
-            )
-          )
-        )
+        class = "blockr-segmented__seg",
+        role = "radio",
+        `data-value` = val,
+        `aria-label` = if (!is.null(ico)) labs[[i]],
+        `data-blockr-tooltip` = if (!is.null(ico)) labs[[i]],
+        if (!is.null(ico)) HTML(ico) else labs[[i]]
       )
     }
-
-    # Rendered from the pre-computed map so the initial paint and the
-    # incremental push (see the code observer in ext.R) go through the
-    # same producer and can never drift apart. Code mode holds an HTML
-    # string (also the target of the incremental push); Output mode holds
-    # a tag object, so a flextable's html dependency survives -- render it
-    # directly rather than through HTML().
-    body <- sects$code_html[[sects$ids[i]]]
-    code_tag <- div(
-      id = ns(paste0("code-", sects$ids[i])),
-      class = if (output_mode) "blockr-otl-codewrap blockr-otl-outwrap" else
-        "blockr-otl-codewrap",
-      if (is.character(body)) HTML(coal(body, "")) else body
-    )
-
-    prose <- if (sects$report[i] && nzchar(sects$descriptions[i])) {
-      div(
-        class = "blockr-otl-prose",
-        HTML(commonmark::markdown_html(sects$descriptions[i], extensions = TRUE))
-      )
-    }
-
-    div(
-      class = "blockr-otl-sect",
-      title = "Double-click to edit the description",
-      if (!sects$report[i]) {
-        offchip_ui(i, open = TRUE)
-      },
-      prose,
-      code_tag
-    )
-  }
-
-  grid_rows <- lapply(seq_along(runs$values), function(r) {
-
-    idx <- seq(starts[r], length.out = runs$lengths[r])
-    stk_id <- sects$stack_ids[idx[1L]]
-    accent <- accent_of(stk_id)
-    grouped <- !is.na(stk_id)
-    continued <- grepl("\\(continued\\)$", coal(run_labels[r], ""))
-
-    # Chapter heading row: the stack's thread (decision: document-styling
-    # variant B, revised) starts at the chapter's gutter cell and runs as
-    # ONE line down to the run's last block. Collapsed chapters show the
-    # hidden blocks' icons inline (pre-rendered, CSS-revealed).
-    chapter <- if (grouped) {
-      tagList(
-        div(
-          class = "blockr-otl-gutter blockr-otl-chapgutter",
-          style = paste0("--accent: ", accent, ";")
-        ),
-        div(
-          class = "blockr-otl-chap",
-          `data-stack` = stk_id,
-          `data-anchor` = sects$ids[idx[1L]],
-          `data-targets` = paste(
-            coal(sects$chap_targets[[r]], character()),
-            collapse = ","
-          ),
-          style = paste0("--accent: ", accent, ";"),
-          span(
-            class = "blockr-otl-chapgrip",
-            draggable = "true",
-            title = "Drag to move this chapter",
-            HTML(paste0(
-              "<svg viewBox=\"0 0 10 16\" width=\"8\" height=\"13\" ",
-              "fill=\"currentColor\" aria-hidden=\"true\">",
-              "<circle cx=\"2.5\" cy=\"3\" r=\"1.3\"/><circle cx=\"7.5\" cy=\"3\" r=\"1.3\"/>",
-              "<circle cx=\"2.5\" cy=\"8\" r=\"1.3\"/><circle cx=\"7.5\" cy=\"8\" r=\"1.3\"/>",
-              "<circle cx=\"2.5\" cy=\"13\" r=\"1.3\"/><circle cx=\"7.5\" cy=\"13\" r=\"1.3\"/>",
-              "</svg>"
-            ))
-          ),
-          span(class = "blockr-otl-chevwrap", outline_chevron()),
-          span(class = "blockr-otl-chlabel", run_labels[r]),
-          span(
-            class = "blockr-otl-chapacts",
-            if (r > 1L) {
-              span(
-                class = "blockr-otl-chapact",
-                `data-act` = "merge",
-                title = "Merge into the chapter above",
-                "merge up"
-              )
-            },
-            span(
-              class = "blockr-otl-chapact",
-              `data-act` = "ungroup",
-              title = "Dissolve this chapter; its blocks keep their order",
-              "ungroup"
-            ),
-            span(
-              class = "blockr-otl-chapact",
-              `data-act` = if (all(sects$report[idx])) "exclude" else "include",
-              title = "Include or exclude every block of this chapter",
-              if (all(sects$report[idx])) "exclude all" else "include all"
-            )
-          ),
-          span(
-            class = "blockr-otl-chapicons",
-            lapply(idx, function(i) {
-              span(
-                class = "blockr-otl-minitile",
-                if (is.na(sects$icons[i])) {
-                  toupper(substr(sects$names[i], 1L, 1L))
-                } else {
-                  HTML(sects$icons[i])
-                }
-              )
-            })
-          )
-        )
-      )
-    }
-
-    stack_desc <- if (grouped) {
-      coal(sects$stack_descriptions[[stk_id]], "")
-    } else {
-      ""
-    }
-
-    # Chapter intro: plain body prose, exactly what quarto renders (no
-    # standfirst, no tint). The gutter cell continues the thread.
-    intro <- if (grouped && !continued) {
-      tagList(
-        div(
-          class = "blockr-otl-gutter blockr-otl-introrow",
-          `data-stack` = stk_id,
-          style = paste0("--accent: ", accent, ";")
-        ),
-        if (identical(editing, paste0("stack:", stk_id))) {
-          div(
-            class = "blockr-otl-gsect blockr-otl-introrow",
-            `data-stack` = stk_id,
-            desc_editor_ui(ns, paste0("stack:", stk_id), stack_desc)
-          )
-        } else {
-          # Always rendered (placeholder when empty) so there is a
-          # double-click target for the chapter intro.
-          div(
-            class = "blockr-otl-gsect blockr-otl-introrow",
-            `data-stack` = stk_id,
-            div(
-              class = "blockr-otl-sect blockr-otl-chapintro",
-              `data-stack` = stk_id,
-              title = "Double-click to edit the chapter intro",
-              div(
-                class = "blockr-otl-prose",
-                if (nzchar(stack_desc)) {
-                  HTML(commonmark::markdown_html(stack_desc, extensions = TRUE))
-                } else {
-                  span(
-                    class = "blockr-otl-placeholder",
-                    "Chapter intro (double-click to add)"
-                  )
-                }
-              )
-            )
-          )
-        }
-      )
-    }
-
-    rows <- lapply(seq_along(idx), function(j) {
-
-      i <- idx[j]
-
-      # The thread starts at the chapter's gutter cell, so block rows only
-      # continue it; the run's last block closes it.
-      spine <- if (!grouped) {
-        "nospine"
-      } else if (j == length(idx)) {
-        "spine-end"
-      }
-
-      # Insert affordance (decision: outline-insert-proposals.html variant
-      # A, revised -- revealed on the block's own hover and placed BELOW
-      # it, styled like blockr.dplyr's add links). Appends after this
-      # block through the dock's own append flow.
-      add_link <- div(
-        class = "blockr-otl-addrow",
-        `data-blk` = sects$ids[i],
-        span(
-          class = "blockr-otl-addlink",
-          span(class = "blockr-otl-addicon", HTML(
-            paste0(
-              "<svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" ",
-              "fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" ",
-              "stroke-linecap=\"round\"><path d=\"M8 3v10M3 8h10\"/></svg>"
-            )
-          )),
-          "Add block"
-        ),
-        # Sections are defined by where they START, so the create gesture
-        # lives on a block, styled exactly like "Add block": this block
-        # and the rest of its run become a new chapter.
-        span(
-          class = "blockr-otl-addlink blockr-otl-newchap",
-          title = "Start a new chapter at this block",
-          span(class = "blockr-otl-addicon", HTML(
-            paste0(
-              "<svg viewBox=\"0 0 16 16\" width=\"12\" height=\"12\" ",
-              "fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" ",
-              "stroke-linecap=\"round\"><path d=\"M8 3v10M3 8h10\"/></svg>"
-            )
-          )),
-          "New chapter"
-        )
-      )
-
-      row <- div(
-        class = paste(
-          "blockr-otl-grow",
-          if (sects$report[i]) "on",
-          if (!isTRUE(active[i])) "dormant"
-        ),
-        `data-blk` = sects$ids[i],
-        `data-stack` = if (grouped) stk_id,
-        `data-droplo` = sects$drop_lo[i],
-        `data-drophi` = sects$drop_hi[i],
-        style = paste0("--accent: ", accent, ";"),
-        div(
-          class = paste("blockr-otl-gutter", spine),
-          chip_ui(i)
-        ),
-        div(class = "blockr-otl-gsect", sect_ui(i), add_link)
-      )
-
-      row_html[[sects$ids[i]]] <- row
-
-      row
-    })
-
-    tagList(chapter, intro, rows)
-  })
-
-  list(
-    el = grid_rows,
-    rows = mget(sects$ids, envir = row_html, ifnotfound = list(NULL))
   )
-}
 
-outline_tags <- function(sects, ns, editing = NULL) {
-  div(class = "blockr-otl", outline_grid(sects, ns, editing)$el)
-}
-
-# The same rows as HTML strings, for the incremental push. Same code path
-# as the full render, so the two can never drift.
-outline_row_map <- function(sects, ns, editing = NULL) {
-  rows <- outline_grid(sects, ns, editing)$rows
-  lapply(Filter(Negate(is.null), rows), as.character)
-}
-
-# What a row swap CANNOT carry, and therefore what forces a full render:
-# the number and order of the rows, the chapter cells between them, and the
-# two modes that change every row at once anyway. Everything else -- a row
-# going active, a report flag, a rename, edited prose, new code -- is
-# per-row and travels as a push.
-#
-# The chapter action label is an aggregate (`exclude all` shows only when
-# every block of the run is on), so it enters the key as that aggregate
-# rather than as the whole report vector: toggling one block of a chapter
-# then leaves the layout alone, which is the common gesture.
-outline_layout_key <- function(sects, editing = NULL) {
-
-  stk <- ifelse(is.na(sects$stack_ids), "", sects$stack_ids)
-  runs <- rle(stk)
-  starts <- cumsum(c(1L, head(runs$lengths, -1L)))
-
-  list(
-    ids = sects$ids,
-    stack_ids = sects$stack_ids,
-    stack_names = sects$stack_names,
-    stack_colors = sects$stack_colors,
-    stack_descriptions = sects$stack_descriptions,
-    chap_targets = sects$chap_targets,
-    # Only a real chapter has an action label to keep honest. An ungrouped
-    # run draws no chapter cell, so folding its report flags in here would
-    # force a full render on the commonest gesture there is -- flipping a
-    # switch on an unstacked board.
-    chap_all_on = vapply(
-      seq_along(runs$values),
-      function(r) {
-        if (!nzchar(runs$values[r])) {
-          return(NA)
-        }
-        all(sects$report[seq(starts[r], length.out = runs$lengths[r])])
-      },
-      logical(1L)
-    ),
-    editing = editing,
-    body_mode = coal(sects$body_mode, "code")
-  )
-}
-
-# The report title as the top-level "chapter": document title on the left
-# (double-click to rename -- it is outline state), the board-wide include /
-# exclude actions inline right after it, revealed on hover exactly like the
-# per-chapter actions. Rendered separately from the outline body so the
-# search box can sit under it while staying static (focus-stable).
-outline_title_row <- function(title) {
-  doc_title <- if (is.character(title) && length(title) && nzchar(title[[1L]])) {
-    title[[1L]]
-  } else {
-    "Board report"
-  }
   div(
-    class = "blockr-otl-doctitle-row",
-    span(
-      class = "blockr-otl-doctitle",
-      title = "Double-click to rename the report",
-      doc_title
+    id = id,
+    class = paste(
+      "blockr-otl-field blockr-segmented",
+      if (xs) "blockr-segmented--xs"
     ),
-    span(
-      class = "blockr-otl-docacts",
-      span(class = "blockr-otl-bulk", `data-bulk` = "include", "include all"),
-      span(class = "blockr-otl-bulk", `data-bulk` = "exclude", "exclude all")
+    role = "radiogroup",
+    `aria-label` = label,
+    `data-kind` = "segmented",
+    `data-value` = selected,
+    segs
+  )
+}
+
+# On or off: the box and its words, no field shell and no label row. The
+# label names the "on" state.
+otl_checkbox <- function(id, label, value = FALSE, size = "small") {
+  otl_field(
+    NULL,
+    tags$label(
+      id = id,
+      class = "blockr-otl-field blockr-checkbox",
+      `data-kind` = "checkbox",
+      tags$input(type = "checkbox", checked = if (isTRUE(value)) NA),
+      span(class = "blockr-checkbox__box", HTML(otl_check_svg())),
+      span(class = "blockr-checkbox__label", label)
+    ),
+    size = size
+  )
+}
+
+otl_check_svg <- function() {
+  paste0(
+    "<svg width=\"10\" height=\"10\" viewBox=\"0 0 16 16\" ",
+    "fill=\"currentColor\" aria-hidden=\"true\"><path d=\"M13.854 3.646a.5.5 ",
+    "0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 ",
+    "10.293l6.646-6.647a.5.5 0 0 1 .708 0\"/></svg>"
+  )
+}
+
+# A name that renames in place: plain text at rest, a field on double-click
+# or Enter. The server sets it (sendInputMessage); it reports on rename.
+otl_name <- function(id, label, empty_msg, placeholder = "") {
+  span(
+    id = id,
+    class = "blockr-otl-field blockr-otl-name",
+    `data-kind` = "name",
+    `data-empty` = empty_msg,
+    `data-placeholder` = placeholder,
+    `aria-label` = label,
+    tabindex = "0"
+  )
+}
+
+# ---- the gear and its tray ------------------------------------------------
+
+# The gear: 26px, framed, gear last in the header row, tooltip "Settings".
+# blockr-panels.js pairs it with the tray of id `tray`.
+otl_gear <- function(tray) {
+  tags$button(
+    type = "button",
+    class = "blockr-gear-btn",
+    `data-blockr-tray` = tray,
+    `aria-controls` = tray,
+    `aria-label` = "Settings",
+    `aria-expanded` = "false",
+    `data-blockr-tooltip` = "Settings",
+    HTML(otl_icon("gear"))
+  )
+}
+
+# The tray: in flow under the header row, bg-subtle, a beak at the gear.
+otl_tray <- function(id, ...) {
+  div(
+    id = id,
+    class = "blockr-settings blockr-settings--beak",
+    ...
+  )
+}
+
+otl_section <- function(title, ...) {
+  tagList(
+    div(class = "blockr-settings__title", title),
+    div(class = "blockr-settings__grid", ...)
+  )
+}
+
+# ---- buttons --------------------------------------------------------------
+
+# A button with words: main (the accent tint, one per view), secondary or
+# quiet, at 26px (xs) or 30px (s). `action = TRUE` makes it an actionButton
+# (Shiny binds .action-button; the label sits in .action-label so
+# updateActionButton() can change it).
+otl_button <- function(label, kind = c("secondary", "main", "quiet"),
+                       size = c("xs", "s"), id = NULL, icon = NULL,
+                       action = FALSE, ...) {
+
+  kind <- match.arg(kind)
+  size <- match.arg(size)
+
+  tags$button(
+    type = "button",
+    id = id,
+    class = paste(
+      "blockr-otl-btn",
+      paste0("blockr-otl-btn--", kind),
+      paste0("blockr-otl-btn--", size),
+      if (action) "action-button"
+    ),
+    ...,
+    if (!is.null(icon)) span(class = "blockr-otl-btn__icon", HTML(icon)),
+    span(class = "action-label", label)
+  )
+}
+
+# ---- block marks ----------------------------------------------------------
+
+# A block's mark in a list row: 24px, its glyph in the category colour on an
+# 18% tint of it (blockr.ui's menu mark, on the panel's surface).
+otl_mark <- function(mark, ...) {
+
+  if (is.null(mark) || !nzchar(coal(mark$icon, ""))) {
+    return(span(class = "blockr-otl-mark", ...))
+  }
+
+  span(
+    class = "blockr-otl-mark",
+    style = paste0("--blockr-outline-mark: ", mark$color, ";"),
+    ...,
+    HTML(mark$icon)
+  )
+}
+
+# What a block's mark needs, and its type's name: registry metadata, the
+# same per class, so memoised per class. blockr.dock keeps blks_metadata()
+# internal; read it the way block_icon_html() does.
+block_mark_cache <- new.env(parent = emptyenv())
+
+block_mark <- function(blk) {
+
+  key <- paste(class(blk), collapse = "|")
+  hit <- block_mark_cache[[key]]
+
+  if (!is.null(hit)) {
+    return(hit)
+  }
+
+  val <- tryCatch(
+    {
+      meta <- utils::getFromNamespace("blks_metadata", "blockr.dock")(blk)
+      list(
+        icon = as.character(meta$icon[[1L]]),
+        color = as.character(meta$color[[1L]]),
+        type = as.character(meta$name[[1L]])
+      )
+    },
+    error = function(e) list(icon = "", color = "", type = "")
+  )
+
+  block_mark_cache[[key]] <- val
+
+  val
+}
+
+# ---- icons ----------------------------------------------------------------
+
+# The glyphs these panels draw, at 14px in currentColor: the gear is
+# blockr.ui's Blockr.icons.gear, the rest follow its thin-stroke small icons.
+otl_icon <- function(name) {
+
+  svg <- function(body, fill = FALSE, width = "1.3") {
+    paste0(
+      "<svg width=\"14\" height=\"14\" viewBox=\"0 0 16 16\" ",
+      if (fill) {
+        "fill=\"currentColor\" "
+      } else {
+        paste0(
+          "fill=\"none\" stroke=\"currentColor\" stroke-width=\"", width,
+          "\" stroke-linecap=\"round\" stroke-linejoin=\"round\" "
+        )
+      },
+      "aria-hidden=\"true\" focusable=\"false\">", body, "</svg>"
     )
+  }
+
+  switch(
+    name,
+    gear = svg(
+      paste0(
+        "<path d=\"M9.405 1.05c-.413-1.4-2.397-1.4-2.81 0l-.1.34a1.464 1.464 ",
+        "0 0 1-2.105.872l-.31-.17c-1.283-.698-2.686.705-1.987 1.987l.169",
+        ".311c.446.82.023 1.841-.872 2.105l-.34.1c-1.4.413-1.4 2.397 0 2.81l",
+        ".34.1a1.464 1.464 0 0 1 .872 2.105l-.17.31c-.698 1.283.705 2.686 ",
+        "1.987 1.987l.311-.169a1.464 1.464 0 0 1 2.105.872l.1.34c.413 1.4 ",
+        "2.397 1.4 2.81 0l.1-.34a1.464 1.464 0 0 1 2.105-.872l.31.17c1.283",
+        ".698 2.686-.705 1.987-1.987l-.169-.311a1.464 1.464 0 0 1 .872-2.105",
+        "l.34-.1c1.4-.413 1.4-2.397 0-2.81l-.34-.1a1.464 1.464 0 0 1-.872-",
+        "2.105l.17-.31c.698-1.283-.705-2.686-1.987-1.987l-.311.169a1.464 ",
+        "1.464 0 0 1-2.105-.872zM8 10.93a2.929 2.929 0 1 1 0-5.86 2.929 ",
+        "2.929 0 0 1 0 5.858z\"/>"
+      ),
+      fill = TRUE
+    ),
+    download = svg(
+      paste0(
+        "<path d=\"M8 1.8v7.4M5.2 6.4 8 9.2l2.8-2.8\"/>",
+        "<path d=\"M2.6 10.6v2.2c0 .5.4.8.8.8h9.2c.5 0 .8-.3.8-.8v-2.2\"/>"
+      ),
+      width = "1.4"
+    ),
+    copy = svg(
+      paste0(
+        "<rect x=\"5.5\" y=\"1.8\" width=\"8.7\" height=\"8.7\" rx=\"1.4\"/>",
+        "<path d=\"M10.5 12.7v.9a1.4 1.4 0 0 1-1.4 1.4H3.2a1.4 1.4 0 0 1-1.4",
+        "-1.4V6.9a1.4 1.4 0 0 1 1.4-1.4h.9\"/>"
+      )
+    ),
+    plus = svg("<path d=\"M8 3v10M3 8h10\"/>"),
+    x = svg("<path d=\"M4 4l8 8M12 4l-8 8\"/>", width = "1.1"),
+    dots = svg(
+      paste0(
+        "<circle cx=\"3\" cy=\"8\" r=\"1.25\"/><circle cx=\"8\" cy=\"8\" ",
+        "r=\"1.25\"/><circle cx=\"13\" cy=\"8\" r=\"1.25\"/>"
+      ),
+      fill = TRUE
+    ),
+    code = svg(
+      paste0(
+        "<path d=\"M5 4.2 1.8 8 5 11.8M11 4.2 14.2 8 11 11.8\"/>",
+        "<path d=\"M9.6 2.4 6.4 13.6\"/>"
+      ),
+      width = "1.4"
+    ),
+    eye = svg(
+      paste0(
+        "<path d=\"M1.2 8S3.8 3.2 8 3.2 14.8 8 14.8 8 12.2 12.8 8 12.8 1.2 8 ",
+        "1.2 8z\"/><circle cx=\"8\" cy=\"8\" r=\"2.2\"/>"
+      )
+    ),
+    text = svg(
+      paste0(
+        "<path d=\"M2.5 3.5h11M2.5 6.5h11M2.5 9.5h11M2.5 12.5h6.5\"/>"
+      )
+    ),
+    stop("Unknown icon: ", name, call. = FALSE)
+  )
+}
+
+# The rows of the "Add block" / "Add slide" menu, for the client: one entry
+# per board block (mark, name, type) and the distinct glyphs, shared by key
+# (icon_key_table()) because a board repeats each type's glyph per block.
+board_catalog <- function(meta) {
+
+  ids <- names(meta)
+  marks <- lapply(ids, function(i) coal(meta[[i]]$mark, list()))
+  tbl <- icon_key_table(
+    chr_ply(marks, function(m) na_blank(coal(m$icon, "")))
+  )
+
+  list(
+    items = lapply(
+      seq_along(ids),
+      function(k) {
+        list(
+          id = ids[[k]],
+          name = coal(na_blank(meta[[ids[[k]]]]$name), ids[[k]]),
+          type = coal(marks[[k]]$type, ""),
+          color = coal(marks[[k]]$color, ""),
+          icon_key = tbl$keys[[k]]
+        )
+      }
+    ),
+    icons = tbl$icons
   )
 }
