@@ -25,6 +25,14 @@
 
   const registry = new Map();
 
+  // The design system's pieces, through the rail (see outline-rail.js):
+  // `ui.icon('plus')`, `ui.tip(el, text)`, `toolBtn(cls, svg, label)`.
+  const ui = {
+    icon: (name) => outlineRail.icon(name),
+    tip: (el, text, opts) => outlineRail.tip(el, text, opts)
+  };
+  const toolBtn = (cls, svg, label) => outlineRail.toolBtn(cls, svg, label);
+
   const getInst = (elId) => {
     let inst = registry.get(elId);
     // A dock panel that was closed and reopened puts a NEW element under the
@@ -146,26 +154,29 @@
 
     // The glyph comes from the catalogue, keyed by the block's type, because
     // an icon belongs to a type and not to a board: it arrives once instead
-    // of riding every board change as a base64 data URI. The tile is tinted
-    // from the block's own colour and the SVG uses `currentColor`, so it
-    // renders white on the solid square -- the same pairing the picker rows
-    // use. A type the catalogue does not carry falls back to the letter.
+    // of riding every board change as a base64 data URI. The SVG uses
+    // `currentColor`, so it takes the category colour the mark sets -- the
+    // same pairing the picker's rows use. A type the catalogue does not
+    // carry falls back to the letter.
     const iconFor = (type) => {
       const m = registry.byType && registry.byType.get(type);
       return m && m.icon ? m.icon : null;
     };
 
+    // The block's mark, as the design system draws it in a list: the glyph
+    // in the category colour on an 18% tint of it (outline.css mixes the
+    // tint, so it follows the dark scheme). The category colour is
+    // `blk_color()`'s, carried on the model.
     const kindIcon = (b) => {
       const k = document.createElement('span');
       k.className = 'md-kind';
-      k.style.background = b.color || '#999';
+      if (b.color) k.style.setProperty('--blockr-outline-mark', b.color);
       const svg = iconFor(b.type);
       if (svg) {
         k.innerHTML = svg;
       } else {
         k.textContent = (b.name || '?').slice(0, 1).toUpperCase();
       }
-      k.title = b.category || '';
       return k;
     };
 
@@ -187,7 +198,8 @@
         if (occ.has(slot)) return;
         const pip = document.createElement('span');
         pip.className = 'md-pip';
-        pip.title = slot + ' — free';
+        pip.setAttribute('role', 'img');
+        pip.setAttribute('aria-label', slot + ', free');
         wrap.appendChild(pip);
       });
       if (b.variadic) {
@@ -199,7 +211,9 @@
         const pip = document.createElement('span');
         pip.className = 'md-pip md-pip-inf';
         pip.textContent = '∞';
-        pip.title = n ? n + ' inputs (unlimited)' : 'unlimited inputs';
+        pip.setAttribute('role', 'img');
+        pip.setAttribute('aria-label',
+          n ? n + ' inputs, unlimited' : 'unlimited inputs');
         wrap.appendChild(pip);
       }
       return wrap;
@@ -214,7 +228,10 @@
       // a row, drag it to the gutter, the row's own `+`), and this is the one
       // that is about no parent -- so it belongs where the block will appear,
       // which is after the last row.
-      opts: { addButton: false, addRow: true },
+      //
+      // `rowMenu`: the rows' "…" (see `nodeTools`) carries every row tool,
+      // so a narrow panel shows only it.
+      opts: { addButton: false, addRow: true, rowMenu: true },
       // Adding and appending are the same operation; only the origin
       // differs, so they open the same picker rather than two sidebars.
       // `block_append` carries the release coordinates, which is what the
@@ -266,20 +283,28 @@
       showSlot: (l) => l.input !== '' &&
         ((blockOf(l.to) || {}).inputs || []).includes(l.input),
 
-      nodeAside: (b) => {
-        const wrap = membershipEl([b.id]) || el('md-views');
-        if (!registry.append.length) return wrap;
-        const plus = el('md-rowadd', 'button');
-        plus.type = 'button';
-        plus.textContent = '+';
-        plus.title = 'Append a block after ' + b.name;
-        plus.addEventListener('click', (ev) => {
-          ev.stopPropagation();
-          openPicker(b.id, ev.currentTarget.closest('.md-chip'), null);
-        });
-        wrap.appendChild(plus);
-        return wrap;
+      // The row's tools, shown on hover: its `+` (append after it) beside
+      // the renderer's remove, and on a narrow panel, in their place, one
+      // "…" that opens the row menu, which carries them all -- two tools
+      // there would take the width the name needs.
+      nodeTools: (b) => {
+        const frag = document.createDocumentFragment();
+        frag.appendChild(moreBtn(() => ({ ids: [b.id], kind: 'blocks' })));
+        if (registry.append.length) {
+          const plus = toolBtn('md-rowadd md-reveal', ui.icon('plus'),
+            'Append a block');
+          plus.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            openPicker(b.id, ev.currentTarget.closest('.md-chip'), null);
+          });
+          frag.appendChild(plus);
+        }
+        return frag;
       },
+      stackTools: (stack) => moreBtn(() => ({ stack: stack.id })),
+
+      // Past the spring: the views the row is on.
+      nodeAside: (b) => membershipEl([b.id]),
       // A stack has no view membership of its own: `dock_view` members are block
       // panels, so anything shown here could only be a UNION over the members --
       // "Overview +1" on a two-block stack meaning one member is on each. That
@@ -316,7 +341,11 @@
     };
 
     const membershipEl = (ids, kind) => {
-      if (!views.length) return null;
+      // With one view "on every view" is true of every row on the board, so
+      // the column would say the same word on each row and take the width
+      // the names need. It is only a fact worth a column once there is a
+      // second view to be absent from.
+      if (views.length < 2) return null;
 
       kind = kind || 'blocks';
       const wrap = el('md-views');
@@ -338,36 +367,47 @@
       // tag does the same thing to the view it names, because a tag that means
       // "shown here" should mean the same wherever it points.
       //
-      // The whole tag is the target; the little x is the hover mark saying so.
-      // The current view's tag is tinted as well, because that is the one whose
-      // effect you can see happen.
-      const dropTag = (t, view, isCur) => {
-        // the class carries the affordance, so the pointer follows the handler
+      // The whole tag is the target; its x, shown on the tag under the
+      // pointer, is the mark saying so. Tags are neutral: the current view
+      // is told apart by coming first.
+      const dropTag = (t, view) => {
         t.classList.add('md-vdrop');
-        if (isCur) t.classList.add('md-vcur');
-        t.title = 'Shown on ' + view.name
-          + ' \u00b7 click to drop it from ' + (isCur ? 'here' : 'there');
+        t.setAttribute('role', 'button');
+        t.tabIndex = 0;
+        t.setAttribute('aria-label', t.textContent + ': drop it from ' +
+          view.name);
         const x = el('md-vx');
-        x.textContent = '\u00d7';
+        x.innerHTML = ui.icon('remove');
         t.appendChild(x);
-        t.addEventListener('click', (ev) => {
+        const drop = (ev) => {
           ev.stopPropagation();          // not a reveal
           push('membership', {
             blocks: kind === 'blocks' ? ids : [],
             extensions: kind === 'extensions' ? ids : [],
             mode: 'rm', view: view.id
           });
+        };
+        t.addEventListener('click', drop);
+        t.addEventListener('keydown', (ev) => {
+          if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); drop(ev); }
         });
+        return t;
+      };
+
+      const tagEl = (text) => {
+        const t = el('md-vtag');
+        const lbl = el('md-vtag-label');
+        lbl.textContent = text;
+        t.appendChild(lbl);
+        ui.tip(lbl, text, { overflow: true });
         return t;
       };
 
       if (whole) {
         // "all views" names no single view, so it drops from the one you are on:
         // the only view whose panel you can watch go.
-        const t = el('md-vtag md-vall-tag');
-        t.appendChild(document.createTextNode('all views'));
-        t.title = views.map((v) => v.name).join(', ');
-        wrap.appendChild(cur ? dropTag(t, cur, true) : t);
+        const t = tagEl('all views');
+        wrap.appendChild(cur ? dropTag(t, cur) : t);
         return wrap;
       }
 
@@ -381,24 +421,28 @@
 
       // The current view first when the row is on it: while you are looking at
       // Detail, "Detail" is the fact you need, and "Overview +1" makes you count.
-      // It is also what gives the drop button something to be attached to.
       const onCur = cur && mine.some((v) => v.id === cur.id);
       const rest = mine.filter((v) => !onCur || v.id !== cur.id);
       const first = onCur ? cur : mine[0];
       const others = onCur ? rest : mine.slice(1);
 
-      const tag = el('md-vtag');
-      tag.appendChild(document.createTextNode(first.name));
-      wrap.appendChild(dropTag(tag, first, !!onCur));
+      wrap.appendChild(dropTag(tagEl(first.name), first));
 
-      // The views behind the count are not reachable here -- one tag is all the
-      // row's width affords -- and the menu's checklist is the complete surface
-      // for them. The count says how many are hidden, not which.
+      // The "+N" overflow stands in for the views one tag leaves out: tag
+      // geometry in the accent tint, the hidden views in its tooltip, one per
+      // line, and a click opens the row menu, whose checklist is the full
+      // surface for them.
       if (others.length) {
-        const more = el('md-vtag md-vmore');
+        const more = el('md-vtag md-vmore', 'button');
+        more.type = 'button';
         more.textContent = '+' + others.length;
-        more.title = 'also on ' + others.map((v) => v.name).join(', ')
-          + ' \u00b7 right-click for all of them';
+        more.setAttribute('aria-label', 'Also on ' +
+          others.map((v) => v.name).join(', '));
+        ui.tip(more, others.map((v) => v.name));
+        more.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          openRowMenuFor(ev.currentTarget, ids, kind);
+        });
         wrap.appendChild(more);
       }
 
@@ -428,9 +472,10 @@
 
       const nm = el('md-name');
       nm.textContent = t.name;
-      nm.title = t.name +
-        (t.self ? ' \u00b7 this panel' : ' \u00b7 click to show it here');
+      ui.tip(nm, t.name, { overflow: true });
       row.appendChild(nm);
+
+      row.appendChild(el('md-spring'));
 
       const mem = membershipEl([t.id], 'extensions');
       if (mem) row.appendChild(mem);
@@ -444,7 +489,7 @@
       if (!t.self) {
         row.addEventListener('click', () => push('ext_select', { id: t.id }));
       } else {
-        row.style.cursor = 'default';
+        row.classList.add('md-self');
       }
 
       return row;
@@ -466,6 +511,7 @@
       }
       box.innerHTML = '';
 
+      // a section title, with the count as muted text after it
       const head = el('md-extshead', 'div');
       head.textContent = 'Extensions';
       const n = el('md-extscount');
@@ -506,8 +552,12 @@
       views.every((v) => !ids.some((id) => memberIds(v, kind).includes(id)));
 
     let menuEl = null, menuSpec = null, menuOpenedAt = 0;
+    let menuPlaced = null, menuAnchor = null, menuRow = null;
 
     const closeMenu = () => {
+      if (menuRow) { menuRow.classList.remove('md-menu-open'); menuRow = null; }
+      if (menuPlaced) { menuPlaced.stop(); menuPlaced = null; }
+      if (menuAnchor) { menuAnchor.remove(); menuAnchor = null; }
       if (menuEl) {
         menuEl.remove();
         menuEl = null;
@@ -531,7 +581,7 @@
         closeMenu();
         return;
       }
-      render(menuSpec);
+      renderMenu(menuSpec);
     };
 
     const write = (spec, mode, view) => {
@@ -540,44 +590,46 @@
       });
     };
 
-    const menuBtn = (label, key, cls, fn) => {
-      const b = el('md-ctxitem' + (cls ? ' ' + cls : ''), 'button');
+    // A row of the design system's menu (blockr.ui's `.blockr-menu__*`
+    // classes, which style a menu built elsewhere the same way): the label,
+    // then the keystroke that does the same as meta text. A destructive row
+    // carries the bin and turns red only under the pointer.
+    const menuBtn = (label, key, opts, fn) => {
+      opts = opts || {};
+      const b = el('blockr-menu__item' +
+        (opts.danger ? ' blockr-menu__item--danger' : ''), 'button');
       b.type = 'button';
-      const l = el('md-ctxlabel');
+      b.setAttribute('role', 'menuitem');
+      if (opts.icon) {
+        const ic = el('blockr-menu__icon');
+        ic.innerHTML = ui.icon(opts.icon);
+        b.appendChild(ic);
+      }
+      const l = el('blockr-menu__label');
       l.textContent = label;
       b.appendChild(l);
       if (key) {
-        const k = el('md-ctxkey');
+        const k = el('blockr-menu__meta');
         k.textContent = key;
         b.appendChild(k);
       }
-      if (fn) {
-        b.addEventListener('click', (ev) => {
-          ev.stopPropagation();
-          fn();
-        });
-      } else {
-        b.disabled = true;
-      }
+      b.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        fn();
+      });
       return b;
     };
 
-    // The two bulk edits, as words at the right of the caption that already
-    // labels what they act on. They used to be a segmented row of three
-    // button-weight presets, which read as commands of the same rank as
-    // "Remove block" when they are a shortcut for ticking -- and the third,
-    // "Current", restated a gesture the board already has: clicking the block
-    // is the easier way to say "here". "Only this view" went with it; None
-    // followed by one tick is the same result in two visible steps rather
-    // than one hidden one.
+    // The two bulk edits, as words at the right of the group title that
+    // already labels what they act on: quiet text buttons, a shortcut for
+    // ticking rather than commands of the rank of "Remove block".
     const capActions = (spec, ids, kind) => {
       const wrap = el('md-ctxacts');
 
-      const one = (label, mode, off, title) => {
+      const one = (label, mode, off) => {
         const b = el('md-ctxact', 'button');
         b.type = 'button';
         b.textContent = label;
-        b.title = title;
         b.disabled = off;
         if (!off) {
           b.addEventListener('click', (ev) => {
@@ -589,16 +641,20 @@
         return b;
       };
 
-      wrap.appendChild(one('None', 'none', onNone(ids, kind),
-        'Show on no view — it stays on the board'));
-      const dot = el('md-ctxactdot');
-      dot.textContent = '·';
-      wrap.appendChild(dot);
-      wrap.appendChild(one('All', 'all', onEvery(ids, kind),
-        'Show on every view (' + views.length + ')'));
+      wrap.appendChild(one('None', 'none', onNone(ids, kind)));
+      wrap.appendChild(one('All', 'all', onEvery(ids, kind)));
       return wrap;
     };
 
+    // The half-way mark for a selection or a stack that is only partly on a
+    // view: a short stroke in the tick's slot, drawn like the tick.
+    const PARTIAL = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" ' +
+      'stroke="currentColor" stroke-width="1.5" stroke-linecap="round">' +
+      '<path d="M4 8h8"></path></svg>';
+
+    // A view as a multi pick: the tick in a slot every row keeps, the name
+    // (weight 600 on the view you are on, the menu's "current" mark), and the
+    // number of panels on it as meta text.
     const tickRow = (spec, v) => {
       const kind = spec.extensions.length ? 'extensions' : 'blocks';
       const ids = spec.blocks.concat(spec.extensions);
@@ -612,30 +668,26 @@
       const armKey = spec.extensions[0] + '@' + v.id;
       const armed = mine && armedTick === armKey;
 
-      const row = el('md-ctxtick' + (armed ? ' md-armed' : ''), 'div');
+      const row = el('blockr-menu__item md-ctxtick' +
+        (v.active ? ' md-ctxcur' : '') +
+        (armed ? ' md-armed' : ''), 'button');
+      row.type = 'button';
+      row.setAttribute('role', 'menuitemcheckbox');
+      row.setAttribute('aria-checked',
+        state === 'all' ? 'true' : state === 'some' ? 'mixed' : 'false');
 
-      row.appendChild(el('md-ctxbox' + (state === 'all' ? ' on'
-        : state === 'some' ? ' some' : '')));
+      const box = el('md-ctxbox');
+      box.innerHTML = state === 'all' ? ui.icon('check')
+        : state === 'some' ? PARTIAL : '';
+      row.appendChild(box);
 
-      const nm = el('md-ctxviewname');
+      const nm = el('blockr-menu__label');
       nm.textContent = armed ? 'Remove from ' + v.name + '?' : v.name;
       row.appendChild(nm);
 
-      const n = el('md-ctxviewn');
+      const n = el('blockr-menu__meta');
       n.textContent = v.n;
-      n.title = v.n + ' panels on ' + v.name;
       row.appendChild(n);
-
-      if (v.active) {
-        const dot = el('md-ctxactive');
-        dot.title = 'The current view';
-        row.appendChild(dot);
-      }
-
-      // No per-row "send it to this one" any more. It was a link that appeared
-      // only while the pointer was on the row that carried it, which is the
-      // least findable control a menu can have -- and "None, then tick one" is
-      // the same edit in two steps you can see and undo separately.
 
       row.addEventListener('click', (ev) => {
         ev.stopPropagation();
@@ -643,7 +695,7 @@
 
         if (mine && clearing && v.active && !armed) {
           armedTick = armKey;
-          render(spec);          // repaint in place: the menu stays open
+          renderMenu(spec);      // repaint in place: the menu stays open
           return;
         }
 
@@ -656,27 +708,30 @@
       return row;
     };
 
-    const render = (spec) => {
+    const renderMenu = (spec) => {
       const ids = spec.blocks.concat(spec.extensions);
       const kind = spec.extensions.length ? 'extensions' : 'blocks';
       const box = menuEl;
 
       box.innerHTML = '';
 
-      const head = el('md-ctxhead', 'div');
-      head.textContent = spec.label;
-      const hn = el('md-ctxheadn');
-      hn.textContent = views.filter((v) =>
-        ids.some((id) => memberIds(v, kind).includes(id))).length
-        + '/' + views.length;
-      head.appendChild(hn);
+      // The head: what the menu is about, and how many views hold it.
+      const head = el('blockr-menu__head', 'div');
+      const title = el('blockr-menu__head-title', 'div');
+      title.textContent = spec.label;
+      head.appendChild(title);
+      const on = views.filter((v) =>
+        ids.some((id) => memberIds(v, kind).includes(id))).length;
+      const text = el('blockr-menu__head-text', 'div');
+      text.textContent = 'On ' + on + ' of ' + views.length +
+        (views.length === 1 ? ' view' : ' views');
+      head.appendChild(text);
       box.appendChild(head);
 
-      const cap = el('md-ctxcap', 'div');
-      cap.textContent = 'Views';
-      const cn = el('md-ctxcapn');
-      cn.textContent = views.length;
-      cap.appendChild(cn);
+      const cap = el('blockr-menu__title md-ctxcap', 'div');
+      const capText = el('md-ctxcaptext');
+      capText.textContent = 'Views';
+      cap.appendChild(capText);
       cap.appendChild(capActions(spec, ids, kind));
       box.appendChild(cap);
 
@@ -686,36 +741,56 @@
 
       // The row operations, and only the ones with no gesture of their own.
       if (spec.kind !== 'ext') {
-        box.appendChild(el('md-ctxsep', 'div'));
+        box.appendChild(el('blockr-menu__divider', 'div'));
 
         if (spec.kind === 'block' && spec.blocks.length === 1) {
-          box.appendChild(menuBtn('Rename', 'dbl-click', '', () => {
+          const id = spec.blocks[0];
+          box.appendChild(menuBtn('Rename', '', null, () => {
             closeMenu();
-            rail.editName(spec.blocks[0]);
+            rail.editName(id);
           }));
+          // the row's `+`, for a panel too narrow to show it
+          if (registry.append.length) {
+            box.appendChild(menuBtn('Append a block', '', null, () => {
+              closeMenu();
+              openPicker(id, rowOf(id), null);
+            }));
+          }
         }
         if (spec.kind === 'stack') {
-          box.appendChild(menuBtn('Rename group', 'dbl-click', '', () => {
+          const sid = spec.stack;
+          box.appendChild(menuBtn('Rename group', '', null, () => {
             closeMenu();
-            rail.editName('stack:' + spec.stack);
+            rail.editName('stack:' + sid);
+          }));
+          // the header's focus and dissolve tools, likewise
+          if (rail.stackFocus() !== sid) {
+            box.appendChild(menuBtn('Show only this group', '', null, () => {
+              closeMenu();
+              rail.focusStack(sid);
+            }));
+          }
+          box.appendChild(menuBtn('Dissolve group', '', null, () => {
+            closeMenu();
+            push('stack_rm', { id: sid });
           }));
         }
 
-        box.appendChild(menuBtn('Copy', CLIP_KEY + 'C', '', () => {
+        box.appendChild(menuBtn('Copy', CLIP_KEY + 'C', null, () => {
           closeMenu();
           document.execCommand('copy');
         }));
-        box.appendChild(menuBtn('Cut', CLIP_KEY + 'X', '', () => {
+        box.appendChild(menuBtn('Cut', CLIP_KEY + 'X', null, () => {
           closeMenu();
           document.execCommand('cut');
         }));
 
-        box.appendChild(el('md-ctxsep', 'div'));
+        box.appendChild(el('blockr-menu__divider', 'div'));
         box.appendChild(menuBtn(
           spec.blocks.length > 1
             ? 'Remove ' + spec.blocks.length + ' blocks'
             : 'Remove block',
-          '', 'md-ctxdanger', () => {
+          '', { danger: true, icon: 'trash' }, () => {
             closeMenu();
             spec.blocks.forEach((id) => push('block_rm', { id: id }));
           }
@@ -740,64 +815,115 @@
       }).catch(() => {});
     };
 
+    // Empty space: the board's two operations, as a plain menu of actions
+    // (`Blockr.menu`) at the pointer.
     const openBoardMenu = (ev) => {
       closeMenu();
-
-      menuEl = el('md-ctxmenu md-ctxboard', 'div');
-      menuSpec = null;                  // nothing to repaint on a board push
-
-      const head = el('md-ctxhead', 'div');
-      head.textContent = 'Board';
-      menuEl.appendChild(head);
-
-      menuEl.appendChild(menuBtn('Add a block', '', '', () => {
-        closeMenu();
-        // where the menu was opened: the gesture had a position, and the
-        // picker is about to insert something there
-        requestAdd(null, deckPoint(ev));
-      }));
-      menuEl.appendChild(menuBtn('Paste', CLIP_KEY + 'V', '', () => {
-        closeMenu();
-        pasteFromClipboard();
-      }));
-
-      document.body.appendChild(menuEl);
-      placeMenu(ev);
+      const B = window.Blockr;
+      if (!B || !B.menu) return;
+      const at = deckPoint(ev);
+      const a = outlineRail.pointAnchor(ev.clientX, ev.clientY);
+      B.menu(a, {
+        caption: 'Board',
+        items: [
+          // where the menu was opened: the gesture had a position, and the
+          // picker is about to insert something there
+          { label: 'Add a block', onSelect: () => requestAdd(null, at) },
+          { label: 'Paste', meta: CLIP_KEY + 'V', onSelect: pasteFromClipboard }
+        ],
+        onClose: () => a.remove()
+      });
     };
 
-    // Fixed to the viewport, then clamped: flip up when it would run off the
-    // bottom, and pull left when it would run off the right.
-    const placeMenu = (ev) => {
-      const box = menuEl.getBoundingClientRect();
-      let left = ev.clientX;
-      let top = ev.clientY;
-      if (left + box.width > window.innerWidth - 6) {
-        left = Math.max(6, window.innerWidth - box.width - 6);
+    // Open the row menu hanging from `anchor` (a point for a right-click, the
+    // "+N" tag for a click on it), placed as every menu is: `Blockr.place`,
+    // under the anchor, flipped above when there is no room.
+    const openMenu = (spec, anchor, temp) => {
+      closeMenu();
+
+      if (!spec.blocks.length && !spec.extensions.length) {
+        if (temp) temp.remove();
+        return;
       }
-      if (top + box.height > window.innerHeight - 6) {
-        top = Math.max(6, ev.clientY - box.height);
+      // Nothing to say about placement on a board with one view, and for an extension
+      // row placement is all the menu has -- so it does not open at all there.
+      if (views.length < 2 && spec.kind === 'ext') {
+        if (temp) temp.remove();
+        return;
       }
-      menuEl.style.left = left + 'px';
-      menuEl.style.top = top + 'px';
-      menuEl.style.visibility = '';
+
+      menuEl = el('blockr-menu md-ctxmenu', 'div');
+      menuEl.setAttribute('role', 'menu');
+      menuSpec = spec;
+      menuAnchor = temp || null;
+      // A tool that shows only while its row is hovered stays while the
+      // menu it opened is open, so the menu keeps its anchor.
+      menuRow = anchor.closest ? anchor.closest('.md-chip, .md-stackhead') : null;
+      if (menuRow) menuRow.classList.add('md-menu-open');
+      document.body.appendChild(menuEl);
+      renderMenu(spec);
+
+      menuPlaced = window.Blockr && Blockr.place
+        ? Blockr.place(menuEl, anchor, { width: { min: 220, max: 320 } })
+        : null;
       menuOpenedAt = performance.now();
     };
 
-    const openMenu = (spec, ev) => {
-      closeMenu();
+    const rowOf = (id) => rootEl.querySelector(
+      '.md-chip[data-id="' + CSS.escape(id) + '"]');
 
-      if (!spec.blocks.length && !spec.extensions.length) return;
-      // Nothing to say about placement on a board with one view, and for an extension
-      // row placement is all the menu has -- so it does not open at all there.
-      if (views.length < 2 && spec.kind === 'ext') return;
+    const blockSpec = (ids) => ({
+      kind: 'block', blocks: ids, extensions: [],
+      label: ids.length > 1
+        ? ids.length + ' rows selected'
+        : (blockOf(ids[0]) || {}).name || ids[0]
+    });
 
-      menuEl = el('md-ctxmenu', 'div');
-      menuSpec = spec;
-      menuEl.style.visibility = 'hidden';
-      document.body.appendChild(menuEl);
-      render(spec);
+    const extSpec = (id) => ({
+      kind: 'ext', blocks: [], extensions: [id],
+      label: (extensions.find((x) => x.id === id) || {}).name || id
+    });
 
-      placeMenu(ev);
+    const stackSpec = (id) => {
+      const stack = stacks.find((x) => x.id === id);
+      const mem = stack ? asArr(stack.blocks) : [];
+      return {
+        kind: 'stack', blocks: mem, extensions: [], stack: id,
+        label: ((stack || {}).name || 'Group') + ' · ' + mem.length + ' blocks'
+      };
+    };
+
+    // The "+N" tag's click and the "…" tool: the same menu as a right-click
+    // on the row.
+    const openRowMenuFor = (anchor, ids, kind) => {
+      if (kind === 'extensions') {
+        openMenu(extSpec(ids[0]), anchor);
+        return;
+      }
+      rail.selectOnly(ids);
+      openMenu(blockSpec(ids), anchor);
+    };
+
+    // "…": the row menu from a tool, for a narrow panel (`md-narrow`).
+    const MORE_ICON = '<svg width="14" height="14" viewBox="0 0 16 16" ' +
+      'fill="currentColor"><circle cx="3.5" cy="8" r="1.25"></circle>' +
+      '<circle cx="8" cy="8" r="1.25"></circle>' +
+      '<circle cx="12.5" cy="8" r="1.25"></circle></svg>';
+    const moreBtn = (what) => {
+      const b = toolBtn('md-more md-narrow', MORE_ICON, 'Actions');
+      b.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        const w = what();
+        if (w.stack) {
+          const spec = stackSpec(w.stack);
+          if (!spec.blocks.length) return;
+          rail.selectOnly(spec.blocks);
+          openMenu(spec, b);
+          return;
+        }
+        openRowMenuFor(b, w.ids, w.kind);
+      });
+      return b;
     };
 
     // One delegated listener for every row shape the outline draws. The rail owns
@@ -818,24 +944,20 @@
         return;
       }
 
+      const at = () => outlineRail.pointAnchor(ev.clientX, ev.clientY);
+
       if (ext) {
-        const t = extensions.find((x) => x.id === ext.dataset.ext);
-        openMenu({
-          kind: 'ext', blocks: [], extensions: [ext.dataset.ext],
-          label: (t || {}).name || ext.dataset.ext
-        }, ev);
+        const a = at();
+        openMenu(extSpec(ext.dataset.ext), a, a);
         return;
       }
 
       if (head) {
-        const stack = stacks.find((x) => x.id === head.dataset.stack);
-        const mem = stack ? asArr(stack.blocks) : [];
-        if (!mem.length) return;
-        rail.selectOnly(mem);
-        openMenu({
-          kind: 'stack', blocks: mem, extensions: [], stack: stack.id,
-          label: (stack.name || 'Group') + ' · ' + mem.length + ' blocks'
-        }, ev);
+        const spec = stackSpec(head.dataset.stack);
+        if (!spec.blocks.length) return;
+        rail.selectOnly(spec.blocks);
+        const a = at();
+        openMenu(spec, a, a);
         return;
       }
 
@@ -847,12 +969,8 @@
         sel = [id];
       }
 
-      openMenu({
-        kind: 'block', blocks: sel, extensions: [],
-        label: sel.length > 1
-          ? sel.length + ' rows selected'
-          : (blockOf(id) || {}).name || id
-      }, ev);
+      const a = at();
+      openMenu(blockSpec(sel), a, a);
     });
 
     // Dismissal: a click anywhere outside, Escape, or a scroll -- the menu is
@@ -889,37 +1007,30 @@
       paintExts();
     };
 
-    /* ---- the inline block picker ----------------------------------------
+    /* ---- the block picker: the "+" menu -----------------------------------
      *
-     * One surface for adding and appending, because they are one operation:
+     * One menu for adding and appending, because they are one operation:
      * blockr.dock's `target_mode()` returns "add" when there is no target,
      * and the only downstream difference is that an append also makes a
      * link. So the origin decides two things and nothing else -- whether a
      * link is created, and which pool is offered (appending needs a block
      * that can receive a link).
      *
-     * Two states, one component. At REST it browses: every type, grouped by
-     * category, with its description. That is the catalogue, which is why
-     * the outline needs no second copy of it in a pane. As soon as you type it
-     * RECALLS: flat, ranked, keyboard-driven, uncapped -- a silent
-     * truncation would hide types from the only place they are listed.
-     *
-     * It opens AT the insertion point rather than as a page overlay, so the
-     * rail and the origin row stay on screen while you choose.
+     * It is the design system's "Picking a block": `Blockr.menu` with a
+     * caption saying what the pick does, a filter box, category titles, one
+     * row per block type with its mark, its name and the package as a
+     * badge, and no description. The rows are built the way blockr.dock's
+     * own "+" menu builds them (`add_block_menu_items()`, not exported), so
+     * the two read the same. It opens at the control that was pressed, or
+     * at the point a drag was released, so the rail and the origin row stay
+     * on screen while you choose.
      */
 
     let registry = { add: [], append: [] };
-    let picker = null, pickMatches = [], pickCursor = -1;
 
-    const closePicker = () => {
-      if (picker) picker.remove();
-      picker = null;
-      pickMatches = [];
-      pickCursor = -1;
-    };
+    const upperFirst = (x) => x ? x.charAt(0).toUpperCase() + x.slice(1) : x;
 
     const commitPick = (meta, originId) => {
-      closePicker();
       // An insert from inside a focused stack view names the stack, so R
       // can add the block AND its membership in one board update -- landing
       // loose and joining a roundtrip later left the block outside the view
@@ -948,10 +1059,7 @@
     };
 
     // Whichever control asked for a block: the "Add a block" row on a board
-    // that has rows, the empty state's button on one that has none. Reading
-    // `.md-addrow` blind is what opened the picker in the bottom-left corner
-    // of an empty panel -- there is no add row there, so the anchor was null
-    // and positioning threw before it could place the box.
+    // that has rows, the empty state's slot on one that has none.
     const addTrigger = () =>
       rootEl.querySelector('.md-addrow') ||
       rootEl.querySelector('.md-empty-add') ||
@@ -959,177 +1067,66 @@
 
     const requestAdd = (anchor, at) => {
       if (registry.add.length) {
-        openPicker(null, anchor || addTrigger(), at || null);
+        openPicker(null, at ? null : anchor || addTrigger(), at || null);
       } else {
         push('block_add', true);
       }
     };
 
-    const openPicker = (originId, anchor, at) => {
-
-      closePicker();
-
-      const pool = originId ? registry.append : registry.add;
-      if (!pool.length) return;
-
-      const box = el('md-picker', 'div');
-
-      // No context header. The picker opens ON the row whose `+` you pressed,
-      // or where you released the drag, so the origin is stated by position;
-      // a line above the list would only restate what you can see. It is also
-      // the one element here that had no equivalent in the block browser.
-      const inp = document.createElement('input');
-      inp.className = 'md-pick-search';
-      inp.type = 'search';
-      inp.placeholder = 'Search block types…';
-      box.appendChild(inp);
-
-      const list = el('md-pick-list', 'div');
-      box.appendChild(list);
-
-      // The block browser's resting row: tinted tile, name, package badge,
-      // and the description as `title` only. Its own comment says the
-      // description band "stays hidden until the card is expanded, keeping
-      // the resting list dense" -- putting all 60 on screen was the clutter.
-      // `-1` means "no row is current", and it is also what `pickCursor`
-      // holds while browsing -- so a bare `i === pickCursor` marked every
-      // row current, giving all 60 the hover border and wash at rest. That
-      // is what turned a flush list into a column of boxes.
-      const isCur = (i) => i >= 0 && i === pickCursor;
-
-      const rowFor = (m, i) => {
-        const r = el('md-pick-row' + (isCur(i) ? ' cur' : ''), 'div');
-        r.dataset.cat = m.category || 'other';
-        const ic = el('md-kind');
-        if (m.icon) {
-          ic.innerHTML = m.icon;          // registry glyph, as the browser
-        } else {
-          ic.textContent = (m.name || '?').slice(0, 1).toUpperCase();
-        }
-        r.appendChild(ic);
-        const nm = el('md-pick-name');
-        nm.textContent = m.name;
-        r.appendChild(nm);
-        const pk = el('md-pick-pkg');
-        pk.textContent = m.package;
-        r.appendChild(pk);
-        r.title = m.description || m.name;
-        r.addEventListener('click', () => commitPick(m, originId));
-        return r;
-      };
-
-      const paint = () => {
-
-        const q = inp.value.trim().toLowerCase();
-        list.innerHTML = '';
-        list.classList.toggle('browse', !q);
-
-        if (!q) {
-          pickMatches = pool;
-          pickCursor = -1;            // nothing preselected while browsing
-          const groups = new Map();
-          pool.forEach((m) => {
-            const k = m.category || 'other';
-            if (!groups.has(k)) groups.set(k, []);
-            groups.get(k).push(m);
-          });
-          groups.forEach((items, cat) => {
-            // the category name alone, as `category_section()` renders it
-            // (`tags$h3(category)`) -- the count was one more thing to read
-            const h = el('md-pick-group', 'div');
-            h.textContent = cat;
-            list.appendChild(h);
-            items.forEach((m) => list.appendChild(rowFor(m, -1)));
-          });
-          return;
-        }
-
-        // name matches first, then the ones that only match by package or
-        // category -- typing "dplyr" should find that package's blocks
-        const hit = (m) => (m.name || '').toLowerCase().includes(q);
-        const near = (m) => (m.package || '').toLowerCase().includes(q) ||
-          (m.category || '').toLowerCase().includes(q) ||
-          (m.description || '').toLowerCase().includes(q);
-        pickMatches = pool.filter(hit).concat(
-          pool.filter((m) => !hit(m) && near(m))
-        );
-        pickCursor = Math.max(0, Math.min(pickCursor, pickMatches.length - 1));
-        pickMatches.forEach((m, i) => list.appendChild(rowFor(m, i)));
-
-        if (!pickMatches.length) {
-          const e = el('md-pick-group', 'div');
-          e.textContent = 'no block type matches';
-          list.appendChild(e);
-        }
-      };
-
-      inp.addEventListener('input', () => { pickCursor = 0; paint(); });
-      inp.addEventListener('keydown', (ev) => {
-        if (ev.key === 'ArrowDown') {
-          ev.preventDefault();
-          pickCursor = Math.min(pickCursor + 1, pickMatches.length - 1);
-          paint();
-          const cur = list.querySelector('.cur');
-          if (cur) cur.scrollIntoView({ block: 'nearest' });
-        }
-        if (ev.key === 'ArrowUp') {
-          ev.preventDefault();
-          pickCursor = Math.max(0, pickCursor - 1);
-          paint();
-          const cur = list.querySelector('.cur');
-          if (cur) cur.scrollIntoView({ block: 'nearest' });
-        }
-        // only when something is genuinely selected: browsing preselects
-        // nothing, so Enter there must not add whatever happens to be first
-        if (ev.key === 'Enter' && pickCursor >= 0 && pickMatches[pickCursor]) {
-          commitPick(pickMatches[pickCursor], originId);
-        }
-        if (ev.key === 'Escape') { ev.stopPropagation(); closePicker(); }
+    // The rows, grouped under category titles in the order the catalogue
+    // lists them.
+    const pickerItems = (pool, originId) => {
+      const groups = new Map();
+      pool.forEach((m) => {
+        const k = m.category || 'other';
+        if (!groups.has(k)) groups.set(k, []);
+        groups.get(k).push(m);
       });
-
-      rootEl.appendChild(box);
-      picker = box;
-      paint();
-
-      // Anchor at the insertion point. `at` is the drag's release position
-      // (the renderer sends x/y on `block_append` for exactly this); a
-      // trigger with no coordinates anchors under its own element.
-      const rootBox = rootEl.getBoundingClientRect();
-      let left, top;
-      if (at) {
-        // measured against the DECK, which is where the renderer measures
-        // its own gestures -- the box is positioned within the PANEL, and
-        // the search row between the two is why the raw number landed the
-        // picker a header's height above the release
-        const deck = rootEl.querySelector('.md-deck');
-        const dBox = deck ? deck.getBoundingClientRect() : rootBox;
-        left = at.x + (dBox.left - rootBox.left);
-        top = at.y + (dBox.top - rootBox.top) + 8;
-      } else if (anchor) {
-        const r = anchor.getBoundingClientRect();
-        left = r.left - rootBox.left;
-        top = r.bottom - rootBox.top + 6;
-      } else {
-        // nothing to point at (a catalogue that arrived with no add row and
-        // no empty state on screen): the top of the panel, not a throw
-        left = 8;
-        top = 8;
-      }
-      const w = box.offsetWidth, h = box.offsetHeight;
-      // flip up rather than run off the bottom, which is the common case
-      // when appending from the last row
-      if (top + h > rootEl.clientHeight && top - h - 12 > 0) top = top - h - 20;
-      box.style.left = Math.max(4, Math.min(left, rootEl.clientWidth - w - 4)) + 'px';
-      box.style.top = Math.max(4, top) + 'px';
-
-      inp.focus();
+      const items = [];
+      groups.forEach((metas, cat) => {
+        items.push({ title: upperFirst(cat) });
+        metas.forEach((m) => items.push({
+          label: m.name,
+          badge: m.package,
+          // the type id, not the description: a description mentions other
+          // blocks' words and would match half the list
+          keywords: m.type + ' ' + cat,
+          mark: { icon: m.icon || '', color: m.color || '' },
+          onSelect: () => commitPick(m, originId)
+        }));
+      });
+      return items;
     };
 
-    // Click outside closes it. Capture phase, so a click that also lands on
-    // a row does not reopen it in the same gesture.
-    document.addEventListener('mousedown', (ev) => {
-      if (picker && !picker.contains(ev.target)) closePicker();
-    }, true);
+    const openPicker = (originId, anchor, at) => {
+
+      const pool = originId ? registry.append : registry.add;
+      if (!pool.length || !window.Blockr || !Blockr.menu) return;
+
+      // `at` is the drag's release position in deck coordinates (the
+      // renderer sends x/y on `block_append` for exactly this); a trigger
+      // hangs the menu under itself.
+      let temp = null;
+      if (!anchor || !anchor.isConnected) {
+        const deck = rootEl.querySelector('.md-deck') || rootEl;
+        const box = deck.getBoundingClientRect();
+        temp = outlineRail.pointAnchor(
+          box.left + (at ? at.x : 8), box.top + (at ? at.y : 8));
+        anchor = temp;
+      }
+
+      const origin = originId ? blockOf(originId) : null;
+      const fs = stacks.find((s) => s.id === rail.stackFocus());
+
+      Blockr.menu(anchor, {
+        caption: origin ? 'Append to ' + origin.name
+          : fs ? 'Add a block to ' + fs.name : 'Add a block',
+        filter: 'Search blocks',
+        minWidth: 300,
+        items: pickerItems(pool, originId),
+        onClose: () => { if (temp) temp.remove(); }
+      });
+    };
 
     /* ---- clipboard -------------------------------------------------
      *

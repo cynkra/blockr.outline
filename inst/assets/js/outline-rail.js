@@ -28,6 +28,14 @@
  *                                collapsed stack row. Stack rows are built
  *                                entirely by the renderer, so this is their
  *                                only adapter hook.
+ *   nodeTools(node) -> Element   optional: tools of the row, shown with its
+ *                                remove button on hover (the board's "append
+ *                                after this row"); give them `md-reveal`.
+ *                                With `opts.rowMenu`, one of them is a menu
+ *                                of all the row's tools, marked `md-narrow`:
+ *                                on a narrow panel it is the only one shown
+ *   stackTools(stack, collapsed) the same, for a stack header and the
+ *                                collapsed stack row
  *   slotsFor(from, to) -> []     which slots this edge could occupy; EMPTY
  *                                means "refuse the connection". Boards ask
  *                                the consumer (free named inputs, '' when
@@ -35,10 +43,15 @@
  *                                (which outcome does this branch leave on).
  *   slotPrompt(from, to)         caption of the slot picker
  *   showSlot(link) -> bool       whether that slot is worth naming
- *   opts { search, stacks, remove, status, allowCycles, nameEdit, edgeLabels,
- *          labelPad, searchPlaceholder, searchEmptyText, emptyText, emptyAddText, metrics,
- *          stackNoun, stackUnit, stackIcon, stackAddText, stackRmTitle,
- *          focusView, crumbRootText }
+ *   opts { search, searchMin, stacks, remove, status, allowCycles, nameEdit,
+ *          edgeLabels, labelPad, searchPlaceholder, searchEmptyText, emptyText,
+ *          emptyAddText, metrics, stackNoun, stackUnit, stackIcon, stackAddText,
+ *          stackRmTitle, focusView, crumbRootText, rowMenu }
+ *
+ * The page needs blockr.ui's controls (`blockr.ui::controls_dep()`, which
+ * `outline_rail_dep()` brings along): the rows draw its chevron and icons,
+ * name their tools with `Blockr.tooltip`, and open their menus with
+ * `Blockr.menu`.
  *
  * The stack wording is an option because a stack is only a stack on a board.
  * The process editor pushes the same object through as a multi-instance
@@ -93,16 +106,71 @@
   const SVG = 'http://www.w3.org/2000/svg';
   const svgEl = (tag) => document.createElementNS(SVG, tag);
 
-  const CHEV_D = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m6 9 6 6 6-6"/></svg>';
-  const CHEV_R = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m9 6 6 6-6 6"/></svg>';
-  const STACK_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m12 3 9 5-9 5-9-5 9-5z"/><path d="m3 13 9 5 9-5"/></svg>';
-  const SEARCH_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>';
+  const STACK_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5 9-5z"/><path d="m3 13 9 5 9-5"/></svg>';
+  const SEARCH_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>';
   const FOCUS_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 8V5a2 2 0 0 1 2-2h3"/><path d="M16 3h3a2 2 0 0 1 2 2v3"/><path d="M21 16v3a2 2 0 0 1-2 2h-3"/><path d="M8 21H5a2 2 0 0 1-2-2v-3"/><circle cx="12" cy="12" r="2.6" fill="currentColor" stroke="none"/></svg>';
+  const WARN_ICON = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.5 14.5 13.5h-13z"/><path d="M8 6.5v3"/><circle cx="8" cy="11.6" r="0.4" fill="currentColor"/></svg>';
 
   const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
   }[c]));
 
+  /* ---- the design system (blockr.ui), read at call time ----------------
+   *
+   * The chevron, the icons, the tooltip, the menu and the placement routine
+   * are blockr.ui's (`Blockr.*`, loaded by `outline_rail_dep()` through
+   * `blockr.ui::controls_dep()`). Read when used rather than when this file
+   * loads, so the load order of two scripts on one page does not matter,
+   * and so `node --test` can still require the module.
+   */
+  const ui = () => (typeof window !== 'undefined' && window.Blockr) || null;
+
+  const icon = (name) => {
+    const B = ui();
+    return (B && B.icons && B.icons[name]) || '';
+  };
+
+  // The one tooltip (the light card). An icon-only control gets one; a label
+  // gets one only while it is cut off (`overflow`). `aria-label` rides along
+  // on controls so a screen reader hears the same words.
+  const tip = (el, text, opts) => {
+    const B = ui();
+    if (B && B.tooltip) B.tooltip.set(el, text, opts);
+  };
+
+  // A 26px tool: bare, the icon in text-muted, a hover wash. Every one of
+  // them is icon-only, so every one carries its name as a tooltip.
+  const toolBtn = (cls, svg, label) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'md-tool' + (cls ? ' ' + cls : '');
+    b.innerHTML = svg;
+    b.setAttribute('aria-label', label);
+    tip(b, label);
+    return b;
+  };
+
+  // A fold's chevron: down while open, right while closed (rotated by CSS).
+  const chevBtn = (cls, open, label) => {
+    const b = toolBtn('md-chev' + (open ? '' : ' md-closed') +
+      (cls ? ' ' + cls : ''), icon('chevron'), label);
+    b.setAttribute('aria-expanded', open ? 'true' : 'false');
+    return b;
+  };
+
+  // A zero-size box to hang a menu from where there is no element to hang it
+  // from: the point a drag was released, the point of a right-click.
+  const pointAnchor = (x, y) => {
+    const a = document.createElement('div');
+    a.className = 'md-anchor';
+    a.style.cssText = 'position:fixed;width:0;height:0;left:' + x +
+      'px;top:' + y + 'px;';
+    document.body.appendChild(a);
+    return a;
+  };
+
+  // Kept for hosts that read it off the module; the renderer itself mixes
+  // tints in the stylesheet (`color-mix()`), so they follow the dark scheme.
   const hexA = (hex, a) => {
     const h = hex.replace('#', '');
     const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16),
@@ -121,19 +189,23 @@
       remove: true, status: true,
       allowCycles: false, nameEdit: 'dblclick',
       edgeLabels: false, labelPad: 34,
-      searchPlaceholder: 'Search blocks…',
-      searchEmptyText: 'No block matches.',
+      // The design system's search field shows only above 8 entries, as a
+      // menu shows its filter box: a list that fits on screen is read, not
+      // searched. A host that wants it always can pass 0.
+      searchMin: 8,
+      searchPlaceholder: 'Search…',
+      searchEmptyText: 'No block matches',
       emptyText: 'No blocks yet.',
-      emptyAddText: '+ Add a block',
+      emptyAddText: 'Add a block',
       addRowText: 'Add a block',
-      addRowTitle: 'A block that reads from nothing',
       stackNoun: 'Stack', stackUnit: 'blocks', stackIcon: STACK_ICON,
       stackAddText: 'Stack them', stackRmTitle: 'Dissolve stack (blocks stay)',
       // The stack-focus view: a focus button on every stack row, and the
       // list narrowed to that stack plus whatever touches it. The whole
       // board's name in the breadcrumb is an option because only a board
       // calls itself one.
-      focusView: true, crumbRootText: 'Board'
+      focusView: true, crumbRootText: 'Board',
+      rowMenu: false
     }, adapter.opts || {});
     const M = Object.assign({}, DEFAULT_METRICS, opts.metrics || {});
     const { LANE_W, ROW_H, GAP, RAIL_L, RAIL_R, DOT_R } = M;
@@ -145,6 +217,8 @@
     const nodeTrail = adapter.nodeTrail || (() => null);
     const nodeAside = adapter.nodeAside || (() => null);
     const stackAside = adapter.stackAside || (() => null);
+    const nodeTools = adapter.nodeTools || (() => null);
+    const stackTools = adapter.stackTools || (() => null);
     const slotPrompt = adapter.slotPrompt ||
       ((from, to) => 'Into which input of ' + to.name + '?');
     // whether the connections popover names the slot an edge occupies
@@ -157,10 +231,13 @@
     // that stylesheet describes -- so it puts the class on rather than making
     // every host remember to (the board's container already has it).
     rootEl.classList.add('outline');
+    // A host whose row tools include a menu of the row's other tools (the
+    // board's "…", see `nodeTools`): on a narrow panel only that one shows.
+    rootEl.classList.toggle('md-rowmenu', !!opts.rowMenu);
     // The row height is a metric, so CSS reads it from here rather than
     // hard-coding 28px: a process step row is taller than a block row.
-    rootEl.style.setProperty('--md-row-h', ROW_H + 'px');
-    rootEl.style.setProperty('--md-row-gap', GAP + 'px');
+    rootEl.style.setProperty('--blockr-outline-row-h', ROW_H + 'px');
+    rootEl.style.setProperty('--blockr-outline-row-gap', GAP + 'px');
 
     // Everything that is ABOUT the list rather than in it -- search, and the
     // selection actions -- rides in one sticky header. On a 92-row board the
@@ -172,9 +249,9 @@
     headEl.className = 'md-head';
     rootEl.appendChild(headEl);
 
-    // "Board › <stack> ×" while a stack is focused; hidden otherwise. Above
-    // the search row, so the search reads as scoped BY it -- the placeholder
-    // says "Search within <stack>…" and this line says why.
+    // The focused stack, as a tag with an x, while a stack is focused. Above
+    // the search row, so the search reads as scoped BY it: inside a focused
+    // stack the query looks at its members only.
     let crumbEl = null;
     if (opts.stacks && opts.focusView) {
       crumbEl = document.createElement('div');
@@ -183,48 +260,65 @@
       headEl.appendChild(crumbEl);
     }
 
-    let searchEl = null, hitsEl = null, foldBtn = null;
-    if (opts.search) {
-      const searchRow = document.createElement('div');
+    // The search field, the fold-all tool and (for a host that wants one) an
+    // add tool share one row. The row itself goes when none of them is
+    // showing, which on a small board without stacks is the usual case.
+    let searchRow = null, searchField = null, searchEl = null, hitsEl = null,
+      clearEl = null, foldBtn = null, addBtn = null;
+    if (opts.search || opts.stacks || opts.addButton) {
+      searchRow = document.createElement('div');
       searchRow.className = 'md-search-row';
-      searchRow.innerHTML = '<span class="md-search-icon">' + SEARCH_ICON + '</span>';
+      headEl.appendChild(searchRow);
+    }
+    if (opts.search) {
+      // The design system's search field: the magnifier inside on the left,
+      // the hit count and a clear button inside on the right while there is
+      // a query.
+      searchField = document.createElement('div');
+      searchField.className = 'md-search-field';
+      searchField.innerHTML = '<span class="md-search-icon">' + SEARCH_ICON + '</span>';
       searchEl = document.createElement('input');
       searchEl.className = 'md-search';
+      searchEl.type = 'text';
+      searchEl.autocomplete = 'off';
       searchEl.placeholder = opts.searchPlaceholder;
-      searchRow.appendChild(searchEl);
+      searchEl.setAttribute('aria-label', 'Search');
+      searchField.appendChild(searchEl);
       hitsEl = document.createElement('span');
       hitsEl.className = 'md-hits';
-      searchRow.appendChild(hitsEl);
-      // Fold or unfold EVERY stack at once: collapsed-all reads as a table
-      // of contents of the board. Lives beside the search because both are
-      // about the whole list; hidden inside a focused view, where the
-      // folding is the view's own doing. `updateFold` (called from render)
-      // keeps its title and pressed state honest.
-      if (opts.stacks) {
-        foldBtn = document.createElement('button');
-        foldBtn.type = 'button';
-        foldBtn.className = 'md-fold';
-        foldBtn.innerHTML = opts.stackIcon;
-        foldBtn.addEventListener('click', () => {
-          const all = stacks.length &&
-            stacks.every((s) => collapsed.has(s.id));
-          if (all) collapsed.clear();
-          else stacks.forEach((s) => collapsed.add(s.id));
-          render();
-        });
-        searchRow.appendChild(foldBtn);
-      }
-      if (opts.addButton) {
-        const addBtn = document.createElement('button');
-        addBtn.className = 'md-add';
-        addBtn.textContent = '+';
-        addBtn.title = 'Add block';
-        // the button itself travels with the gesture: an adapter that
-        // answers with a picker opens it ON the control that was pressed
-        addBtn.addEventListener('click', () => emit('block_add', { el: addBtn }));
-        searchRow.appendChild(addBtn);
-      }
-      headEl.appendChild(searchRow);
+      searchField.appendChild(hitsEl);
+      clearEl = toolBtn('md-search-clear', icon('x'), 'Clear the search');
+      clearEl.hidden = true;
+      clearEl.addEventListener('click', () => {
+        searchEl.value = '';
+        applySearch();
+        searchEl.focus();
+      });
+      searchField.appendChild(clearEl);
+      searchRow.appendChild(searchField);
+    }
+    // Fold or unfold EVERY stack at once: collapsed-all reads as a table
+    // of contents of the board. Lives beside the search because both are
+    // about the whole list; hidden inside a focused view, where the
+    // folding is the view's own doing. `updateFold` (called from render)
+    // keeps its tooltip and pressed state honest.
+    if (opts.stacks) {
+      foldBtn = toolBtn('md-fold', opts.stackIcon, 'Collapse all');
+      foldBtn.addEventListener('click', () => {
+        const all = stacks.length &&
+          stacks.every((s) => collapsed.has(s.id));
+        if (all) collapsed.clear();
+        else stacks.forEach((s) => collapsed.add(s.id));
+        render();
+      });
+      searchRow.appendChild(foldBtn);
+    }
+    if (opts.addButton) {
+      addBtn = toolBtn('md-add', icon('plus'), 'Add a block');
+      // the button itself travels with the gesture: an adapter that
+      // answers with a picker opens it ON the control that was pressed
+      addBtn.addEventListener('click', () => emit('block_add', { el: addBtn }));
+      searchRow.appendChild(addBtn);
     }
 
     let barEl = null, selcountEl = null, mkstackBtn = null;
@@ -232,14 +326,14 @@
       barEl = document.createElement('div');
       barEl.className = 'md-actionbar';
       selcountEl = document.createElement('span');
+      selcountEl.className = 'md-selcount';
       barEl.appendChild(selcountEl);
       mkstackBtn = document.createElement('button');
-      mkstackBtn.className = 'md-go';
+      mkstackBtn.type = 'button';
+      mkstackBtn.className = 'md-btn md-btn--main';
       mkstackBtn.textContent = opts.stackAddText;
       barEl.appendChild(mkstackBtn);
-      const clearselBtn = document.createElement('button');
-      clearselBtn.className = 'md-no';
-      clearselBtn.textContent = 'Clear';
+      const clearselBtn = toolBtn('md-selclear', icon('x'), 'Clear the selection');
       barEl.appendChild(clearselBtn);
       headEl.appendChild(barEl);
 
@@ -395,6 +489,7 @@
       searchKeep = null;
       searchHits = null;
       if (hitsEl) hitsEl.textContent = '';
+      if (clearEl) clearEl.hidden = true;
     };
 
     const setStackFocus = (id) => {
@@ -433,51 +528,67 @@
       if (!foldBtn) return;
       foldBtn.hidden = !stacks.length || !!stackFocus;
       const all = stacks.length && stacks.every((x) => collapsed.has(x.id));
+      // pressed while everything is folded: the accent tint, as every
+      // pressed icon button
       foldBtn.classList.toggle('active', !!all);
-      foldBtn.title = all ? 'Expand all' : 'Collapse all';
+      foldBtn.setAttribute('aria-pressed', all ? 'true' : 'false');
+      const label = all ? 'Expand all' : 'Collapse all';
+      foldBtn.setAttribute('aria-label', label);
+      tip(foldBtn, label);
+    };
+
+    // What the head row holds right now. The search field is there above
+    // `searchMin` entries (the members, inside a focused stack) or while a
+    // query is typed; the row goes when nothing in it shows, and the
+    // selection bar, which normally lies over it, then takes its own line.
+    const updateHead = () => {
+      if (searchField) {
+        const fs = focusedStack();
+        const n = fs ? fs.blocks.length : blocks.length;
+        searchField.hidden = n <= opts.searchMin && !searchEl.value;
+      }
+      if (searchRow) {
+        searchRow.hidden = (!searchField || searchField.hidden) &&
+          (!foldBtn || foldBtn.hidden) && !addBtn;
+      }
+      headEl.classList.toggle('md-head--bare', !searchRow || searchRow.hidden);
     };
 
     const updateCrumb = () => {
       const s = focusedStack();
       rootEl.classList.toggle('md-focused', !!s);
       updateFold();
-      if (searchEl) {
-        searchEl.placeholder = s
-          ? 'Search within ' + s.name + '…' : opts.searchPlaceholder;
-      }
+      updateHead();
       if (!crumbEl) return;
       crumbEl.hidden = !s;
       crumbEl.innerHTML = '';
       if (!s) return;
-      // One pill, one ×. This started life as a "Board › <stack>" breadcrumb,
+      // One tag, one ×. This started life as a "Board › <stack>" breadcrumb,
       // but nothing else in the app navigates by breadcrumb, so it read as a
-      // new idiom to learn. A filter pill is one the search row already
-      // taught: something is narrowing the list, and × takes it off.
+      // new idiom to learn. A tag is one the design system already has: a
+      // value in force, and × takes it off.
       const cur = document.createElement('span');
       cur.className = 'md-crumb-cur';
       if (s.color) {
-        cur.style.borderColor = hexA(s.color, 0.5);
-        cur.style.background = hexA(s.color, 0.06);
+        cur.classList.add('md-tinted');
+        cur.style.setProperty('--blockr-outline-stack', s.color);
       }
       const cap = document.createElement('span');
       cap.className = 'md-cap';
       cap.innerHTML = opts.stackIcon;
-      if (s.color) cap.style.color = s.color;
+      if (s.color) cap.style.setProperty('--blockr-outline-mark', s.color);
       cur.appendChild(cap);
       const nm = document.createElement('span');
       nm.className = 'md-crumb-name';
       nm.textContent = s.name;
-      nm.title = s.name;   // readable even when ellipsized
+      tip(nm, s.name, { overflow: true });   // readable even when cut off
       cur.appendChild(nm);
       const n = document.createElement('span');
-      n.className = 'md-crumb-n';
+      n.className = 'md-badge';
       n.textContent = s.blocks.length + ' ' + opts.stackUnit;
       cur.appendChild(n);
-      const x = document.createElement('button');
-      x.type = 'button';
-      x.className = 'md-crumb-x';
-      x.textContent = '×';
-      x.title = 'Back to the whole ' + opts.crumbRootText.toLowerCase();
+      const x = toolBtn('md-crumb-x', icon('remove'),
+        'Back to the whole ' + opts.crumbRootText.toLowerCase());
       x.addEventListener('click', clearStackFocus);
       cur.appendChild(x);
       crumbEl.appendChild(cur);
@@ -574,34 +685,38 @@
       // block" there would answer a question nobody asked, and hide the one
       // fact that matters -- the board still has 92 rows, this query reaches
       // none of them.
-      if (searchKeep && !searchKeep.size) {
-        const empty = document.createElement('div');
-        empty.className = 'md-empty';
-        empty.innerHTML = '<p>' + escapeHtml(opts.searchEmptyText) + '</p>';
+      // Both empty states are the design system's one line of italic muted
+      // text where the rows would be, with the way out as a slot in it.
+      const emptyLine = (text, slotText, onSlot) => {
+        const p = document.createElement('p');
+        p.className = 'md-empty';
+        p.appendChild(document.createTextNode(text + ' '));
         const b = document.createElement('button');
-        b.className = 'md-empty-add';
-        b.textContent = 'Clear the search';
-        b.addEventListener('click', () => {
-          searchEl.value = '';
-          applySearch();
-          searchEl.focus();
-        });
-        empty.appendChild(b);
-        deckEl.appendChild(empty);
+        b.type = 'button';
+        b.className = 'md-empty-add md-slot';
+        // a host may still write the old "+ Add ..." wording; the slot is
+        // already the offer, so the plus goes
+        b.textContent = String(slotText).replace(/^\+\s*/, '');
+        b.addEventListener('click', () => onSlot(b));
+        p.appendChild(b);
+        deckEl.appendChild(p);
+      };
+
+      if (searchKeep && !searchKeep.size) {
+        const q = searchEl ? searchEl.value.trim() : '';
+        emptyLine(opts.searchEmptyText + (q ? ' “' + q + '”.' : '.'),
+          'Clear the search', () => {
+            searchEl.value = '';
+            applySearch();
+            searchEl.focus();
+          });
         updateBar();
         return;
       }
 
       if (!blocks.length) {
-        const empty = document.createElement('div');
-        empty.className = 'md-empty';
-        empty.innerHTML = '<p>' + escapeHtml(opts.emptyText) + '</p>';
-        const b = document.createElement('button');
-        b.className = 'md-empty-add';
-        b.textContent = opts.emptyAddText;
-        b.addEventListener('click', () => emit('block_add', { el: b }));
-        empty.appendChild(b);
-        deckEl.appendChild(empty);
+        emptyLine(opts.emptyText, opts.emptyAddText,
+          (b) => emit('block_add', { el: b }));
         updateBar();
         return;
       }
@@ -718,20 +833,13 @@
         p.setAttribute('stroke-width', '1.6');
         p.setAttribute('stroke-dasharray', '3 3');
         p.setAttribute('marker-end', 'url(#' + arrowId + ')');
+        // `up` is not a loop: it is a plain dependency the ROW ORDER could
+        // not honour, and the only thing that forces that on a board is a
+        // stack whose frame has to jump over a block feeding it. The stack
+        // header's "between" button is where that is explained and fixed.
         p.setAttribute('class', 'md-edge md-edge-back' + (e.up ? ' md-edge-up' : ''));
         p.dataset.from = e.from;
         p.dataset.to = e.to;
-        // `up` is not a loop: it is a plain dependency the ROW ORDER could
-        // not honour, and the only thing that forces that on a board is a
-        // stack whose frame has to jump over a block feeding it. Say so on
-        // the line itself -- the alternative is an arrow that reads as a
-        // cycle on a graph that cannot have one.
-        if (e.up) {
-          const t = svgEl('title');
-          t.textContent = 'Feeds a row above it: a stack in between keeps ' +
-            'its rows together, so this link has to climb.';
-          p.appendChild(t);
-        }
         svg.appendChild(p);
         const hit = svgEl('path');
         hit.setAttribute('d', p.getAttribute('d'));
@@ -759,7 +867,8 @@
           perRow.set(r, n + 1);
           const t = svgEl('text');
           t.setAttribute('x', railW - RAIL_R);
-          t.setAttribute('y', dotY(r) - 5 - n * 9);
+          // one line per label at the canvas type size (11px)
+          t.setAttribute('y', dotY(r) - 5 - n * 11);
           t.setAttribute('text-anchor', 'end');
           t.setAttribute('class', 'md-edge-label');
           t.setAttribute('fill', LANE_COLORS[e.lane % LANE_COLORS.length]);
@@ -775,14 +884,17 @@
           : null;
         const laneCol = LANE_COLORS[laneOf.get(e.id) % LANE_COLORS.length];
         const baseR = isStack ? DOT_R + 1 : DOT_R;
+        // The lane or stack colour is data and goes on as an attribute; the
+        // surface the dot is punched out of is a token, so the stylesheet
+        // sets it (a CSS rule outranks a presentation attribute).
         const c = svgEl('circle');
         c.setAttribute('cx', laneX(laneOf.get(e.id)));
         c.setAttribute('cy', dotY(e.row));
         c.setAttribute('r', baseR);
-        c.setAttribute('fill', isStack ? (stackCol || laneCol) : '#fff');
-        c.setAttribute('stroke', isStack ? '#fff' : laneCol);
+        if (isStack) c.setAttribute('fill', stackCol || laneCol);
+        else c.setAttribute('stroke', laneCol);
         c.setAttribute('stroke-width', '2');
-        c.setAttribute('class', 'md-dot');
+        c.setAttribute('class', 'md-dot' + (isStack ? ' md-dot--stack' : ''));
         c.dataset.rail = e.id;
         svg.appendChild(c);
         const hc = svgEl('circle');
@@ -791,15 +903,19 @@
         hc.setAttribute('r', '11');
         hc.setAttribute('fill', 'transparent');
         hc.setAttribute('pointer-events', 'all');
-        hc.style.cursor = 'crosshair';
-        const tip = svgEl('title');
-        tip.textContent = 'Drag to connect or append · click for connections';
-        hc.appendChild(tip);
+        hc.setAttribute('class', 'md-dot-hit');
+        // the dot is a control with no words on it, so it names its gestures
+        tip(hc, 'Drag to connect or append; click for connections');
         hc.addEventListener('mouseenter', () => c.setAttribute('r', String(baseR + 1.5)));
         hc.addEventListener('mouseleave', () => c.setAttribute('r', String(baseR)));
         hc.addEventListener('mousedown', (ev) => {
-          const anchor = deckEl.querySelector('.md-chip[data-id="' + CSS.escape(e.id) + '"]');
-          startDrag(ev, e.id, hc, () => { if (anchor) openConn(anchor, e.id); });
+          // the row is looked up when the menu opens: a render in between
+          // replaces it
+          startDrag(ev, e.id, hc, () => {
+            const anchor = deckEl.querySelector(
+              '.md-chip[data-id="' + CSS.escape(e.id) + '"]');
+            if (anchor) openConn(anchor, e.id);
+          });
         });
         svg.appendChild(hc);
       });
@@ -813,9 +929,11 @@
         frame.dataset.stack = r.stack.id;
         if (r.stack.color) {
           // a custom property rather than `style.borderColor`: the selected
-          // state needs to override this, and an inline value would win
-          frame.style.setProperty('--md-stack-color', r.stack.color);
-          frame.style.background = hexA(r.stack.color, 0.06);
+          // state needs to override this, and an inline value would win. The
+          // tint is mixed in the stylesheet, onto the surface, so it follows
+          // the dark scheme.
+          frame.classList.add('md-tinted');
+          frame.style.setProperty('--blockr-outline-stack', r.stack.color);
         }
         frame.style.left = (railW - FRAME_PAD_X) + 'px';
         frame.style.right = '0px';
@@ -853,17 +971,18 @@
       // empty state carries the same offer, so this is only drawn when there are
       // rows.
       if (opts.addRow) {
+        // A quiet button, as "Add condition" under a list of rows: text only,
+        // with the plus, and a hover wash. It sizes to its words; the margin
+        // lines its text up with the names above it.
         const addRow = document.createElement('button');
         addRow.type = 'button';
         addRow.className = 'md-addrow';
         addRow.style.marginLeft = railW + 'px';
-        // A form control is shrink-to-fit even as a flex container, so unlike
-        // `.md-rows` (a div, which fills by default) the width has to be stated.
-        addRow.style.width = 'calc(100% - ' + railW + 'px)';
-        addRow.title = opts.addRowTitle;
-        const tile = document.createElement('span');
-        tile.className = 'md-addrow-tile';
-        addRow.appendChild(tile);
+        addRow.style.maxWidth = 'calc(100% - ' + railW + 'px)';
+        const plus = document.createElement('span');
+        plus.className = 'md-addrow-icon';
+        plus.innerHTML = icon('plus');
+        addRow.appendChild(plus);
         const lbl = document.createElement('span');
         lbl.className = 'md-addrow-label';
         // While focused, a new block joins the focused stack at creation
@@ -930,6 +1049,22 @@
 
     /* ---- row builders ---- */
 
+    // The right end of a row: its tools, then whatever else keeps the right
+    // edge (the adapter's aside, a stack's chevron). On a panel narrow
+    // enough that the names need every pixel, the tools lie OVER the end of
+    // the name while the row is hovered instead of pushing it shorter;
+    // wider, they sit in the row (outline.css steps between the two on the
+    // panel's width).
+    const rowEnd = (row) => {
+      const end = document.createElement('span');
+      end.className = 'md-end';
+      const tools = document.createElement('span');
+      tools.className = 'md-rowtools';
+      end.appendChild(tools);
+      row.appendChild(end);
+      return { el: end, tools: tools };
+    };
+
     // The renderer owns the row shell (identity, selection, drop feedback,
     // rename, status, remove); the adapter paints what is inside it.
     const chip = (b, inStack) => {
@@ -940,7 +1075,16 @@
       // the frame ends at the outline's right edge, so a framed row has to stop
       // short of it or the border is drawn ON the row -- padded on the left,
       // clipped on the right, which is how it read before
-      if (inStack) el.style.marginRight = FRAME_PAD_X + 'px';
+      if (inStack) {
+        el.style.marginRight = FRAME_PAD_X + 'px';
+        // what is under the row is the frame's fill, which the row's hover
+        // tools are painted on (outline.css)
+        const home = stackOf(b.id);
+        if (home && home.color) {
+          el.classList.add('md-tinted');
+          el.style.setProperty('--blockr-outline-stack', home.color);
+        }
+      }
 
       const lead = nodeLead(b);
       if (lead) el.appendChild(lead);
@@ -970,25 +1114,28 @@
       spring.className = 'md-spring';
       el.appendChild(spring);
 
+      const end = rowEnd(el);
+
+      // The row's tools, shown on hover or keyboard focus of the row: the
+      // adapter's (the board's "append after this row") and remove.
+      const extra = nodeTools(b);
+      if (extra) end.tools.appendChild(extra);
+      if (opts.remove) {
+        const rm = toolBtn('md-rm md-reveal', icon('x'), 'Remove block');
+        rm.addEventListener('click', (e) => {
+          e.stopPropagation();
+          emit('block_rm', { id: b.id });
+        });
+        end.tools.appendChild(rm);
+      }
+
       // Past the spring, so it right-aligns: `nodeTrail` sits beside the name
       // and is the wrong place for anything that wants to read as a column
       // down the outline. Kept as a separate hook rather than moving `nodeTrail`,
       // which blockr.process's adapter uses for exactly the beside-the-name
       // job its name promises.
       const aside = nodeAside(b);
-      if (aside) el.appendChild(aside);
-
-      if (opts.remove) {
-        const rm = document.createElement('button');
-        rm.className = 'md-rm';
-        rm.textContent = '×';
-        rm.title = 'Remove block';
-        rm.addEventListener('click', (e) => {
-          e.stopPropagation();
-          emit('block_rm', { id: b.id });
-        });
-        el.appendChild(rm);
-      }
+      if (aside) end.el.appendChild(aside);
 
       // Only where there is somewhere to drop: on a board with no stacks the
       // gesture has no target, and swallowing mousedown would cost the row
@@ -1067,16 +1214,59 @@
       const name = document.createElement('span');
       name.className = 'md-name';
       name.textContent = obj.name;
-      name.title = 'Click to open · double-click to rename · ⌘-click to select';
-      name.addEventListener('dblclick', () => {
+      renameable(name, obj, commit, 'block');
+      return name;
+    };
+
+    /* Renaming in place (design system, "Renaming in place"): a double-click
+     * on the name, or Rename in the row menu (`editName`), turns the text
+     * into a field at its own size and weight. Enter commits, Escape
+     * restores, a click elsewhere commits. An empty name is refused in place:
+     * the danger edge and one line under the field saying why, and the field
+     * stays open. At rest the name carries a tooltip only while it is cut
+     * off. */
+    const renameable = (name, obj, commit, noun) => {
+      name.classList.add('md-name--edit');
+      // no tooltip while the name is a field
+      tip(name, () => name.isContentEditable ? '' : obj.name, { overflow: true });
+      let errEl = null;
+      const setBad = (bad) => {
+        name.classList.toggle('md-name--bad', bad);
+        if (bad && !errEl) {
+          errEl = document.createElement('span');
+          errEl.className = 'md-name-error';
+          errEl.setAttribute('role', 'alert');
+          errEl.textContent = 'A ' + noun + ' needs a name';
+          const row = name.parentElement;
+          if (row) {
+            row.appendChild(errEl);
+            // under the name, pulled left as far as it has to be to stay in
+            // the row (a narrow panel clips what runs past it)
+            errEl.style.left = Math.max(0, Math.min(name.offsetLeft,
+              row.clientWidth - errEl.offsetWidth)) + 'px';
+          }
+        }
+        if (!bad && errEl) { errEl.remove(); errEl = null; }
+      };
+      const start = () => {
+        // the row's tools stand back while it is renamed
+        if (name.parentElement) name.parentElement.classList.add('md-renaming');
         name.contentEditable = 'true';
+        name.spellcheck = false;
         name.focus();
         document.getSelection().selectAllChildren(name);
-      });
+      };
+      name._mdEdit = start;
+      name.addEventListener('dblclick', start);
+      name.addEventListener('input', () => setBad(false));
       name.addEventListener('blur', () => {
         if (name.contentEditable !== 'true') return;
         name.contentEditable = 'false';
+        if (name.parentElement) name.parentElement.classList.remove('md-renaming');
+        setBad(false);
         const nm = name.textContent.trim();
+        // a click elsewhere commits; an empty name cannot be committed, so
+        // leaving the field with one restores the old name
         if (nm && nm !== obj.name) {
           obj.name = nm;
           commit(nm);
@@ -1085,10 +1275,17 @@
         if (pendingRender) render();
       });
       name.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') { e.preventDefault(); name.blur(); }
-        if (e.key === 'Escape') { name.textContent = obj.name; name.blur(); }
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          if (!name.textContent.trim()) { setBad(true); return; }
+          name.blur();
+        }
+        if (e.key === 'Escape') {
+          e.stopPropagation();
+          name.textContent = obj.name;
+          name.blur();
+        }
       });
-      return name;
     };
 
     const stackChip = (stack) => {
@@ -1096,11 +1293,13 @@
       el.className = 'md-chip md-stackchip';
       el.dataset.id = 'stack:' + stack.id;
 
+      // the stack's mark: its icon on a tint of the stack's colour, drawn as
+      // a block's mark is
       const k = document.createElement('span');
-      k.className = 'md-kind';
+      k.className = 'md-kind md-stackkind';
       k.innerHTML = opts.stackIcon;
-      if (stack.color) k.style.background = stack.color;
-      k.title = opts.stackNoun;
+      if (stack.color) k.style.setProperty('--blockr-outline-mark', stack.color);
+      k.setAttribute('aria-label', opts.stackNoun);
       el.appendChild(k);
 
       // Same position as on a block row (see chip()): the collapsed stack's
@@ -1113,8 +1312,10 @@
       const name = document.createElement('span');
       name.className = 'md-name';
       name.textContent = stack.name;
+      tip(name, stack.name, { overflow: true });
       el.appendChild(name);
 
+      // a count with a unit is a badge: neutral, read-only
       const badge = document.createElement('span');
       badge.className = 'md-badge';
       badge.textContent = stack.blocks.length + ' ' + opts.stackUnit;
@@ -1124,8 +1325,13 @@
       spring.className = 'md-spring';
       el.appendChild(spring);
 
+      const end = rowEnd(el);
+
+      const extraS = stackTools(stack, true);
+      if (extraS) end.tools.appendChild(extraS);
+
       const aside = stackAside(stack, true);
-      if (aside) el.appendChild(aside);
+      if (aside) end.el.appendChild(aside);
 
       // Inside a focused view every other stack's row is a DOORWAY: the
       // collapse behind it is synthetic (drawModel folded it, `collapsed`
@@ -1135,35 +1341,30 @@
       const doorway = opts.focusView && stackFocus && stack.id !== stackFocus;
 
       if (opts.focusView && !doorway) {
-        const fb = document.createElement('button');
-        fb.type = 'button';
-        fb.className = 'md-focusbtn';
-        fb.innerHTML = FOCUS_ICON;
-        fb.title = 'Focus: show only ' + stack.name;
+        const fb = toolBtn('md-focusbtn', FOCUS_ICON, 'Show only ' + stack.name);
+        fb.setAttribute('aria-pressed', 'false');
         fb.addEventListener('click', (e) => {
           e.stopPropagation();
           setStackFocus(stack.id);
         });
-        el.appendChild(fb);
+        end.tools.appendChild(fb);
       }
 
-      const chev = document.createElement('button');
-      chev.className = 'md-chev';
-      chev.innerHTML = CHEV_R;
-      chev.title = doorway
-        ? 'Focus ' + stack.name
-        : 'Expand ' + opts.stackNoun.toLowerCase();
+      // In a doorway the arrow is a "go to": it points right and stays
+      // there. Otherwise it is the fold, closed.
+      const chev = doorway
+        ? toolBtn('md-chev md-closed md-goto', icon('chevron'), 'Show only ' + stack.name)
+        : chevBtn('', false, 'Expand ' + opts.stackNoun.toLowerCase());
       chev.addEventListener('click', (e) => {
         e.stopPropagation();
         if (doorway) { setStackFocus(stack.id); return; }
         collapsed.delete(stack.id);
         render();
       });
-      el.appendChild(chev);
+      end.el.appendChild(chev);
 
       if (doorway) {
         el.classList.add('md-hop');
-        el.title = 'Focus ' + stack.name;
       }
 
       el.addEventListener('click', (e) => {
@@ -1196,37 +1397,23 @@
       el.className = 'md-stackhead';
       el.dataset.stack = stack.id;
       el.style.marginRight = FRAME_PAD_X + 'px';   // inside the frame too
+      if (stack.color) {
+        el.classList.add('md-tinted');
+        el.style.setProperty('--blockr-outline-stack', stack.color);
+      }
 
       const cap = document.createElement('span');
       cap.className = 'md-cap';
       cap.innerHTML = opts.stackIcon;
-      if (stack.color) cap.style.color = stack.color;
+      if (stack.color) cap.style.setProperty('--blockr-outline-mark', stack.color);
       el.appendChild(cap);
 
       const name = document.createElement('span');
       name.className = 'md-name';
       name.textContent = stack.name;
-      name.title = 'Double-click to rename';
-      name.addEventListener('dblclick', () => {
-        name.contentEditable = 'true';
-        name.focus();
-        document.getSelection().selectAllChildren(name);
-      });
-      name.addEventListener('blur', () => {
-        if (name.contentEditable !== 'true') return;
-        name.contentEditable = 'false';
-        const nm = name.textContent.trim();
-        if (nm && nm !== stack.name) {
-          stack.name = nm;
-          emit('stack_rename', { id: stack.id, name: nm });
-        }
-        name.textContent = stack.name;
-        if (pendingRender) render();
-      });
-      name.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') { e.preventDefault(); name.blur(); }
-        if (e.key === 'Escape') { name.textContent = stack.name; name.blur(); }
-      });
+      renameable(name, stack,
+        (nm) => emit('stack_rename', { id: stack.id, name: nm }),
+        opts.stackNoun.toLowerCase());
       el.appendChild(name);
 
       const badge = document.createElement('span');
@@ -1239,30 +1426,48 @@
       // rows in an order that looks wrong -- gives no hint of the cause. So
       // name it here, on the group responsible, with the fix one click away:
       // the blocks in the way are exactly the ones that make it convex again.
+      // The explanation and the fix live in a menu the button opens: the
+      // explanation is its head, the fix its one action (disabled, with the
+      // reason, when the blocks in the way belong to another stack).
       const holes = G.stackHoles(model(), stack);
       if (holes.length) {
         const nameOfBlk = (id) => (blockOf(id) || { name: id }).name;
         const free = holes.filter((id) => !stackOf(id));
+        const noun = opts.stackNoun.toLowerCase();
         const warn = document.createElement('button');
         warn.className = 'md-warn';
         warn.type = 'button';
-        warn.textContent = '⚠ ' + holes.length + ' between';
-        warn.title = holes.map(nameOfBlk).join(', ') +
-          (holes.length === 1 ? ' reads' : ' read') +
-          ' from this stack and feed' + (holes.length === 1 ? 's' : '') +
-          ' back into it, without being in it — so the rows cannot follow ' +
-          'the flow.' + (free.length
-            ? '\nClick to add ' + (free.length === holes.length
-              ? 'them' : free.map(nameOfBlk).join(', ')) + ' to the stack.'
-            : '\nThey are in another stack, so they cannot join this one.');
-        if (free.length) {
-          warn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            emit('stack_join', { blocks: free, stack: stack.id });
+        warn.innerHTML = WARN_ICON;
+        warn.appendChild(document.createTextNode(holes.length + ' between'));
+        warn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const B = ui();
+          if (!B || !B.menu) return;
+          const names = holes.map(nameOfBlk).join(', ');
+          const m = B.menu(warn, {
+            head: {
+              title: holes.length === 1 ? '1 block in between'
+                : holes.length + ' blocks in between',
+              text: names + (holes.length === 1 ? ' reads' : ' read') +
+                ' from this ' + noun + ' and feed' +
+                (holes.length === 1 ? 's' : '') + ' back into it without' +
+                ' being in it, so its rows cannot follow the flow.'
+            },
+            items: [free.length
+              ? {
+                label: 'Add ' + (free.length === holes.length
+                  ? (free.length === 1 ? 'it' : 'them')
+                  : free.map(nameOfBlk).join(', ')) + ' to the ' + noun,
+                onSelect: () => emit('stack_join', { blocks: free, stack: stack.id })
+              }
+              : {
+                label: 'Add them to the ' + noun, disabled: true,
+                reason: 'They are in another ' + noun + ', so they cannot join this one'
+              }],
+            onClose: () => { if (closePicker === m.close) closePicker = null; }
           });
-        } else {
-          warn.disabled = true;
-        }
+          closePicker = m.close;
+        });
         el.appendChild(warn);
       }
 
@@ -1270,8 +1475,13 @@
       spring.className = 'md-spring';
       el.appendChild(spring);
 
+      const end = rowEnd(el);
+
+      const extraS = stackTools(stack, false);
+      if (extraS) end.tools.appendChild(extraS);
+
       const aside = stackAside(stack, false);
-      if (aside) el.appendChild(aside);
+      if (aside) end.el.appendChild(aside);
 
       // The header selects the whole group, same as the collapsed row: they
       // are two views of one object, so one gesture.
@@ -1298,40 +1508,34 @@
       // action bar depends on it. Not hover-revealed like `md-rm`: an
       // affordance nobody has seen is one nobody uses, and this is the one
       // button on the row that changes what the whole list shows.
+      // remove first, so the focus tool keeps its place when it appears
+      const rm = toolBtn('md-rm md-reveal', icon('x'), opts.stackRmTitle);
+      rm.addEventListener('click', () => emit('stack_rm', { id: stack.id }));
+      end.tools.appendChild(rm);
+
       if (opts.focusView) {
-        const fb = document.createElement('button');
-        fb.type = 'button';
-        fb.className = 'md-focusbtn' + (stackFocus === stack.id ? ' active' : '');
-        fb.innerHTML = FOCUS_ICON;
-        fb.title = stackFocus === stack.id
-          ? 'Back to the whole ' + opts.crumbRootText.toLowerCase()
-          : 'Focus: show only ' + stack.name;
+        const on = stackFocus === stack.id;
+        // a pressed icon button while the view is focused on this stack
+        const fb = toolBtn('md-focusbtn' + (on ? ' active' : ''), FOCUS_ICON,
+          on ? 'Back to the whole ' + opts.crumbRootText.toLowerCase()
+            : 'Show only ' + stack.name);
+        fb.setAttribute('aria-pressed', on ? 'true' : 'false');
         fb.addEventListener('click', (e) => {
           e.stopPropagation();
           if (stackFocus === stack.id) clearStackFocus();
           else setStackFocus(stack.id);
         });
-        el.appendChild(fb);
+        end.tools.appendChild(fb);
       }
-
-      const rm = document.createElement('button');
-      rm.className = 'md-rm';
-      rm.textContent = '×';
-      rm.title = opts.stackRmTitle;
-      rm.addEventListener('click', () => emit('stack_rm', { id: stack.id }));
-      el.appendChild(rm);
 
       // No collapse offer on the focused stack: its rows ARE the view.
       if (stackFocus !== stack.id) {
-        const chev = document.createElement('button');
-        chev.className = 'md-chev';
-        chev.innerHTML = CHEV_D;
-        chev.title = 'Collapse ' + opts.stackNoun.toLowerCase();
+        const chev = chevBtn('', true, 'Collapse ' + opts.stackNoun.toLowerCase());
         chev.addEventListener('click', () => {
           collapsed.add(stack.id);
           render();
         });
-        el.appendChild(chev);
+        end.el.appendChild(chev);
       }
 
       return el;
@@ -1452,18 +1656,25 @@
     };
 
     const renderBadges = () => {
-      deckEl.querySelectorAll('.md-status[data-for]').forEach((el) => {
-        const st = statuses.get(el.dataset.for);
+      // The dot is a status mark, not a control, so it has no tooltip; its
+      // words go to assistive technology.
+      const paint = (el, st) => {
         el.style.background = st ? st.color : 'transparent';
-        el.title = st ? st.label : '';
+        if (st && st.label) {
+          el.setAttribute('role', 'img');
+          el.setAttribute('aria-label', st.label);
+        } else {
+          el.removeAttribute('role');
+          el.removeAttribute('aria-label');
+        }
         el.classList.toggle('on', !!st);
+      };
+      deckEl.querySelectorAll('.md-status[data-for]').forEach((el) => {
+        paint(el, statuses.get(el.dataset.for));
       });
       deckEl.querySelectorAll('.md-status[data-stack]').forEach((el) => {
         const s = stacks.find((x) => x.id === el.dataset.stack);
-        const st = s ? stackStatus(s) : null;
-        el.style.background = st ? st.color : 'transparent';
-        el.title = st ? st.label : '';
-        el.classList.toggle('on', !!st);
+        paint(el, s ? stackStatus(s) : null);
       });
     };
 
@@ -1482,6 +1693,7 @@
     const applySearch = () => {
       if (!searchEl) return;
       const q = searchEl.value.trim().toLowerCase();
+      clearEl.hidden = !searchEl.value;
       if (!q) {
         searchKeep = null;
         searchHits = null;
@@ -1636,24 +1848,16 @@
       const allOne = whole && wholeStackSelected(whole) &&
         whole.blocks.length === selection.size;
 
-      // The offer stands for stacked rows too: grouping them MOVES them, so
-      // the button says where the selection is going, and the tooltip says
-      // what it leaves behind.
-      if (mkstackBtn) {
-        mkstackBtn.style.display = '';
-        mkstackBtn.title = stacked.length
-          ? 'They leave the ' + opts.stackNoun.toLowerCase() +
-            ' they are in now'
-          : '';
-      }
+      // The offer stands for stacked rows too: grouping them MOVES them out
+      // of the stack they are in, the same move as dragging them out of the
+      // frame and grouping them.
 
       // A selected stack needs no bar: the frame's ring already says so, and
       // the only thing the bar could offer -- grouping -- is exactly what
       // cannot apply. The bar is for a selection that has somewhere to go.
       barEl.classList.toggle('on', selection.size >= 2 && !allOne);
 
-      selcountEl.textContent =
-        selection.size + ' ' + opts.stackUnit + ' selected';
+      selcountEl.textContent = selection.size + ' ' + opts.stackUnit;
     };
 
     /* ---- unlink: hover a rail edge for a ✕ at its midpoint ---- */
@@ -1675,14 +1879,13 @@
       const at = band || path;
       const m = at.getPointAtLength(at.getTotalLength() / 2);
       const behind = linksBehind(e.from, e.to);
-      edgeXEl = document.createElement('button');
-      edgeXEl.className = 'md-edge-x';
-      edgeXEl.textContent = '×';
-      edgeXEl.title = behind.length > 1
+      // 22px, the size of the search field's clear button: a remove mark
+      // riding on a line, which a 26px square would bury
+      edgeXEl = toolBtn('md-edge-x', icon('x'), behind.length > 1
         ? 'Remove connection (' + behind.length + ' links)'
-        : 'Remove connection';
-      edgeXEl.style.left = (m.x - 8) + 'px';
-      edgeXEl.style.top = (m.y - 8) + 'px';
+        : 'Remove connection');
+      edgeXEl.style.left = (m.x - 11) + 'px';
+      edgeXEl.style.top = (m.y - 11) + 'px';
       edgeXEl.addEventListener('mouseenter', () => clearTimeout(edgeXTimer));
       edgeXEl.addEventListener('mouseleave', hideEdgeXSoon);
       edgeXEl.addEventListener('click', () => {
@@ -1701,91 +1904,106 @@
       edgeXTimer = setTimeout(hideEdgeXNow, 300);
     };
 
-    /* ---- connections popover ---- */
+    /* ---- connections and slots: menus -----------------------------------
+     *
+     * Both are the design system's action menu (`Blockr.menu`), placed by
+     * `Blockr.place`: the connections of a row under that row, the slot a
+     * new link takes at the point the drag was released. Every row does one
+     * thing and the menu closes.
+     */
 
     const slotLabel = (input) => input === '' ? 'new input' : input;
 
-    const openConn = (el, railId) => {
+    // Open a menu and remember how to close it, so a render (which rebuilds
+    // the rows it hangs from) takes it away rather than leaving it pointing
+    // at a detached row.
+    const openMenu = (anchor, config, temp) => {
       if (closePicker) closePicker();
+      const B = ui();
+      if (!B || !B.menu) { if (temp) temp.remove(); return; }
+      let m = null;
+      m = B.menu(anchor, Object.assign({}, config, {
+        onClose: () => {
+          if (temp) temp.remove();
+          if (m && closePicker === m.close) closePicker = null;
+        }
+      }));
+      closePicker = m.close;
+    };
+
+    const openConn = (el, railId) => {
       const ins = links.filter((l) => railIdOf(l.to) === railId && railIdOf(l.from) !== railId);
       const outs = links.filter((l) => railIdOf(l.from) === railId && railIdOf(l.to) !== railId);
-      const pop = document.createElement('div');
-      pop.className = 'md-picker md-conn';
-      pop.style.left = Math.min(el.offsetLeft + 24, Math.max(0, deckEl.clientWidth - 230)) + 'px';
-      const estH = 30 + (ins.length + outs.length) * 26 + (ins.length && outs.length ? 20 : 0);
-      const below = el.offsetTop + ROW_H + 2;
-      pop.style.top = (below + estH > deckEl.clientHeight + PITCH
-        ? Math.max(0, el.offsetTop - estH - 4) : below) + 'px';
-      const section = (title, list, dir, other, withSlot) => {
+      const items = [];
+      // A connection row removes that connection: it is the one thing a row
+      // here can do, so the rows carry the bin and turn red under the
+      // pointer, as a destructive row does.
+      const section = (title, list, other) => {
         if (!list.length) return;
-        const cap = document.createElement('div');
-        cap.className = 'md-sect';
-        cap.textContent = title;
-        pop.appendChild(cap);
+        items.push({ title: title });
         list.forEach((l) => {
-          const row = document.createElement('div');
-          row.className = 'md-crow';
           const nm = blockOf(other(l));
-          row.innerHTML = '<span class="md-dir">' + dir + '</span>' +
-            '<span class="md-who">' + escapeHtml(nm ? nm.name : other(l)) + '</span>' +
-            (withSlot && showSlot(l)
-              ? '<span class="md-slot">' + escapeHtml(l.input) + '</span>' : '');
-          const x = document.createElement('button');
-          x.className = 'md-unlink';
-          x.textContent = '×';
-          x.title = 'Remove this connection';
-          x.addEventListener('click', () => emit('link_rm', { ids: [l.id] }));
-          row.appendChild(x);
-          pop.appendChild(row);
+          items.push({
+            label: nm ? nm.name : other(l),
+            meta: showSlot(l) ? l.input : undefined,
+            icon: 'trash',
+            danger: true,
+            onSelect: () => emit('link_rm', { ids: [l.id] })
+          });
         });
       };
-      section('Inputs', ins, 'from', (l) => l.from, true);
-      section('Outputs', outs, 'to', (l) => l.to, true);
-      if (!ins.length && !outs.length) {
-        const none = document.createElement('div');
-        none.className = 'md-none';
-        none.textContent = 'No connections yet — drag this block’s dot.';
-        pop.appendChild(none);
+      section('Inputs', ins, (l) => l.from);
+      section('Outputs', outs, (l) => l.to);
+      if (!items.length) {
+        items.push({
+          label: 'No connections yet', disabled: true,
+          reason: 'Drag this row\u2019s dot onto another row to connect them'
+        });
       }
-      deckEl.appendChild(pop);
-      const onDoc = (ev) => { if (!pop.contains(ev.target)) close(); };
-      const close = () => {
-        document.removeEventListener('mousedown', onDoc);
-        pop.remove();
-        closePicker = null;
-      };
-      setTimeout(() => document.addEventListener('mousedown', onDoc), 0);
-      closePicker = close;
+      const self = blockOf(railId);
+      openMenu(el, {
+        caption: items.length > 1 ? 'Remove a connection' +
+          (self ? ' of ' + self.name : '') : undefined,
+        items: items
+      });
     };
 
     /* ---- slot picker: which slot the new edge occupies ---- */
 
     const openSlotPicker = (x, y, from, to, free, onPick) => {
-      if (closePicker) closePicker();
-      const pop = document.createElement('div');
-      pop.className = 'md-picker';
-      pop.style.left = Math.max(0, Math.min(x, deckEl.clientWidth - 170)) + 'px';
-      pop.style.top = Math.max(0, y) + 'px';
-      const cap = document.createElement('div');
-      cap.className = 'md-sect';
-      cap.textContent = slotPrompt(from, to);
-      pop.appendChild(cap);
-      free.forEach((slot) => {
-        const item = document.createElement('div');
-        item.className = 'md-pick';
-        item.innerHTML = '<b>' + escapeHtml(slotLabel(slot)) + '</b>';
-        item.addEventListener('click', () => { close(); onPick(slot); });
-        pop.appendChild(item);
-      });
-      deckEl.appendChild(pop);
-      const onDoc = (ev) => { if (!pop.contains(ev.target)) close(); };
-      const close = () => {
-        document.removeEventListener('mousedown', onDoc);
-        pop.remove();
-        closePicker = null;
-      };
-      setTimeout(() => document.addEventListener('mousedown', onDoc), 0);
-      closePicker = close;
+      const box = deckEl.getBoundingClientRect();
+      const a = pointAnchor(box.left + x, box.top + y);
+      openMenu(a, {
+        caption: slotPrompt(from, to),
+        items: free.map((slot) => ({
+          label: slotLabel(slot),
+          onSelect: () => onPick(slot)
+        }))
+      }, a);
+    };
+
+    /* ---- what a drag will do, at the pointer ----
+     *
+     * A drag with no verdict is a drag you have to release to find out
+     * about. The verdict is the design system's light tooltip card, fixed to
+     * the viewport (it follows the pointer, not the outline), with the
+     * danger text when the release would be refused.
+     */
+    let dragTipEl = null;
+    const sayAt = (e, text, bad) => {
+      if (!dragTipEl) {
+        dragTipEl = document.createElement('div');
+        dragTipEl.className = 'blockr-tooltip md-droptip';
+        dragTipEl.setAttribute('role', 'status');
+        document.body.appendChild(dragTipEl);
+      }
+      dragTipEl.textContent = text;
+      dragTipEl.classList.toggle('no', !!bad);
+      dragTipEl.style.left = (e.clientX + 14) + 'px';
+      dragTipEl.style.top = (e.clientY + 16) + 'px';
+    };
+    const unsay = () => {
+      if (dragTipEl) { dragTipEl.remove(); dragTipEl = null; }
     };
 
     /* ---- move a row into (or out of) a stack ----
@@ -1820,28 +2038,16 @@
       const home = stackOf(b.id);
       const label = ids.length > 1 ? ids.length + ' blocks' : b.name;
       const x0 = ev.clientX, y0 = ev.clientY;
-      let moved = false, frames = [], deckBox = null, tip = null, drop = null;
+      let moved = false, frames = [], deckBox = null, drop = null;
 
       const unpaint = () => {
         deckEl.querySelectorAll('.md-stackframe').forEach(
           (f) => f.classList.remove('drop-ok', 'drop-no', 'drop-out')
         );
-        if (tip) { tip.remove(); tip = null; }
+        unsay();
       };
 
-      // What the release will do, at the pointer. A drag with no verdict is
-      // a drag you have to release to find out about.
-      const say = (e, text, bad) => {
-        if (!tip) {
-          tip = document.createElement('div');
-          tip.className = 'md-droptip';
-          document.body.appendChild(tip);
-        }
-        tip.textContent = text;
-        tip.classList.toggle('no', !!bad);
-        tip.style.left = (e.clientX + 14) + 'px';
-        tip.style.top = (e.clientY + 16) + 'px';
-      };
+      const say = sayAt;
 
       const onMove = (e) => {
         if (!moved) {
@@ -1916,6 +2122,23 @@
 
     /* ---- port drag ---- */
 
+    // A menu opened on mouseup would be closed by the click that follows it
+    // in the same gesture (a click outside a menu closes it). So it opens
+    // once that click has been dispatched, or shortly after the mouseup if
+    // none comes (a drag released over another element fires none).
+    const afterClick = (fn) => {
+      let done = false;
+      const run = () => {
+        if (done) return;
+        done = true;
+        document.removeEventListener('click', onClick, true);
+        fn();
+      };
+      const onClick = () => setTimeout(run, 0);
+      document.addEventListener('click', onClick, true);
+      setTimeout(run, 80);
+    };
+
     const startDrag = (e, railId, port, onTap) => {
       e.preventDefault();
       e.stopPropagation();
@@ -1932,7 +2155,7 @@
 
       const path = svgEl('path');
       path.setAttribute('fill', 'none');
-      path.setAttribute('stroke', '#2563eb');
+      path.setAttribute('class', 'md-wire-path');
       path.setAttribute('stroke-width', '1.6');
       path.setAttribute('stroke-dasharray', '4 3');
       wire.appendChild(path);
@@ -1982,17 +2205,20 @@
         if (ghost) { ghost.remove(); ghost = null; }
         target = null;
         const band = bandAt(x, y);
+        if (band === 'self') unsay();
         if (band && band !== 'self') {
           const verdict = dropVerdict(railId, band);
           const chipEl = deckEl.querySelector('.md-chip[data-id="' + CSS.escape(band) + '"]');
           if (chipEl) {
             chipEl.classList.add(verdict === 'ok' ? 'drop-ok' : 'drop-no');
-            if (verdict === 'full') chipEl.title = 'All inputs are taken';
-            else if (verdict === 'cycle') chipEl.title = 'Would create a cycle';
-            else chipEl.title = '';
           }
+          // why a drop would be refused, said at the pointer
+          if (verdict === 'full') sayAt(ev, 'All inputs are taken', true);
+          else if (verdict === 'cycle') sayAt(ev, 'That would make a cycle', true);
+          else unsay();
           if (verdict === 'ok') target = band;
         } else if (!band && moved) {
+          unsay();
           // Where the appended block would land, drawn WHERE THE POINTER IS.
           // It used to be pinned at `listH`, the end of the list: correct as
           // a statement about the topological order, invisible on any board
@@ -2016,6 +2242,7 @@
         document.removeEventListener('mousemove', onMove);
         document.removeEventListener('mouseup', onUp);
         dragging = false;
+        unsay();
         path.remove();
         if (ghost) ghost.remove();
         deckEl.classList.remove('md-dropzone');
@@ -2023,13 +2250,13 @@
           c.classList.remove('drop-ok', 'drop-no'));
         const x = ev.clientX - deckBox.left, y = ev.clientY - deckBox.top;
         if (target) {
-          doConnect(railId, target, x, Math.min(y, listH));
           if (pendingRender) render();
+          afterClick(() => doConnect(railId, target, x, Math.min(y, listH)));
           return;
         }
         if (!moved) {
-          if (onTap) onTap();
           if (pendingRender) render();
+          if (onTap) afterClick(onTap);
           return;
         }
         // released on the canvas: append a new node wired from the source
@@ -2042,8 +2269,9 @@
         }
         // x/y so an adapter that answers with a picker can open it where the
         // drag was released
-        emit('block_append', { from: sinkOf(railId), x, y });
         if (pendingRender) render();
+        const from = sinkOf(railId);
+        afterClick(() => emit('block_append', { from: from, x, y }));
       };
 
       document.addEventListener('mousemove', onMove);
@@ -2118,6 +2346,7 @@
           : '.md-chip[data-id="' + CSS.escape(String(id)) + '"] .md-name';
         const name = deckEl.querySelector(sel);
         if (!name || name.tagName === 'INPUT') return false;
+        if (name._mdEdit) { name._mdEdit(); return true; }
         name.contentEditable = 'true';
         name.focus();
         document.getSelection().selectAllChildren(name);
@@ -2149,5 +2378,8 @@
     };
   }
 
-  return { create, LANE_COLORS, escapeHtml, hexA };
+  // `toolBtn`, `icon`, `tip` and `pointAnchor` are the design-system pieces
+  // the board adapter draws its own controls with, so a tool in a row looks
+  // the same whoever built it.
+  return { create, LANE_COLORS, escapeHtml, hexA, toolBtn, icon, tip, pointAnchor };
 });
