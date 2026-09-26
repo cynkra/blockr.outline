@@ -411,7 +411,7 @@ report_ext_srv <- function(items, title, settings) {
                 list(
                   name = blockr.core::block_name(blks[[i]]),
                   kind = block_exhibit_kind(blks[[i]]),
-                  icon = block_icon_html(blks[[i]])
+                  mark = block_mark(blks[[i]])
                 )
               }
             )
@@ -441,38 +441,22 @@ report_ext_srv <- function(items, title, settings) {
 
         # ---- picking and ordering -----------------------------------
         #
-        # Catalogue (the board, as searchable cards) and picked set ride in
-        # two messages, identical-skipped, exactly as in slides.R -- but
-        # under blockr-report-* names: both extensions can sit on one page,
-        # and shared message names would cross-wire their menus.
+        # The "Add block" menu's rows (the board, as marks, names and
+        # types) and the picked set ride in two messages, identical-skipped,
+        # exactly as in slides.R. Both carry the panel's root id: two
+        # panels on one page must not fill each other's menus.
+        root_id <- session$ns("rpt_root")
         catalog_sig <- NULL
 
         observe(
           {
-            meta <- block_meta()
-            ids <- names(meta)
-            tbl <- icon_key_table(
-              chr_ply(ids, function(i) na_blank(meta[[i]]$icon))
-            )
+            msg <- board_catalog(block_meta())
 
-            items_msg <- lapply(
-              seq_along(ids),
-              function(k) {
-                i <- ids[[k]]
-                list(
-                  id = i,
-                  name = coal(na_blank(meta[[i]]$name), i),
-                  icon_key = tbl$keys[[k]],
-                  kind = coal(meta[[i]]$kind, "")
-                )
-              }
-            )
-
-            if (!identical(items_msg, catalog_sig)) {
-              catalog_sig <<- items_msg
+            if (!identical(msg, catalog_sig)) {
+              catalog_sig <<- msg
               session$sendCustomMessage(
                 "blockr-report-catalog",
-                list(items = items_msg, icons = tbl$icons)
+                c(list(root = root_id), msg)
               )
             }
           }
@@ -482,7 +466,7 @@ report_ext_srv <- function(items, title, settings) {
           {
             session$sendCustomMessage(
               "blockr-report-picked",
-              list(ids = as.list(item_block_ids(rv_items())))
+              list(root = root_id, ids = as.list(item_block_ids(rv_items())))
             )
           }
         )
@@ -708,6 +692,7 @@ report_ext_srv <- function(items, title, settings) {
             session$sendCustomMessage(
               "blockr-report-rows",
               list(
+                root = root_id,
                 n = n,
                 set = lapply(
                   changed,
@@ -725,8 +710,6 @@ report_ext_srv <- function(items, title, settings) {
             rv_title(input$rpt_title)
           }
         }, ignoreInit = TRUE)
-
-        updateTextInput(session, "rpt_title", value = isolate(rv_title()))
 
         # The gear band's fields, each writing its slot through the
         # sanitizer -- one reactiveVal, so a settings change is one
@@ -777,19 +760,30 @@ report_ext_srv <- function(items, title, settings) {
           ignoreInit = TRUE
         )
 
-        # Seed the band's inputs from the restored settings, once.
-        local({
+        # Show the restored title and settings in the panel: at the start,
+        # and again whenever the panel announces itself (rpt_rows_sync),
+        # because a message to a field that is not on the page yet is
+        # dropped. The fields never echo a value set this way.
+        seed_panel <- function() {
           s <- isolate(rv_settings())
-          updateSelectInput(session, "rpt_set_format", selected = s$format)
-          updateCheckboxInput(session, "rpt_set_embed", value = s$embed_resources)
-          updateSelectInput(session, "rpt_set_titles", selected = s$block_titles)
-          updateNumericInput(session, "rpt_set_figw", value = s$fig_width)
-          updateNumericInput(session, "rpt_set_figh", value = s$fig_height)
-          updateCheckboxInput(session, "rpt_set_toc", value = s$toc)
-          updateCheckboxInput(session, "rpt_set_numbers", value = s$number_sections)
-          updateCheckboxInput(session, "rpt_set_fold", value = s$code_fold)
-          updateCheckboxInput(session, "rpt_set_warnings", value = s$warnings)
-        })
+          set <- function(id, value) {
+            session$sendInputMessage(id, list(value = value))
+          }
+          set("rpt_title", isolate(rv_title()))
+          set("rpt_set_format", s$format)
+          set("rpt_set_embed", s$embed_resources)
+          set("rpt_set_titles", s$block_titles)
+          set("rpt_set_figw", s$fig_width)
+          set("rpt_set_figh", s$fig_height)
+          set("rpt_set_toc", s$toc)
+          set("rpt_set_numbers", s$number_sections)
+          set("rpt_set_fold", s$code_fold)
+          set("rpt_set_warnings", s$warnings)
+        }
+
+        seed_panel()
+
+        observeEvent(input$rpt_rows_sync, seed_panel(), ignoreInit = TRUE)
 
         # Narrow the format select to what this deployment can actually
         # produce. Off the UI's critical path on purpose: the probe is a
@@ -808,11 +802,15 @@ report_ext_srv <- function(items, title, settings) {
           known <- report_known_formats()
           choices <- known[known %in% c(report_render_formats(), cur)]
 
-          updateSelectInput(
-            session,
+          session$sendInputMessage(
             "rpt_set_format",
-            choices = choices,
-            selected = cur
+            list(
+              value = cur,
+              options = lapply(
+                seq_along(choices),
+                function(i) list(value = unname(choices[[i]]), label = names(choices)[[i]])
+              )
+            )
           )
         })
 
@@ -825,8 +823,7 @@ report_ext_srv <- function(items, title, settings) {
           updateActionButton(
             session,
             "rpt_go",
-            label = paste("Render", report_format_name(rv_settings()$format)),
-            icon = icon("play")
+            label = paste("Render", report_format_name(rv_settings()$format))
           )
         )
 
@@ -991,14 +988,15 @@ report_ext_srv <- function(items, title, settings) {
           if (is.null(state$pieces)) {
             return(
               div(
-                class = "blockr-rpt-empty",
-                "Nothing in the report yet, so nothing to show here."
+                class = "blockr-empty blockr-empty--panel",
+                "No blocks in the report yet, so no code."
               )
             )
           }
 
           report_code_ui(
-            state$pieces, state$view, state$sects, session$ns
+            state$pieces, state$view, state$sects, session$ns,
+            marks = lapply(isolate(block_meta()), `[[`, "mark")
           )
         })
 

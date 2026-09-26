@@ -111,18 +111,18 @@ new_slide_block <- function(layout = "exhibit-full", title = "",
 
           label <- if (want == 0L) {
             if (n > 0L) {
-              paste(n, "linked \u2014 this layout draws none")
+              paste0(n, " linked, this layout draws none")
             } else {
-              "no inputs"
+              "No inputs"
             }
           } else {
             paste0(
               n, " of ", want, " linked",
-              if (n > want) paste0(" \u2014 ", n - want, " not drawn")
+              if (n > want) paste0(", ", n - want, " not drawn")
             )
           }
 
-          htmltools::div(
+          htmltools::span(
             class = "slb-meter",
             if (length(cells)) htmltools::span(class = "slb-cells", cells),
             htmltools::span(label)
@@ -158,6 +158,11 @@ new_slide_block <- function(layout = "exhibit-full", title = "",
           content = function(file) write_slide_html(cur_slide(), file)
         )
 
+        # The links wait, hidden, in the closed download menu; a suspended
+        # hidden output would never get its href.
+        shiny::outputOptions(output, "dl_pptx", suspendWhenHidden = FALSE)
+        shiny::outputOptions(output, "dl_html", suspendWhenHidden = FALSE)
+
         list(
           expr = shiny::reactive(
             bquote(
@@ -184,62 +189,74 @@ new_slide_block <- function(layout = "exhibit-full", title = "",
     },
 
     function(id) {
+
+      ns <- function(x) shiny::NS(id, x)
+      tray <- ns("tray")
+
       htmltools::div(
         class = "slb-root",
-        # The layout picker: schematic tiles (the chart block's type-picker
-        # pattern), drawn from the layouts' own slot rects. Clicking a tile
-        # sets input$layout, same as the select it replaces.
-        slide_layout_picker(shiny::NS(id, "layout"), selected = layout),
-        shiny::textInput(
-          shiny::NS(id, "title"), "Title", value = title, width = "100%"
-        ),
-        shiny::textInput(
-          shiny::NS(id, "subtitle"), "Subtitle", value = subtitle,
-          width = "100%"
-        ),
-        shiny::textInput(
-          shiny::NS(id, "footnote"), "Footnote", value = footnote,
-          width = "100%"
-        ),
-        slide_layout_field(
-          "text", layout,
-          htmltools::tagList(
-            shiny::textAreaInput(
-              shiny::NS(id, "text"), "Details",
-              value = text, rows = 3L, width = "100%"
-            ),
-            htmltools::div(
-              style = "font-size:11px;color:#9ca3af;margin:-6px 0 10px;",
-              paste0("Kept across layouts \u00b7 \u201c- \u201d bullet ",
-                     "\u00b7 \u201c1.\u201d numbered \u00b7 **bold** ",
-                     "*italic*")
-            )
-          )
-        ),
-        slide_layout_field(
-          "labels", layout,
-          shiny::textInput(
-            shiny::NS(id, "labels"), "Panel labels (left | right)",
-            value = labels, width = "100%"
-          )
-        ),
-        slide_layout_field(
-          "paginate", layout,
-          shiny::checkboxInput(
-            shiny::NS(id, "paginate"),
-            "Page a long table over further slides",
-            value = isTRUE(paginate)
-          )
-        ),
+        panels_dep(),
+        slide_block_dep(),
+        # The header row: how many exhibits the layout draws (a status, on
+        # the left), then the tools, gear last.
         htmltools::div(
-          style = paste0(
-            "display:flex;align-items:center;gap:10px;margin-bottom:8px;"
+          class = "blockr-otl-head slb-head",
+          htmltools::div(
+            class = "slb-status",
+            shiny::uiOutput(ns("capacity"), inline = TRUE)
           ),
           htmltools::div(
-            style = "flex:1 1 auto;",
-            shiny::uiOutput(shiny::NS(id, "capacity"))
+            class = "blockr-otl-tools",
+            slide_dl_menu(id),
+            otl_gear(tray)
+          )
+        ),
+        # Every option, in the gear tray. The layout-dependent fields are
+        # rendered once and shown or hidden client-side by the layout pick
+        # (data-layouts), so a switch never rebuilds the Details field:
+        # its words survive the switch.
+        otl_tray(
+          tray,
+          otl_section(
+            "Layout",
+            otl_field(
+              NULL,
+              slide_layout_picker(ns("layout"), selected = layout),
+              size = "full"
+            ),
+            slide_layout_field(
+              "paginate", layout,
+              otl_checkbox(
+                ns("paginate"),
+                "Page a long table over further slides",
+                value = isTRUE(paginate),
+                size = "full"
+              )
+            )
           ),
-          slide_dl_menu(id)
+          otl_section(
+            "Text",
+            otl_text_field(ns("title"), "Title", value = title),
+            otl_text_field(ns("subtitle"), "Subtitle", value = subtitle),
+            otl_text_field(ns("footnote"), "Footnote", value = footnote),
+            slide_layout_field(
+              "labels", layout,
+              otl_text_field(
+                ns("labels"), "Panel labels", value = labels,
+                placeholder = "left | right"
+              )
+            ),
+            slide_layout_field(
+              "text", layout,
+              otl_textarea_field(
+                ns("text"), "Details", value = text, rows = 3L,
+                placeholder = paste(
+                  "- bullet, 1. numbered, **bold**, *italic*.",
+                  "Kept when the layout changes."
+                )
+              )
+            )
+          )
         )
       )
     },
@@ -266,104 +283,44 @@ block_ui.slide_block <- function(id, x, ...) {
 }
 
 
-# A layout-dependent control, rendered ONCE: wrapped with the
-# space-separated list of layout ids it belongs to (data-layouts), initial
-# visibility resolved server-side from the ctor's layout, every later
-# switch toggled client-side by the picker. The wrapper is a plain div
-# (span when inline), so the control inside keeps its identity -- and its
-# value -- for the life of the block.
-slide_layout_field <- function(feature, layout, tag, inline = FALSE) {
+# A layout-dependent field, rendered ONCE: the field carries the
+# space-separated list of layout ids it belongs to (data-layouts), its
+# initial visibility resolved here from the ctor's layout, every later switch
+# toggled client-side by the layout pick (blockr-panels.js). The control
+# keeps its identity, and its value, for the life of the block.
+slide_layout_field <- function(feature, layout, field) {
 
   ids <- slide_layout_features()[[feature]]
   shown <- layout %in% strsplit(ids, " ", fixed = TRUE)[[1L]]
 
-  fn <- if (inline) htmltools::span else htmltools::div
-  fn(
+  htmltools::tagAppendAttributes(
+    field,
     `data-layouts` = ids,
-    style = if (!shown) "display:none;",
-    tag
+    hidden = if (!shown) NA
   )
 }
 
-# The download control: the table block's single toggle, verbatim in shape
-# -- one 30px icon button that is the <summary> of a <details> menu, no JS
-# (the open / close, keyboard handling and focus order are the browser's).
-# The chrome CSS is restated from blockr.viz R/html-table.R dl_chrome_css()
-# the way chart.css restates it: blockr.viz is a Suggests, and a block's
-# controls must not depend on which other blocks share the page.
+slide_block_dep <- function() {
+  htmltools::htmlDependency(
+    "blockr-slide-block",
+    pkg_version(),
+    src = pkg_file("assets", "css"),
+    stylesheet = "blockr-slide-block.css"
+  )
+}
+
+# The download: a tool that opens an action menu, one row per format with
+# the extension as meta.
 slide_dl_menu <- function(id) {
-
-  dl_icon <- htmltools::HTML(paste0(
-    '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" ',
-    'stroke="currentColor" stroke-width="1.6" stroke-linecap="round" ',
-    'stroke-linejoin="round">',
-    '<path d="M8 2.5 V10 M4.8 7 L8 10.2 L11.2 7"/>',
-    '<path d="M2.5 11.5 V12.8 A1.2 1.2 0 0 0 3.7 14 H12.3 ',
-    'A1.2 1.2 0 0 0 13.5 12.8 V11.5"/></svg>'
-  ))
-
-  item <- function(output_id, label) {
-    htmltools::tags$a(
-      id = shiny::NS(id, output_id),
-      class = "blockr-dl-item shiny-download-link",
-      href = "", target = "_blank", download = NA,
-      title = paste0("Download as ", label),
-      `aria-label` = paste0("Download as ", label),
-      label
-    )
-  }
-
-  htmltools::tagList(
-    htmltools::tags$style(htmltools::HTML("
-a.blockr-dl-xlsx, summary.blockr-dl-xlsx { appearance: none;
-  box-sizing: border-box; display: inline-flex; align-items: center;
-  justify-content: center; width: 30px; height: 30px; flex: 0 0 auto;
-  padding: 0; margin: 0;
-  border: 1px solid var(--blockr-color-border, #e5e7eb);
-  border-radius: 4px;
-  background-color: var(--blockr-color-bg-input, #f9fafb);
-  color: var(--blockr-grey-500, #6b7280); line-height: 1; cursor: pointer;
-  transition: border-color 0.12s, background-color 0.12s, color 0.12s; }
-a.blockr-dl-xlsx:hover, summary.blockr-dl-xlsx:hover {
-  background-color: #fff;
-  border-color: var(--blockr-grey-300, #d1d5db);
-  color: var(--blockr-color-text-primary, #374151);
-  text-decoration: none; }
-summary.blockr-dl-xlsx:focus-visible { outline: none;
-  border-color: var(--blockr-color-primary, #2563eb);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12); }
-a.blockr-dl-xlsx svg, summary.blockr-dl-xlsx svg { display: block; }
-details.blockr-dl-menu { position: relative; flex: 0 0 auto; }
-details.blockr-dl-menu > summary { list-style: none; user-select: none; }
-details.blockr-dl-menu > summary::-webkit-details-marker { display: none; }
-details.blockr-dl-menu > summary::marker { content: \"\"; }
-details.blockr-dl-menu[open] > summary { background-color: #fff;
-  border-color: var(--blockr-grey-300, #d1d5db);
-  color: var(--blockr-color-text-primary, #374151); }
-.blockr-dl-menu-list { position: absolute; top: calc(100% + 4px); right: 0;
-  z-index: 20; min-width: 172px; padding: 4px;
-  border: 1px solid var(--blockr-color-border, #e5e7eb); border-radius: 6px;
-  background-color: #fff; box-shadow: 0 6px 16px rgba(17, 24, 39, 0.12);
-  display: flex; flex-direction: column; gap: 1px; }
-a.blockr-dl-item { display: block; padding: 6px 10px; border-radius: 4px;
-  font-size: var(--blockr-font-size-sm, 0.8125rem);
-  color: var(--blockr-color-text-primary, #111827); text-decoration: none;
-  white-space: nowrap; cursor: pointer; }
-a.blockr-dl-item:hover {
-  background-color: var(--blockr-color-bg-hover, #f3f4f6); }
-    ")),
-    htmltools::tags$details(
-      class = "blockr-dl-menu",
-      htmltools::tags$summary(
-        class = "blockr-dl-xlsx",
-        title = "Download", `aria-label` = "Download",
-        dl_icon
-      ),
-      htmltools::tags$div(
-        class = "blockr-dl-menu-list", role = "menu",
-        item("dl_pptx", "PowerPoint (.pptx)"),
-        item("dl_html", "Web page (.html)")
-      )
+  blockr.ui::action_menu(
+    blockr.ui::tool_button(htmltools::HTML(otl_icon("download")), "Download"),
+    blockr.ui::menu_item(
+      shiny::downloadLink(shiny::NS(id, "dl_pptx"), "PowerPoint"),
+      meta = ".pptx"
+    ),
+    blockr.ui::menu_item(
+      shiny::downloadLink(shiny::NS(id, "dl_html"), "Web page"),
+      meta = ".html"
     )
   )
 }
