@@ -158,492 +158,77 @@ slides_ext_ui <- function(id, board, ...) {
   ns <- NS(id)
 
   div(
-    class = "blockr-sld-panel",
+    class = "blockr-otl-pnl blockr-sld-panel",
     id = ns("sld_root"),
+    `data-ns` = ns(""),
+    panels_dep(),
     slides_dep(),
     div(
-      class = "blockr-sld-toolbar",
-      textInput(
+      class = "blockr-otl-head",
+      otl_name(
         ns("sld_title"),
-        label = NULL,
-        placeholder = "Deck title",
-        width = "100%"
+        label = "Deck title",
+        empty_msg = "A deck needs a title",
+        placeholder = "Untitled deck"
       ),
       div(
-        class = "blockr-sld-toolbar-right",
-        # The outline's split button, same classes: a neutral format picker
-        # fused to the green action, labelled for the file you walk away
-        # with rather than for the render that produces it.
-        div(
-          class = "blockr-sld-rendergroup",
-          selectInput(
-            ns("sld_format"),
-            label = NULL,
-            choices = deck_formats(),
-            selected = "pptx",
-            selectize = FALSE,
-            width = "116px"
-          ),
-          # Two-stage, exactly like the outline's: on a deferred board the
-          # picked blocks may not be constructed yet, so the click goes to
-          # the server first (demand the closure, wait for its code) and
-          # the hidden link below is clicked from JS once it is ready.
-          actionButton(
-            ns("sld_go"),
-            "Download",
-            icon = icon("download"),
-            class = "blockr-sld-renderbtn"
-          ),
-          downloadLink(ns("sld_dl"), label = NULL, style = "display: none;")
+        class = "blockr-otl-tools",
+        # The download is a tool; with two formats it opens an action menu,
+        # one row per format with the extension as meta. A row goes to the
+        # server first (demand the picked blocks, wait for their code) and
+        # the hidden link below is clicked once the deck is ready. No gear:
+        # the deck's look comes from the deployment's template (see
+        # effective_template()), so there is nothing left to configure.
+        do.call(
+          blockr.ui::action_menu,
+          c(
+            list(blockr.ui::tool_button(HTML(otl_icon("download")), "Download")),
+            lapply(
+              seq_along(deck_formats()),
+              function(i) {
+                fmt <- unname(deck_formats()[[i]])
+                blockr.ui::menu_item(
+                  tags$button(
+                    class = "blockr-sld-fmt",
+                    `data-format` = fmt,
+                    deck_format_label(fmt)
+                  ),
+                  meta = paste0(".", report_ext(fmt))
+                )
+              }
+            )
+          )
         )
-        # No gear. The deck's one settable property used to be the reference
-        # template, and that is not the user's to set here: it styles every
-        # download of a deployment, so it comes from the app (see
-        # effective_template()). With nothing left to configure, a gear would
-        # open on an empty band.
       )
     ),
-    # The picker: the outline's search-and-add box, which is itself the
-    # block browser's. Same classes, hence the same magnifier, focus ring,
-    # rows and icon tiles as every other "find a block" control in the app,
-    # from the stylesheet blockr.dock already puts on the page.
-    #
-    # NOT .blockr-block-browser: that class is the block browser's Shiny
-    # input binding and its search JS, which would adopt this control as a
-    # browser instance and filter it by data attributes these cards do not
-    # carry. The card classes are inert styling; the --bb-* tokens they
-    # read are mapped in blockr-slides.css.
-    div(
-      class = "blockr-sld-search",
-      tags$input(
-        type = "search",
-        class = "blockr-block-browser-search blockr-sld-searchinput",
-        placeholder = "Search or add a block\u2026",
-        `aria-label` = "Search blocks",
-        autocomplete = "off",
-        spellcheck = "false"
-      ),
-      span(class = "blockr-sld-searchcount"),
-      div(class = "blockr-sld-searchmenu")
+    downloadLink(ns("sld_dl"), label = NULL, style = "display: none;"),
+    div(class = "blockr-otl-list", uiOutput(ns("sld_list"))),
+    otl_button(
+      "Add slide",
+      kind = "quiet",
+      icon = otl_icon("plus"),
+      class = "blockr-otl-add"
     ),
-    uiOutput(ns("sld_list")),
-    slides_js(ns)
+    tags$script(
+      HTML(sprintf("BlockrSlides.init('%s');", ns("sld_root")))
+    )
   )
+}
+
+# The name a download menu row gives a format.
+deck_format_label <- function(fmt) {
+  switch(fmt, pptx = "PowerPoint", html = "Web page", fmt)
 }
 
 slides_dep <- function() {
   htmlDependency(
     "blockr-slides",
     pkg_version(),
-    src = pkg_file("assets", "css"),
-    stylesheet = "blockr-slides.css"
+    src = pkg_file("assets"),
+    script = "js/blockr-slides.js",
+    stylesheet = "css/blockr-slides.css",
+    all_files = FALSE
   )
-}
-
-# Delegated client logic, the same shape as outline_js and a small fraction
-# of it: the list has no legality to enforce (every order is a valid deck),
-# so a drag is just "put this one there".
-slides_js <- function(ns) {
-
-  consts <- sprintf(
-    paste0("var ACT = '%s', MOVE = '%s', DL = '%s', ADD = '%s', ",
-           "ROOT = '%s', OPEN = '%s';"),
-    ns("sld_act"),
-    ns("sld_move"),
-    ns("sld_dl"),
-    ns("sld_add"),
-    ns("sld_root"),
-    ns("sld_open")
-  )
-
-  tags$script(HTML(paste0(
-    "$(function() {",
-    consts,
-    "
-      // Delegated from document so the list can be re-rendered freely --
-      // rows are markup, never Shiny inputs, so there is nothing to rebind.
-      document.addEventListener('click', function(e) {
-
-        var btn = e.target.closest ? e.target.closest('.blockr-sld-act') : null;
-        if (btn) {
-          var arow = btn.closest('.blockr-sld-row');
-          if (!arow) return;
-          Shiny.setInputValue(
-            ACT,
-            {id: arow.dataset.blk, act: btn.dataset.act},
-            {priority: 'event'}
-          );
-          return;
-        }
-
-        // A plain click on the row opens that block's panel, the same move
-        // the report extension's rows make: the deck lists blocks, and the
-        // obvious question about a listed block is \"show me this one\".
-        var row = e.target.closest ?
-          e.target.closest('.blockr-sld-row') : null;
-        if (!row || !row.dataset.blk) return;
-        Shiny.setInputValue(OPEN, {id: row.dataset.blk}, {priority: 'event'});
-      });
-
-      var dragged = null;
-
-      document.addEventListener('dragstart', function(e) {
-        var row = e.target.closest ? e.target.closest('.blockr-sld-row') : null;
-        if (!row) return;
-        dragged = row.dataset.blk;
-        row.classList.add('is-dragging');
-        if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
-      });
-
-      // The pointer's half of the row decides which gap the drop targets;
-      // the indicator and the drop share this one rule, so the line never
-      // promises a spot the drop will not use. (The lower half meaning
-      // after-the-row is also the only way to reach the last position.)
-      function dropAfter(e, row) {
-        var box = row.getBoundingClientRect();
-        return (e.clientY - box.top) > box.height / 2;
-      }
-
-      // ONE caret per list, moved to the targeted gap -- the report
-      // builder's arrangement, and for the reason given there: anchoring
-      // the line to a row via ::after only lands on the right pixel while
-      // the rows are flush and borderless, which is an invisible
-      // dependency rather than a property anyone maintains.
-      function caretFor(row) {
-        var list = row.closest('.blockr-sld-list');
-        if (!list) return null;
-        var caret = list.querySelector('.blockr-sld-caret');
-        if (!caret) {
-          caret = document.createElement('div');
-          caret.className = 'blockr-sld-caret is-hidden';
-          list.appendChild(caret);
-        }
-        return caret;
-      }
-
-      function hideCarets() {
-        document.querySelectorAll('.blockr-sld-caret').forEach(function(c) {
-          c.classList.add('is-hidden');
-        });
-      }
-
-      // The gap's centre, read off what is actually on screen, so this
-      // knows nothing about the rows' border, margin or height.
-      function moveCaret(row, after) {
-        var caret = caretFor(row);
-        if (!caret) return;
-        var box = row.getBoundingClientRect();
-        var sib = after ? row.nextElementSibling : row.previousElementSibling;
-        while (sib && !sib.classList.contains('blockr-sld-row')) {
-          sib = after ? sib.nextElementSibling : sib.previousElementSibling;
-        }
-        var y;
-        if (sib) {
-          var sb = sib.getBoundingClientRect();
-          y = after ? (box.bottom + sb.top) / 2 : (sb.bottom + box.top) / 2;
-        } else {
-          var edge = parseFloat(getComputedStyle(row).marginBottom) || 0;
-          y = after ? box.bottom + edge / 2 : box.top - edge / 2;
-        }
-        var lb = row.closest('.blockr-sld-list').getBoundingClientRect();
-        caret.style.top = (y - lb.top) + 'px';
-        caret.classList.remove('is-hidden');
-      }
-
-      document.addEventListener('dragend', function() {
-        dragged = null;
-        hideCarets();
-        document.querySelectorAll('.blockr-sld-row').forEach(function(r) {
-          r.classList.remove('is-dragging');
-        });
-      });
-
-      document.addEventListener('dragover', function(e) {
-        if (dragged === null) return;
-        var row = e.target.closest ? e.target.closest('.blockr-sld-row') : null;
-        if (!row) return;
-        e.preventDefault();
-        moveCaret(row, dropAfter(e, row));
-      });
-
-      document.addEventListener('drop', function(e) {
-        if (dragged === null) return;
-        var row = e.target.closest ? e.target.closest('.blockr-sld-row') : null;
-        if (!row) return;
-        e.preventDefault();
-        hideCarets();
-        Shiny.setInputValue(
-          MOVE,
-          {id: dragged, target: row.dataset.blk, after: dropAfter(e, row)},
-          {priority: 'event'}
-        );
-        dragged = null;
-      });
-
-      // ---- search: the picker, as the block browser's box ------------
-      // The catalogue (every board block, the picked ones first) is pushed
-      // by the server; the menu is rendered HERE so the input never
-      // re-renders and never loses focus mid-query. A picked block is a
-      // \"go to\" -- its row is in the list below -- and an unpicked one an
-      // \"add\", which writes the same input the old select fed. The menu
-      // stays open after an add, so building a deck is type, Enter, type,
-      // Enter.
-      //
-      // The rows ARE the block browser's rows: same classes, same
-      // stylesheet, so picking a block looks the same everywhere in the
-      // app and this file owns no row styling.
-      // The catalogue describes the BOARD (names, icons, descriptions) and
-      // moves only when the board does; which blocks are in the deck is a
-      // separate, tiny message, because that flips on every add and the
-      // catalogue costs tens of KB to resend. Icon markup is shipped once
-      // per block class and referenced by key for the same reason.
-      var catalog = [];
-      var icons = {};
-      var picked = [];
-      var pickedAt = {};
-      var hot = 0;
-
-      function isPicked(b) {
-        return pickedAt[b.id] !== undefined;
-      }
-
-      function panel() {
-        return document.getElementById(ROOT);
-      }
-      function searchRoot() {
-        var p = panel();
-        return p && p.querySelector('.blockr-sld-search');
-      }
-      function searchInput() {
-        var p = panel();
-        return p && p.querySelector('.blockr-sld-searchinput');
-      }
-      function searchQuery() {
-        var inp = searchInput();
-        return (inp && inp.value ? inp.value : '').trim().toLowerCase();
-      }
-      function esc(s) {
-        return String(s == null ? '' : s).replace(/[&<>]/g, function(c) {
-          return {'&': '&amp;', '<': '&lt;', '>': '&gt;'}[c];
-        });
-      }
-      // Mark the matched substring, on escaped text.
-      function mark(text, q) {
-        var t = String(text == null ? '' : text);
-        if (!q) return esc(t);
-        var i = t.toLowerCase().indexOf(q);
-        if (i < 0) return esc(t);
-        return esc(t.slice(0, i)) + '<mark>' + esc(t.slice(i, i + q.length)) +
-          '</mark>' + esc(t.slice(i + q.length));
-      }
-      // Match on the name and the id, which is what an entry SHOWS plus the
-      // thing that disambiguates two blocks sharing a name. Deliberately not
-      // the registry description: it is boilerplate per block TYPE -- every
-      // block of a kind carries the same sentence -- so matching it returns
-      // hits for a word the user cannot see on any of them.
-      function searchHits(q) {
-        return catalog.filter(function(b) {
-          if (!q) return true;
-          return (b.name + ' ' + b.id).toLowerCase().indexOf(q) >= 0;
-        });
-      }
-      function cardHtml(b, q, idx) {
-        return '<div class=\"blockr-block-browser-card\" data-blk=\"' +
-          esc(b.id) + '\" data-idx=\"' + idx + '\">' +
-          '<div class=\"blockr-block-browser-card-header\">' +
-            '<span class=\"blockr-block-browser-card-icon\">' +
-              (icons[b.icon_key] || '') + '</span>' +
-            '<div class=\"blockr-block-browser-card-body\">' +
-              '<div class=\"blockr-block-browser-card-titles\">' +
-                '<span class=\"blockr-block-browser-card-name\">' +
-                  mark(b.name, q) + '</span>' +
-                (b.kind ?
-                  '<span class=\"blockr-block-browser-card-package\">' +
-                  esc(b.kind) + '</span>' : '') +
-              '</div>' +
-            '</div>' +
-          '</div>' +
-        '</div>';
-      }
-      // The menu's two sections, and the flat order the keyboard index and
-      // the click index both count in. ONE definition: the renderer and the
-      // chooser used to sort independently, which was safe only while the
-      // server happened to send the catalogue unpicked-first.
-      function orderedHits(q) {
-        var hits = searchHits(q);
-        var out = hits.filter(function(b) { return !isPicked(b); });
-        // Deck order, matching the rows below -- the catalogue no longer
-        // carries it, since it would change on every add.
-        var inn = hits.filter(isPicked).sort(function(a, b) {
-          return pickedAt[a.id] - pickedAt[b.id];
-        });
-        return {out: out, inn: inn, all: out.concat(inn)};
-      }
-      function sectionHtml(title, items, q, start) {
-        if (!items.length) return '';
-        var html = '<div class=\"blockr-block-browser-category\"><h3>' +
-          title + '</h3><div class=\"blockr-block-browser-cards\">';
-        items.forEach(function(b, k) { html += cardHtml(b, q, start + k); });
-        return html + '</div></div>';
-      }
-      // Keyboard selection, the browser's own marker class. Scrolls only
-      // when the arrows moved it, so a re-render never jumps the panel.
-      function selectHot(scroll) {
-        var root = searchRoot();
-        if (!root) return;
-        root.querySelectorAll('.blockr-block-browser-card').forEach(
-          function(c, i) {
-            var on = i === hot;
-            c.classList.toggle('card-selected', on);
-            if (on && scroll) c.scrollIntoView({block: 'nearest'});
-          });
-      }
-      function renderMenu() {
-        var root = searchRoot();
-        var menu = root && root.querySelector('.blockr-sld-searchmenu');
-        if (!menu) return;
-
-        var q = searchQuery();
-        var split = orderedHits(q);
-        var out = split.out, inn = split.inn, all = split.all;
-        if (hot >= all.length) hot = Math.max(0, all.length - 1);
-
-        var count = root.querySelector('.blockr-sld-searchcount');
-        if (count) {
-          var pool = catalog.filter(function(b) { return !isPicked(b); }).length;
-          count.textContent = pool ? pool + ' not in the deck' : '';
-        }
-        root.classList.toggle('has-value', !!q);
-
-        menu.classList.toggle('is-empty', !all.length);
-        menu.innerHTML =
-          '<div class=\"blockr-block-browser-categories\">' +
-            sectionHtml('Add a slide', out, q, 0) +
-            sectionHtml('Already in the deck', inn, q, out.length) +
-          '</div>' +
-          '<div class=\"blockr-block-browser-empty\">' +
-            'No blocks match your search.</div>';
-        selectHot(false);
-      }
-      function searchOpen() {
-        var root = searchRoot();
-        if (!root) return;
-        root.classList.add('open');
-        renderMenu();
-      }
-      function searchClose() {
-        var root = searchRoot();
-        if (root) root.classList.remove('open');
-      }
-      // Reveal a picked block's row: scroll it into view and flash it, so
-      // a hit on a long deck lands somewhere visible.
-      function gotoRow(id) {
-        var p = panel();
-        var row = p && p.querySelector(
-          '.blockr-sld-row[data-blk=\"' + id + '\"]'
-        );
-        if (!row) return;
-        row.scrollIntoView({block: 'center', behavior: 'smooth'});
-        row.classList.remove('blockr-sld-flash');
-        void row.offsetWidth;
-        row.classList.add('blockr-sld-flash');
-      }
-      function searchChoose(idx) {
-        var b = orderedHits(searchQuery()).all[idx];
-        if (!b) return;
-        if (isPicked(b)) {
-          searchClose();
-          var inp = searchInput();
-          if (inp) inp.blur();
-          gotoRow(b.id);
-          return;
-        }
-        // Add: the server appends the slide and pushes the new picked set,
-        // which re-renders the menu with the entry moved to the second
-        // group.
-        Shiny.setInputValue(ADD, b.id, {priority: 'event'});
-      }
-
-      Shiny.addCustomMessageHandler('blockr-slides-catalog', function(msg) {
-        catalog = msg.items || [];
-        icons = msg.icons || {};
-        renderMenu();
-      });
-
-      // Which blocks are in the deck, and in what order. Its own message:
-      // this flips on every add, and re-sending the catalogue to say so
-      // meant resending every name, description and icon with it.
-      Shiny.addCustomMessageHandler('blockr-slides-picked', function(msg) {
-        picked = msg.ids || [];
-        if (typeof picked === 'string') picked = [picked];
-        pickedAt = {};
-        picked.forEach(function(id, i) { pickedAt[id] = i; });
-        renderMenu();
-      });
-
-      document.addEventListener('input', function(ev) {
-        if (ev.target && ev.target.classList &&
-            ev.target.classList.contains('blockr-sld-searchinput')) {
-          // Top hit selected on every keystroke, so Enter always does
-          // something (the block browser's behaviour).
-          hot = 0;
-          searchOpen();
-        }
-      });
-      document.addEventListener('focusin', function(ev) {
-        if (ev.target && ev.target.classList &&
-            ev.target.classList.contains('blockr-sld-searchinput')) {
-          searchOpen();
-        }
-      });
-      // mousedown, not click: click fires after blur, and blurring the
-      // input would have to close the menu first.
-      document.addEventListener('mousedown', function(ev) {
-        var card = ev.target.closest &&
-          ev.target.closest('.blockr-sld-searchmenu .blockr-block-browser-card');
-        if (!card) return;
-        ev.preventDefault();
-        searchChoose(parseInt(card.dataset.idx, 10));
-      });
-      // CAPTURE phase on purpose: choosing an entry re-renders the menu and
-      // detaches the clicked node, so a bubble-phase listener would see a
-      // target that is no longer inside the box and close it on every add.
-      document.addEventListener('mousedown', function(ev) {
-        var root = searchRoot();
-        if (root && !root.contains(ev.target)) searchClose();
-      }, true);
-      document.addEventListener('keydown', function(ev) {
-        if (!(ev.target && ev.target.classList &&
-              ev.target.classList.contains('blockr-sld-searchinput'))) {
-          return;
-        }
-        var n = searchHits(searchQuery()).length;
-        if (ev.key === 'ArrowDown') {
-          // Wrapping, like the block browser.
-          hot = n ? (hot + 1) % n : 0;
-          selectHot(true); ev.preventDefault();
-        } else if (ev.key === 'ArrowUp') {
-          hot = n ? (hot + n - 1) % n : 0;
-          selectHot(true); ev.preventDefault();
-        } else if (ev.key === 'Enter') {
-          searchChoose(hot); ev.preventDefault();
-        } else if (ev.key === 'Escape') {
-          // No container to close, so the box clears first and closes
-          // second.
-          if (ev.target.value) {
-            ev.target.value = ''; hot = 0; searchOpen();
-          } else {
-            searchClose(); ev.target.blur();
-          }
-        }
-      });
-
-      Shiny.addCustomMessageHandler('blockr-slides-download', function(msg) {
-        var el = document.getElementById(msg.id);
-        if (el) el.click();
-      });
-    });"
-  )))
 }
 
 slides_ext_srv <- function(slides, title, format = "pptx") {
@@ -683,7 +268,7 @@ slides_ext_srv <- function(slides, title, format = "pptx") {
                 list(
                   name = blockr.core::block_name(blks[[i]]),
                   kind = block_exhibit_kind(blks[[i]]),
-                  icon = block_icon_html(blks[[i]])
+                  mark = block_mark(blks[[i]])
                 )
               }
             )
@@ -706,64 +291,39 @@ slides_ext_srv <- function(slides, title, format = "pptx") {
 
         # ---- picking and ordering -----------------------------------
 
-        # The search menu is filled client-side from this payload: every
-        # board block, the ones NOT yet in the deck first (the menu's whole
-        # job is what to add next), each carrying what its card shows.
-        # Pushed whole rather than diffed -- one small array that only moves
-        # when the board or the deck does.
+        # The "Add slide" menu is filled client-side from this payload:
+        # every board block, its mark, name and type. Which blocks are in
+        # the deck rides in its own, tiny message, because that flips on
+        # every add; glyphs are shared by key because a board repeats each
+        # type's glyph per block.
+        #
         # Identical-skip: `board$board` is reassigned by EVERY board update,
-        # including the state a block commits as it constructs and the views
-        # delta a dock tab click sends, and a plain reactive re-emits
-        # regardless of whether anything it reads moved. The handler on the
-        # other end rebuilds the whole menu, so an unskipped push repaints an
-        # open dropdown for nothing. Same store the outline puts in front of
-        # its projection (`board_shape`, R/ext.R).
+        # including the state a block commits as it constructs, and a plain
+        # reactive re-emits regardless of whether anything it reads moved.
+        # Both messages carry the panel's root id, so two panels on a page
+        # do not fill each other's menus.
+        root_id <- session$ns("sld_root")
         catalog_sig <- NULL
 
-        # The catalogue describes the BOARD, and nothing in it depends on
-        # the deck: which blocks are picked (and in what order) rides in its
-        # own message below. It used to be a field on every entry, plus the
-        # entry ORDER, so adding one slide resent the whole array --
-        # every name, description and icon -- to say one flag had moved.
-        # Icon markup is shared by block class for the same reason: inline
-        # SVG is up to 1.4KB and a board repeats each of them per block.
         observe(
           {
-            meta <- block_meta()
-            ids <- names(meta)
-            tbl <- icon_key_table(
-              chr_ply(ids, function(i) na_blank(meta[[i]]$icon))
-            )
+            msg <- board_catalog(block_meta())
 
-            items <- lapply(
-              seq_along(ids),
-              function(k) {
-                i <- ids[[k]]
-                list(
-                  id = i,
-                  name = coal(na_blank(meta[[i]]$name), i),
-                  icon_key = tbl$keys[[k]],
-                  kind = coal(meta[[i]]$kind, "")
-                )
-              }
-            )
-
-            if (!identical(items, catalog_sig)) {
-              catalog_sig <<- items
+            if (!identical(msg, catalog_sig)) {
+              catalog_sig <<- msg
               session$sendCustomMessage(
                 "blockr-slides-catalog",
-                list(items = items, icons = tbl$icons)
+                c(list(root = root_id), msg)
               )
             }
           }
         )
 
-        # The deck: a list of ids, pushed on every change. Tens of bytes.
         observe(
           {
             session$sendCustomMessage(
               "blockr-slides-picked",
-              list(ids = as.list(rv_slides()))
+              list(root = root_id, ids = as.list(rv_slides()))
             )
           }
         )
@@ -891,8 +451,8 @@ slides_ext_srv <- function(slides, title, format = "pptx") {
           if (!length(picked)) {
             return(
               div(
-                class = "blockr-sld-empty",
-                "No slides yet. Search above and add a block to make it one."
+                class = "blockr-empty blockr-empty--panel",
+                "No slides yet. Add a block to make it one."
               )
             )
           }
@@ -922,23 +482,26 @@ slides_ext_srv <- function(slides, title, format = "pptx") {
           }
         }, ignoreInit = TRUE)
 
-        observeEvent(rv_title(), {
-          if (!identical(input$sld_title, rv_title())) {
-            updateTextInput(session, "sld_title", value = rv_title())
-          }
-        })
+        # The title field never echoes a value the server sets, so this
+        # leg sends unconditionally; again when the panel announces itself
+        # (sld_sync), because a message to a field not on the page yet is
+        # dropped.
+        send_title <- function() {
+          session$sendInputMessage("sld_title", list(value = rv_title()))
+        }
 
+        observeEvent(rv_title(), send_title())
+
+        observeEvent(input$sld_sync, send_title(), ignoreInit = TRUE)
+
+        # The format is the download menu's last pick. A controller can set
+        # it too; it then names the format a saved board last downloaded.
         observeEvent(input$sld_format, {
-          if (!identical(input$sld_format, rv_format())) {
-            rv_format(input$sld_format)
+          if (deck_format(input$sld_format) %in% deck_formats() &&
+                !identical(input$sld_format, rv_format())) {
+            rv_format(deck_format(input$sld_format))
           }
         }, ignoreInit = TRUE)
-
-        observeEvent(rv_format(), {
-          if (!identical(input$sld_format, rv_format())) {
-            updateSelectInput(session, "sld_format", selected = rv_format())
-          }
-        })
 
         # ---- the projection, on demand -------------------------------
         #
@@ -1151,6 +714,13 @@ slides_ext_srv <- function(slides, title, format = "pptx") {
         observeEvent(
           input$sld_go,
           {
+            # A download menu row sends the format it names; a bare click
+            # count downloads the current one.
+            fmt <- if (is.list(input$sld_go)) input$sld_go$format
+            if (is.character(fmt) && deck_format(fmt) %in% deck_formats()) {
+              rv_format(deck_format(fmt))
+            }
+
             if (!length(rv_slides())) {
               showNotification(
                 "Pick at least one block before downloading a deck.",
@@ -1279,60 +849,40 @@ slides_ext_srv <- function(slides, title, format = "pptx") {
   }
 }
 
-# One row of the deck list. Pure markup, no Shiny inputs: the buttons report
-# through one delegated handler (see slides_js), so the list can be
-# re-rendered without anything to rebind.
+# One row of the deck list. Pure markup, no Shiny inputs: the remove tool
+# reports through one delegated handler (blockr-slides.js), so the list can
+# be re-rendered without anything to rebind. The whole row drags; Alt+Up and
+# Alt+Down move the focused row.
 slides_row <- function(id, k, meta) {
 
   meta <- coal(meta, list())
+  name <- coal(na_blank(meta$name), id)
 
-  act <- function(a, label, path) {
-    tags$button(
-      type = "button",
-      class = "blockr-sld-act",
-      `data-act` = a,
-      title = label,
-      `aria-label` = label,
-      HTML(paste0(
-        "<svg width='13' height='13' viewBox='0 0 24 24' fill='none' ",
-        "stroke='currentColor' stroke-width='2.2' stroke-linecap='round' ",
-        "stroke-linejoin='round'>", path, "</svg>"
-      ))
-    )
-  }
-
-  # The block browser's card, compact form: icon tile, name, trailing pill.
-  # Same classes as the picker's menu rows and the dock's own sidebar, so a
-  # slide reads as the block it is. What the deck adds is the number (and
-  # the drag, and the actions).
   div(
-    class = "blockr-sld-row blockr-block-browser-card",
+    class = "blockr-otl-row blockr-sld-row",
     `data-blk` = id,
+    `data-kind` = coal(meta$kind, ""),
     draggable = "true",
-    div(
-      class = "blockr-block-browser-card-header",
-      span(class = "blockr-sld-num", k),
-      if (nzchar(coal(meta$icon, ""))) {
-        span(class = "blockr-block-browser-card-icon", HTML(meta$icon))
-      },
-      div(
-        class = "blockr-block-browser-card-body",
-        div(
-          class = "blockr-block-browser-card-titles",
-          span(
-            class = "blockr-block-browser-card-name",
-            coal(na_blank(meta$name), id)
-          ),
-          if (nzchar(coal(meta$kind, ""))) {
-            span(class = "blockr-block-browser-card-package", meta$kind)
-          }
-        )
-      ),
-      div(
-        class = "blockr-sld-acts",
-        act("up", "Move up", "<polyline points='18 15 12 9 6 15'/>"),
-        act("down", "Move down", "<polyline points='6 9 12 15 18 9'/>"),
-        act("rm", "Remove slide", "<path d='M18 6 6 18M6 6l12 12'/>")
+    tabindex = "0",
+    # The slide number is what makes this a deck rather than a set. It is
+    # positional, drawn from the row's place in the list and never stored.
+    span(class = "blockr-otl-row__num blockr-sld-num", k),
+    otl_mark(meta$mark),
+    span(
+      class = "blockr-otl-row__name",
+      `data-blockr-tooltip` = name,
+      `data-blockr-tooltip-overflow` = NA,
+      name
+    ),
+    span(
+      class = "blockr-otl-row__tools",
+      tags$button(
+        type = "button",
+        class = "blockr-tool blockr-otl-row__rm",
+        `data-act` = "rm",
+        `aria-label` = "Remove slide",
+        `data-blockr-tooltip` = "Remove slide",
+        HTML(otl_icon("x"))
       )
     )
   )
