@@ -1,532 +1,247 @@
-/* Report builder extension.
+/* The report panel (R/report-ui.R). The header row, rows, buttons and the
+   mark are blockr-panels.css; the fields and the gear tray are blockr.ui's.
+   What is the report's own: the view switch, text rows and their editor,
+   and the code views' gutter. Meaning tokens only. */
 
-   The builder is the slides panel under blockr-rpt-* classes (see
-   report-ui.R for why the rename is load-bearing, not cosmetic), so most of
-   this file mirrors blockr-slides.css. What the report adds is at the
-   bottom: the note editor, the intro, and the code views' gutter. The
-   fileblock frame, syntax theme and Milkdown editor styles ride in with
-   outline_dep()/md_editor_dep(). */
-
-.blockr-rpt-panel {
-  padding: 12px 16px;
-  --bb-grey-50: var(--blockr-grey-50, #f9fafb);
-  --bb-grey-100: var(--blockr-grey-100, #f3f4f6);
-  --bb-grey-200: var(--blockr-grey-200, #e5e7eb);
-  --bb-grey-300: var(--blockr-grey-300, #d1d5db);
-  --bb-grey-400: var(--blockr-grey-400, #9ca3af);
-  --bb-grey-500: var(--blockr-grey-500, #6b7280);
-  --bb-grey-600: var(--blockr-grey-600, #4b5563);
-  --bb-grey-700: var(--blockr-grey-700, #374151);
-  --bb-grey-900: var(--blockr-grey-900, #111827);
-  --bb-blue-100: var(--blockr-blue-100, #dbeafe);
-  --bb-blue-500: var(--blockr-blue-500, #3b82f6);
-  --bb-blue-600: var(--blockr-blue-600, #2563eb);
-  --bb-blue-700: var(--blockr-blue-700, #1d4ed8);
-  --bb-icon: 32px;
-  --bb-gap: 12px;
+.blockr-rpt-views {
+  margin-bottom: 10px;
 }
 
-/* ---- toolbar ------------------------------------------------------- */
-
-.blockr-rpt-toolbar { display: flex; align-items: center;
-  justify-content: space-between; gap: 10px; margin-bottom: 10px;
-  flex-wrap: wrap; }
-.blockr-rpt-toolbar .shiny-input-container { margin: 0; }
-
-.blockr-rpt-toolbar-right { display: flex; align-items: center; gap: 8px; }
-.blockr-rpt-toolbar-right .form-group,
-.blockr-rpt-toolbar-right .shiny-input-container { margin-bottom: 0; }
-
-/* One button, no picker fused to it: the format moved into the gear with
-   the rest of the YAML, so there is nothing left on this row to choose --
-   only something to state. Rounded on all four corners again, which is
-   what the split group's shared radius was hiding. */
-.blockr-rpt-rendergroup { display: inline-flex; align-items: stretch; }
-
-/* A neutral button carrying a primary MARK. The green it replaces was not
-   merely rare in the ecosystem, it was local: #f0fdf4 / #86efac / #166534
-   / #dcfce7 appear in this package and nowhere else, and the palette has
-   no action green to begin with -- colors.md defines exactly one green,
-   --blockr-color-success, for "confirmed states", which is how ggplot's
-   .preview-status.valid and blockr.io's path input use it. Green is a
-   status here, never a verb.
-   The house constructive action is a solid primary fill (.btn-primary),
-   which is LOUDER than what it replaces rather than quieter. So the
-   colour moves off the box and onto the glyph: nothing is filled, the
-   button matches the chrome around it, and the one primary mark on the
-   row still marks where the row ends. */
-.blockr-rpt-renderbtn { display: inline-flex; align-items: center; gap: 6px;
-  height: 28px; padding: 0 11px; font-size: 0.75rem; font-weight: 500;
-  border-radius: 6px; border: 1px solid var(--blockr-color-border, #e5e7eb);
-  background: #fff; color: var(--blockr-grey-900, #111827);
-  box-shadow: none; white-space: nowrap; }
-.blockr-rpt-renderbtn:hover { background: var(--blockr-grey-50, #f9fafb);
-  border-color: var(--blockr-grey-300, #d1d5db);
-  color: var(--blockr-grey-900, #111827); }
-/* The glyph is where the colour lives. Targeted through .action-icon,
-   Shiny's own wrapper: fontawesome renders <i class="fas fa-play">, and
-   the rule this replaces said `.fa` -- which matches neither `fas` nor
-   the svg build, so its font-size had never applied either. */
-.blockr-rpt-renderbtn .action-icon { display: inline-flex; font-size: 0.7rem;
-  color: var(--blockr-color-primary, #2563eb); }
-.blockr-rpt-renderbtn .action-icon svg { color: inherit; }
-
-/* ---- the view switcher ---------------------------------------------- */
-
-/* The ecosystem's segmented control, not Bootstrap's button group: white
-   segments divided by hairlines, blue-50 fill and primary text on the
-   active one. Copied from blockr.ggplot's .dd-cfg-types / .dd-type-btn
-   (the chart-type strip) by way of blockr-outline.css, which already
-   states it for the outline toolbar -- including the icon-only segments
-   (.blockr-otl-bodytoggle) this is the report panel's version of.
-
-   Icon only because report_code_ui() prints `report.R` / `report.qmd` in
-   the fileblock header a few pixels below this row: a labelled segment
-   would put the same filename on screen twice. The name survives as the
-   tooltip and as .blockr-rpt-sr inside each segment.
-
-   The active selector must be `.btn-check:checked + label`: shinyWidgets
-   renders the radio as a SIBLING of its label, so neither `.active` nor
-   `label:has(input:checked)` ever matches -- which is what left the
-   active segment invisible when the outline first styled this strip.
-
-   28px, not the 30px of the outline's copy: the gear and the render group
-   on this row are 28px, and one baseline beats one shared token. */
-
-.blockr-rpt-toolbar .btn-group { height: 28px;
-  border: 1px solid var(--blockr-color-border, #e5e7eb);
-  border-radius: 6px; overflow: hidden; }
-.blockr-rpt-toolbar .btn-group > .btn.radiobtn {
-  display: inline-flex; align-items: center; justify-content: center;
-  height: 100%; margin: 0; padding: 0 10px;
-  border: 0; border-right: 1px solid var(--blockr-color-border, #e5e7eb);
-  border-radius: 0; background: #fff; box-shadow: none;
-  color: var(--blockr-grey-500, #6b7280); }
-.blockr-rpt-toolbar .btn-group > .btn.radiobtn:last-of-type {
-  border-right: 0; }
-.blockr-rpt-toolbar .btn-group > .btn.radiobtn:hover {
-  background: var(--blockr-grey-50, #f9fafb); }
-/* Selected is TINTED: blue-50 behind a primary glyph. This is the
-   ecosystem's selected state and it is close to unanimous -- the
-   chart-type strip and tile grid this switcher was copied from
-   (dd-type-active), dplyr's mode pills and popover toggles, viz's control
-   radios, chips and cards, the dock's block-browser card. Grey is not the
-   alternative to it: grey is the HOVER state, said out loud in
-   sidebar-block.css ("a clear blue marker, distinct from the grey
-   hover/expanded state").
-   A grey selected state shipped here briefly and was wrong twice over --
-   it left the strip out of step with every other selector in the app, and
-   it made selected and hovered two greys one step apart, distinguished
-   only by how dark the glyph was. */
-.blockr-rpt-toolbar .btn-check:checked + .btn.radiobtn {
-  background: var(--blockr-blue-50, #eff6ff);
-  color: var(--blockr-color-primary, #2563eb); }
-/* The input is the focus target and it is visually hidden, so the ring has
-   to be drawn on the label -- inset, or the strip's overflow clips it. */
-.blockr-rpt-toolbar .btn-check:focus-visible + .btn.radiobtn {
-  outline: 2px solid var(--blockr-blue-500, #3b82f6); outline-offset: -2px; }
-
-.blockr-rpt-viewicon { display: inline-flex; align-items: center; }
-.blockr-rpt-viewicon svg { opacity: 0.55; }
-/* 0.9, the value the chart-type tiles use for an active glyph -- the tint
-   carries the state, the glyph only stops being muted. */
-.blockr-rpt-toolbar .btn-check:checked + .btn.radiobtn
-  .blockr-rpt-viewicon svg { opacity: 0.9; }
-
-/* The segment's accessible name. Not Bootstrap's .visually-hidden: this
-   stylesheet loads wherever the extension does, and which Bootstrap the
-   host app carries is the host's business. */
-.blockr-rpt-sr { position: absolute; width: 1px; height: 1px; padding: 0;
-  margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap;
-  border: 0; }
-
-/* ---- title ---------------------------------------------------------- */
-
-.blockr-rpt-head { margin-bottom: 10px; }
-.blockr-rpt-head > .shiny-input-container { margin: 0; width: 100% !important; }
-.blockr-rpt-head input[type="text"] { height: 30px; border: 0;
-  border-bottom: 1px solid transparent; border-radius: 0; box-shadow: none;
-  padding: 0 2px; background: transparent;
-  font-size: var(--blockr-font-size-md, 0.95rem); font-weight: 600;
-  color: var(--blockr-grey-900, #111827); }
-.blockr-rpt-head input[type="text"]:hover {
-  border-bottom-color: var(--blockr-color-border, #e5e7eb); }
-.blockr-rpt-head input[type="text"]:focus { outline: none;
-  border-bottom-color: var(--blockr-blue-500, #3b82f6);
-  box-shadow: none; background: transparent; }
-
-/* ---- ghost buttons: the dock's header-icon idiom -------------------- */
-
-.blockr-rpt-gh { min-width: 28px; height: 28px; padding: 6px 7px; border: 0;
-  border-radius: 8px; background-color: transparent;
-  color: var(--bb-grey-300); font-size: 12px; line-height: 1;
-  display: inline-flex; align-items: center; justify-content: center;
-  cursor: pointer; transition: all 0.15s ease; box-shadow: none; }
-.blockr-rpt-gh:hover { background-color: var(--bb-grey-100);
-  color: var(--bb-grey-400); }
-.blockr-rpt-gh.is-on { color: var(--bb-blue-500); }
-.blockr-rpt-gh.is-on:hover { background-color: var(--blockr-blue-50, #eff6ff);
-  color: var(--bb-blue-500); }
-.blockr-rpt-gh.is-rm:hover { background-color: #fee2e2; color: #dc2626; }
-.blockr-rpt-gh svg, .blockr-rpt-gh .fa { width: 14px; height: 14px; }
-
-/* ---- the settings gear ---------------------------------------------- */
-
-/* The gear is the ECOSYSTEM's gear, not this panel's ghost button: a
-   bordered 26px square, grey until touched, primary and tinted while its
-   band is open. Every block on a board draws that one -- canon lives in
-   blockr.dplyr's blockr-blocks.css as .blockr-gear-btn -- and a settings
-   gear that looks like nothing else on the page is a gear the reader has
-   to learn twice.
-
-   Restated here under the panel's own class rather than imported:
-   blockr.outline does not otherwise depend on blockr.dplyr, and a bare
-   .blockr-gear-btn rule in this sheet would repaint every gear in the
-   app the moment the report extension is on the page -- the drift
-   blockr.io's unscoped 32px selector already caused once. It moves with
-   the rest of the shared layer when that lands in blockr.ui.
-
-   The ROW buttons above keep .blockr-rpt-gh, and that is not an
-   inconsistency: an eye on a report row IS the eye on a block card, so
-   it wears the dock's borderless header idiom. This one configures a
-   document, and configuring wears a border. */
-
-.blockr-rpt-gear { display: inline-flex; align-items: center;
-  justify-content: center; width: 26px; height: 26px; padding: 0;
-  flex-shrink: 0; color: var(--blockr-grey-400, #9ca3af);
-  background: transparent;
-  border: 1px solid var(--blockr-color-border, #e5e7eb);
-  border-radius: 4px; cursor: pointer; box-shadow: none;
-  transition: color 0.15s ease, border-color 0.15s ease,
-              background 0.15s ease; }
-.blockr-rpt-gear:hover { color: var(--blockr-color-primary, #2563eb);
-  border-color: rgba(37, 99, 235, 0.3);
-  background: rgba(37, 99, 235, 0.04); }
-.blockr-rpt-gear.is-on { color: var(--blockr-color-primary, #2563eb);
-  border-color: rgba(37, 99, 235, 0.3);
-  background: rgba(37, 99, 235, 0.08); }
-.blockr-rpt-gear svg { display: block; }
-
-/* ---- the settings band ---------------------------------------------- */
-
-.blockr-rpt-band { display: none; background: var(--bb-grey-50);
-  border: 1px solid var(--blockr-color-border, #e5e7eb); border-radius: 8px;
-  padding: 11px 13px; margin: 0 0 10px; }
-.blockr-rpt-band.open { display: block; }
-.blockr-rpt-bandgrid { display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 18px; }
-.blockr-rpt-fld { display: flex; align-items: center;
-  justify-content: space-between; gap: 10px; min-height: 30px; }
-.blockr-rpt-fld > label { margin: 0;
-  font-size: var(--blockr-font-size-xs, 0.75rem); font-weight: 400;
-  color: var(--bb-grey-600); }
-.blockr-rpt-fldhint { display: block; font-size: 0.6875rem;
-  color: var(--bb-grey-400); margin-top: 1px; }
-/* Do not let the row's space-between squeeze the control: the label takes
-   the slack, the control keeps its content width. Without this the select
-   shrank to 70px and clipped "Typst PDF". */
-.blockr-rpt-fld .shiny-input-container { margin: 0; width: auto !important; }
-/* Direct children only. The figure-size field nests two number inputs
-   inside .blockr-rpt-figsize, and letting them refuse to shrink blew both
-   boxes out to their default intrinsic width and pushed the next grid
-   cell over the top of them. */
-.blockr-rpt-fld > .shiny-input-container { flex: 0 0 auto; }
-
-/* The caret is a background image at `calc(100% - 12px)`, because the
-   theme sets appearance:none and draws its own -- so the right padding is
-   what keeps the text out from under it. The old `padding: 0 6px` reserved
-   nothing and the arrow landed on the last word.
-   `width: auto` lets the select size to its widest OPTION rather than to
-   whatever the flex row leaves over, which is what a format list that
-   gains entries needs. */
-.blockr-rpt-fld select.form-control, .blockr-rpt-fld select.form-select {
-  height: 26px; padding: 0 26px 0 8px; font-size: 0.75rem;
-  border-radius: 6px; width: auto; min-width: 110px; max-width: none; }
-.blockr-rpt-fld .checkbox { margin: 0; min-height: 0; }
-.blockr-rpt-fld .checkbox label { padding-left: 0; }
-.blockr-rpt-figsize { display: flex; gap: 4px; align-items: center;
-  font-size: 0.6875rem; color: var(--bb-grey-400); }
-.blockr-rpt-figsize input[type="number"] { height: 26px; padding: 0 4px;
-  font-size: 0.75rem; text-align: center; border-radius: 6px; }
-
-/* ---- picker: the block browser's search box ------------------------- */
-
-.blockr-rpt-search { position: relative; margin: 0 0 10px; }
-.blockr-rpt-search .blockr-rpt-searchinput { padding-right: 132px; }
-.blockr-rpt-searchcount { position: absolute; right: 12px; top: 50%;
-  transform: translateY(-50%); pointer-events: none;
-  font-size: var(--blockr-font-size-xs, 0.75rem);
-  color: var(--blockr-grey-400, #9ca3af); }
-.blockr-rpt-search.has-value .blockr-rpt-searchcount { display: none; }
-.blockr-rpt-search.has-value .blockr-rpt-searchinput { padding-right: 12px; }
-
-.blockr-rpt-search .blockr-rpt-searchmenu { display: none; position: absolute;
-  left: 0; right: 0; top: calc(100% + 4px); z-index: 30; margin: 0;
-  padding: 6px 0; height: auto; max-height: 320px; overflow-y: auto; gap: 0;
-  background: var(--blockr-color-bg, #fff);
-  border: 1px solid var(--blockr-color-border, #e5e7eb); border-radius: 8px;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12); }
-.blockr-rpt-search.open .blockr-rpt-searchmenu { display: flex;
-  flex-direction: column; }
-.blockr-rpt-searchmenu .blockr-block-browser-categories { gap: 6px; }
-.blockr-rpt-searchmenu.is-empty .blockr-block-browser-categories {
-  display: none; }
-.blockr-rpt-searchmenu.is-empty .blockr-block-browser-empty { display: flex; }
-.blockr-rpt-searchmenu mark { background: #fef08a; color: inherit;
-  border-radius: 2px; padding: 0 1px; }
-/* A picker entry is icon, name and kind badge, one line -- the shape
-   blockr.dock's block-type browser has, which is the reference.
-   Nothing else: the registry DESCRIPTION is boilerplate per block type,
-   so it repeats verbatim down the list and says nothing about the block
-   being chosen; and a trailing "Add" word is not a second control (the
-   entry itself is the control) while the two section headings already
-   say whether a click adds the block or goes to the row it has. */
-
-/* ---- the list ------------------------------------------------------ */
-
-.blockr-rpt-empty { padding: 26px 14px; text-align: center;
-  font-size: var(--blockr-font-size-sm, 0.8125rem);
-  color: var(--blockr-grey-400, #9ca3af); }
-
-.blockr-rpt-list { display: flex; flex-direction: column; }
-
-.blockr-rpt-row { cursor: grab; user-select: none; position: relative; }
-.blockr-rpt-row .blockr-block-browser-card-header { align-items: center; }
-.blockr-rpt-row.is-dragging { opacity: 0.45; cursor: grabbing; }
-
-/* The drop indicator: a STRAIGHT 2px line in the gap the drop targets,
-   with an open notch on the leading edge that makes it read as an
-   insertion caret. Not an inset box-shadow -- the shadow follows the card's
-   rounded corners and curls at both ends, which is what made the old
-   indicator ugly.
-
-   ONE element, belonging to the list, which report_js moves to the gap. It
-   used to be a pair of pseudo-elements on the rows (is-over / is-over-top),
-   which works here only because these rows are flush and borderless: a
-   row's bottom edge is then literally the next row's top edge, so both
-   anchors resolve to the same pixel. That is an invisible dependency -- add
-   a border or a margin to a row and the same gap draws 2px apart depending
-   on which row the pointer is over, because a pseudo-element is laid out
-   against the padding box, which a border insets. The caret then visibly
-   jumps between clinging to one row and the other. Owning the caret at the
-   list removes the dependency: its position is the midpoint between the two
-   rows bounding the gap, read off the layout. */
-.blockr-rpt-list { position: relative; }
-
-.blockr-rpt-caret { position: absolute; left: 10px; right: 0; height: 2px;
-  border-radius: 1px; background: var(--blockr-blue-700, #1d4ed8);
-  transform: translateY(-50%); z-index: 5;
-  /* It sits under the pointer mid-drag; without this it becomes a drop
-     target and swallows the dragover it exists to visualise. */
-  pointer-events: none; }
-.blockr-rpt-caret::before { content: ""; position: absolute; left: -10px;
-  top: 50%; transform: translateY(-50%); width: 8px; height: 8px;
-  border-radius: 50%; border: 2px solid var(--blockr-blue-700, #1d4ed8);
-  background: #fff; box-sizing: border-box; }
-.blockr-rpt-caret.is-hidden { display: none; }
-
-.blockr-rpt-row.blockr-rpt-flash { animation: blockr-rpt-flash 1.1s ease-out; }
-@keyframes blockr-rpt-flash {
-  0% { background: var(--blockr-blue-100, #dbeafe); }
-  100% { background: transparent; }
-}
-
-/* The number stays put -- the whole row drags (cursor: grab says so), and
-   swapping the digits for a grip on hover read as flicker. */
-.blockr-rpt-num { flex: 0 0 16px; text-align: right;
-  font-size: var(--blockr-font-size-xs, 0.75rem);
-  font-variant-numeric: tabular-nums; font-weight: 600;
-  color: var(--blockr-grey-400, #9ca3af); }
-
-.blockr-rpt-row .blockr-block-browser-card-icon,
-.blockr-rpt-searchmenu .blockr-block-browser-card-icon { background: none; }
-.blockr-rpt-row .blockr-block-browser-card-icon svg,
-.blockr-rpt-row .blockr-block-browser-card-icon img,
-.blockr-rpt-searchmenu .blockr-block-browser-card-icon svg,
-.blockr-rpt-searchmenu .blockr-block-browser-card-icon img {
-  width: 32px; height: 32px; }
-
-.blockr-rpt-panel .blockr-block-browser-card-package {
-  text-transform: uppercase; letter-spacing: 0.04em; }
-
-/* ---- row controls ---------------------------------------------------
-   The two visibility toggles stay readable at rest (the document's shape
-   is scannable down the column); the dots and the x appear on hover, as
-   secondary actions do everywhere. A toggle that is ON stays visible. */
-.blockr-rpt-ctrls { flex: 0 0 auto; display: flex; align-items: center;
-  gap: 2px; }
-.blockr-rpt-ctrls > .blockr-rpt-gh:not(.is-on),
-.blockr-rpt-ctrls > .blockr-rpt-menuwrap,
-.blockr-rpt-ctrls > .is-rm { opacity: 0; transition: opacity 0.12s ease; }
-.blockr-rpt-row:hover .blockr-rpt-ctrls > *,
-.blockr-rpt-ctrls:focus-within > *,
-.blockr-rpt-ctrls > .blockr-rpt-menuwrap:has(.show) { opacity: 1; }
-.blockr-rpt-gh:focus-visible { outline: 2px solid
-  var(--blockr-blue-500, #3b82f6); outline-offset: 1px; }
+/* ---- rows ------------------------------------------------------------ */
 
 /* Both switches off: in the document, renders nothing. Present, dimmed. */
-.blockr-rpt-row.is-silent .blockr-block-browser-card-name,
-.blockr-rpt-row.is-silent .blockr-block-browser-card-package {
-  color: var(--bb-grey-400); }
-.blockr-rpt-row.is-silent .blockr-block-browser-card-icon { opacity: 0.4; }
+.blockr-rpt-row.is-silent .blockr-otl-row__name {
+  color: var(--blockr-color-text-muted);
+}
 
-/* ---- text rows ------------------------------------------------------ */
+.blockr-rpt-row.is-silent .blockr-otl-mark {
+  opacity: 0.5;
+}
 
-/* A text row anchors its number and tile to the TOP, beside the first
-   line -- centering them against a multi-paragraph text floats them
-   mid-block and the row boundaries blur. The number gets the tile's
-   line-height and the prose a small top offset, so on a one-liner all
-   three centres still coincide exactly as on a block row. */
-.blockr-rpt-textrow .blockr-block-browser-card-header {
-  align-items: flex-start; }
-.blockr-rpt-textrow .blockr-rpt-num { line-height: 32px; }
-.blockr-rpt-textrow .blockr-rpt-prose { padding-top: 6px; }
-/* The markdown mark gets a tile of its own, the block icons' shape in the
-   text items' colour: grey, not a category. */
-.blockr-rpt-texticon,
-.blockr-rpt-row .blockr-block-browser-card-icon.blockr-rpt-texticon {
-  display: flex; align-items: center; justify-content: center; width: 32px;
-  height: 32px; border-radius: 8px; background: var(--bb-grey-100);
-  color: var(--bb-grey-500); }
-.blockr-rpt-texticon svg, .blockr-rpt-texticon .fa {
-  width: 18px !important; height: 14px !important; }
-.blockr-rpt-prose { font-size: var(--blockr-font-size-sm, 0.8125rem);
-  line-height: 1.55; color: var(--bb-grey-700); min-width: 0; }
+.blockr-rpt-row.is-silent:hover .blockr-otl-row__name {
+  color: var(--blockr-color-text-default);
+}
+
+/* A text row anchors its number and mark to the first line of the text. */
+.blockr-rpt-textrow {
+  align-items: flex-start;
+}
+
+.blockr-rpt-textrow .blockr-otl-row__num {
+  line-height: 24px;
+}
+
+.blockr-rpt-textrow.is-editing {
+  cursor: default;
+}
+
+.blockr-rpt-textrow.is-editing:hover {
+  background: transparent;
+}
+
+/* While writing, the editor takes the mark's place: a narrow sidebar needs
+   the width for Discard and Done. */
+.blockr-rpt-textrow.is-editing .blockr-otl-mark {
+  display: none;
+}
+
+.blockr-otl-mark--text {
+  color: var(--blockr-color-text-muted);
+  background: color-mix(in srgb, var(--blockr-color-text-muted) 14%, var(--blockr-color-bg-surface));
+}
+
+.blockr-rpt-prose {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-top: 2px;
+  font-size: var(--blockr-font-size-base);
+  line-height: 1.5;
+  color: var(--blockr-color-text-default);
+  overflow-wrap: anywhere;
+}
+
 .blockr-rpt-prose > *:first-child { margin-top: 0; }
 .blockr-rpt-prose > *:last-child { margin-bottom: 0; }
-/* A compact heading ladder: the levels must read as levels, inside a row
-   that is still a list entry, not a page. */
-.blockr-rpt-prose h1, .blockr-rpt-prose h2, .blockr-rpt-prose h3,
-.blockr-rpt-prose h4, .blockr-rpt-prose h5, .blockr-rpt-prose h6 {
-  font-weight: 700; margin: 6px 0 3px; color: var(--bb-grey-900);
-  line-height: 1.3; }
-.blockr-rpt-prose h1 { font-size: 1.0625rem; }
-.blockr-rpt-prose h2 { font-size: 0.9375rem; }
-.blockr-rpt-prose h3 { font-size: 0.845rem; }
-.blockr-rpt-prose h4, .blockr-rpt-prose h5, .blockr-rpt-prose h6 {
-  font-size: var(--blockr-font-size-sm, 0.8125rem);
-  color: var(--bb-grey-700); }
-.blockr-rpt-prose.is-empty { color: var(--bb-grey-400); font-style: italic; }
+.blockr-rpt-prose p { margin: 0 0 6px; }
+.blockr-rpt-prose ul,
+.blockr-rpt-prose ol { margin: 0 0 6px; padding-left: 18px; }
 
-/* ---- the dots menu --------------------------------------------------
-   Markup and base styling are the dock's block dropdown; only the figure
-   size presets are the report's own. */
-.blockr-rpt-menuitem { display: flex; align-items: center; gap: 9px;
-  padding: 8px 12px !important; }
-.blockr-rpt-menuicon { width: 15px; flex: 0 0 15px; display: inline-flex;
-  justify-content: center; color: var(--bb-grey-400); }
-.blockr-rpt-menuicon svg, .blockr-rpt-menuicon .fa { width: 13px;
-  height: 13px; }
-.blockr-rpt-menuitem.is-on .blockr-rpt-menuicon { color: var(--bb-blue-500); }
-.blockr-rpt-menuitem.is-good .blockr-rpt-menuicon { color: #16a34a; }
-.blockr-rpt-sizes { display: flex; gap: 4px; padding: 2px 12px 4px; }
-.blockr-rpt-size { flex: 1; height: 26px;
-  border: 1px solid var(--blockr-color-border, #e5e7eb); border-radius: 6px;
-  background: #fff; font-size: 0.6875rem; font-weight: 600;
-  color: var(--bb-grey-500); cursor: pointer; }
-.blockr-rpt-size:hover { border-color: var(--bb-grey-300);
-  color: var(--bb-grey-700); }
-.blockr-rpt-size.is-on { border-color: #bfdbfe;
-  background: var(--blockr-blue-50, #eff6ff); color: var(--bb-blue-600); }
-.blockr-rpt-sizenote { padding: 0 12px 6px; font-size: 0.6875rem;
-  color: var(--bb-grey-400); }
+/* The levels read as levels inside a list entry, never larger than a
+   block's title. */
+.blockr-rpt-prose h1,
+.blockr-rpt-prose h2,
+.blockr-rpt-prose h3,
+.blockr-rpt-prose h4,
+.blockr-rpt-prose h5,
+.blockr-rpt-prose h6 {
+  margin: 6px 0 2px;
+  font-size: var(--blockr-font-size-base);
+  font-weight: var(--blockr-font-weight-semibold);
+  line-height: 1.35;
+  color: var(--blockr-color-text-default);
+}
 
-/* ---- the text editor: a writer card --------------------------------
-   Raw markdown, but set in the UI font at reading size, so the text keeps
-   the width and rhythm it will have rendered -- the syntax is visible,
-   the writing is not typewritten. The footer teaches the four bits of
-   markdown people actually use and offers Done / Discard; click-outside
-   and Esc keep working. */
+.blockr-rpt-prose h1 { font-size: var(--blockr-font-size-lg); }
 
-.blockr-rpt-editor { margin: 0; min-width: 0; flex: 1 1 auto;
-  border: 1px solid var(--blockr-blue-500, #3b82f6); border-radius: 8px;
-  background: #fff; overflow: hidden;
-  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.08); }
-.blockr-rpt-mdedit { display: block; width: 100%; resize: none;
-  overflow: hidden; border: 0; padding: 11px 13px; min-height: 84px;
-  background: #fff; font-family: inherit;
-  font-size: var(--blockr-font-size-base, 0.875rem); line-height: 1.6;
-  color: var(--bb-grey-700); }
-.blockr-rpt-mdedit:focus { outline: none; }
-.blockr-rpt-mdedit::placeholder { color: var(--bb-grey-400); }
+.blockr-rpt-prose.is-empty {
+  font-size: var(--blockr-font-size-sm);
+  font-style: italic;
+  color: var(--blockr-color-text-muted);
+}
 
-.blockr-rpt-edfoot { display: flex; align-items: center;
-  justify-content: space-between; gap: 10px; padding: 6px 10px;
-  border-top: 1px solid var(--bb-grey-100); background: var(--bb-grey-50); }
-.blockr-rpt-cheat { display: flex; gap: 12px; min-width: 0;
-  overflow: hidden; }
-.blockr-rpt-cheatbit { font-family: var(--blockr-font-mono, ui-monospace,
-  SFMono-Regular, Menlo, monospace); font-size: 0.65rem;
-  color: var(--bb-grey-400); white-space: nowrap; }
-.blockr-rpt-edbtns { display: flex; gap: 6px; flex: 0 0 auto; }
-.blockr-rpt-edbtn { height: 24px; padding: 0 10px; border-radius: 6px;
-  font-size: 0.6875rem; font-weight: 600; cursor: pointer;
-  border: 1px solid var(--blockr-color-border, #e5e7eb); background: #fff;
-  color: var(--bb-grey-500); }
-.blockr-rpt-edbtn:hover { border-color: var(--bb-grey-300);
-  color: var(--bb-grey-700); }
-.blockr-rpt-edsave { border-color: #bfdbfe;
-  background: var(--blockr-blue-50, #eff6ff); color: var(--bb-blue-600); }
-.blockr-rpt-edsave:hover { border-color: var(--bb-blue-500);
-  background: var(--bb-blue-100); color: var(--bb-blue-600); }
+.blockr-otl-row:hover .blockr-rpt-prose.is-empty {
+  color: var(--blockr-color-text-default);
+}
 
-/* The empty state, without a node the row diff would have to step over. */
+/* Nothing in the report: one italic line where the rows would be. */
 .blockr-rpt-rows:empty::before {
-  content: "Nothing in the report yet. Search above to add a block, or start with a piece of text.";
-  display: block; padding: 26px 14px; text-align: center;
-  font-size: var(--blockr-font-size-sm, 0.8125rem);
-  color: var(--bb-grey-400); }
+  content: "Nothing in the report yet. Add a block to start.";
+  display: block;
+  padding: 18px 0 14px;
+  font-size: var(--blockr-font-size-sm);
+  font-style: italic;
+  line-height: 1.5;
+  color: var(--blockr-color-text-muted);
+}
 
-/* ---- the code views ------------------------------------------------ */
+/* ---- the text editor ----------------------------------------------------
+   Raw markdown in a field set in the UI font, so the text keeps the width
+   and rhythm it will have rendered. It is the field in use: the accent
+   border and the focus ring. */
+.blockr-rpt-editor {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  background: var(--blockr-color-bg-surface);
+  border: 1px solid var(--blockr-color-border-accent);
+  border-radius: var(--blockr-radius-lg);
+  box-shadow: var(--blockr-focus-ring);
+}
 
-/* Copy and Download, in blockr.viz's download chrome (.blockr-dl-xlsx /
-   .dd-chart-dl): icon-only bordered squares, input-grey, white on hover,
-   at the 26px icon-button tier. No words -- the filename beside them is
-   the label both share, and the tooltip carries each one's own.
-   Restated rather than imported for the reason the gear is: an unscoped
-   .blockr-dl-xlsx rule here would reach every download button in the app.
-   The `a` in the selector outranks Bootstrap's link colour, which is what
-   the downloadLink otherwise arrives wearing. */
-.blockr-rpt-fileblock a.blockr-rpt-fbtn,
-.blockr-rpt-fileblock button.blockr-rpt-fbtn {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 26px; height: 26px; padding: 0; flex: 0 0 auto;
-  border: 1px solid var(--blockr-color-border, #e5e7eb); border-radius: 4px;
-  background-color: var(--blockr-grey-50, #f9fafb);
-  color: var(--blockr-grey-500, #6b7280); line-height: 1; cursor: pointer;
-  box-shadow: none; text-decoration: none;
-  transition: border-color 0.12s, background-color 0.12s, color 0.12s; }
-.blockr-rpt-fileblock a.blockr-rpt-fbtn:hover,
-.blockr-rpt-fileblock button.blockr-rpt-fbtn:hover {
-  background-color: #fff; border-color: var(--blockr-grey-300, #d1d5db);
-  color: var(--blockr-grey-700, #374151); text-decoration: none; }
-.blockr-rpt-fileblock a.blockr-rpt-fbtn:focus-visible,
-.blockr-rpt-fileblock button.blockr-rpt-fbtn:focus-visible {
-  outline: none; border-color: var(--blockr-color-primary, #2563eb);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12); }
-.blockr-rpt-fbtn svg { display: block; }
+.blockr-rpt-mdedit {
+  display: block;
+  width: 100%;
+  min-height: 84px;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  resize: none;
+  overflow: hidden;
+  border: 0;
+  outline: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: var(--blockr-font-size-base);
+  line-height: 1.5;
+  color: var(--blockr-color-text-default);
+  cursor: text;
+  user-select: text;
+}
 
-/* The header is now filename + a pair of squares, so the filename takes
-   the slack rather than space-between spreading two buttons apart. */
-.blockr-rpt-fileblock .blockr-otl-filehead { gap: 6px; padding-right: 8px; }
-.blockr-rpt-fileblock .blockr-otl-filename { margin-right: auto; }
+.blockr-rpt-mdedit::placeholder {
+  color: var(--blockr-color-text-muted);
+}
 
-.blockr-rpt-codebody { padding: 4px 0; }
-.blockr-rpt-coderow { display: grid; grid-template-columns: 34px 1fr;
-  align-items: start; }
-.blockr-rpt-coderow + .blockr-rpt-coderow { margin-top: 10px; }
+.blockr-rpt-edfoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border-top: 1px solid var(--blockr-color-border-default);
+  background: var(--blockr-color-bg-subtle);
+}
 
-.blockr-rpt-gutter { display: flex; justify-content: center;
-  padding-top: 2px; }
-.blockr-rpt-chip { display: inline-flex; align-items: center;
-  justify-content: center; width: 26px; height: 26px; padding: 0; border: 0;
-  border-radius: 6px; background: transparent; cursor: pointer;
-  opacity: 0.85; }
-.blockr-rpt-chip:hover { opacity: 1;
-  background: var(--blockr-grey-100, #f3f4f6); }
-.blockr-rpt-chip:focus-visible { outline: 2px solid
-  var(--blockr-blue-500, #3b82f6); outline-offset: 1px; }
-.blockr-rpt-chip svg, .blockr-rpt-chip img { width: 22px; height: 22px; }
+.blockr-rpt-cheat {
+  display: flex;
+  gap: 12px;
+  min-width: 0;
+  overflow: hidden;
+}
 
-.blockr-rpt-code { min-width: 0; overflow-x: auto; }
-.blockr-rpt-code pre { margin: 0; }
+.blockr-rpt-cheatbit {
+  font-family: var(--blockr-font-mono);
+  font-size: var(--blockr-font-size-xs);
+  color: var(--blockr-color-text-muted);
+  white-space: nowrap;
+}
+
+.blockr-rpt-edbtns {
+  display: flex;
+  gap: 4px;
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+/* ---- the code views -------------------------------------------------- */
+
+.blockr-rpt-fileblock .blockr-otl-filehead {
+  gap: 2px;
+  padding-right: 6px;
+}
+
+.blockr-rpt-fileblock .blockr-otl-filename {
+  margin-right: auto;
+}
+
+.blockr-rpt-codebody {
+  padding: 4px 0;
+}
+
+.blockr-rpt-coderow {
+  display: grid;
+  grid-template-columns: 36px 1fr;
+  align-items: start;
+}
+
+.blockr-rpt-coderow + .blockr-rpt-coderow {
+  margin-top: 10px;
+}
+
+.blockr-rpt-gutter {
+  display: flex;
+  justify-content: center;
+  padding-top: 2px;
+}
+
+/* The block's mark as a button: a click opens the block's panel. */
+.blockr-rpt-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--blockr-radius-sm);
+  background: transparent;
+  cursor: pointer;
+  transition: background-color var(--blockr-transition);
+}
+
+.blockr-rpt-chip:hover {
+  background: var(--blockr-color-bg-hover);
+}
+
+.blockr-rpt-chip:focus-visible {
+  outline: var(--blockr-focus-outline);
+  outline-offset: var(--blockr-focus-offset);
+}
+
+.blockr-rpt-code {
+  min-width: 0;
+  overflow-x: auto;
+  font-family: var(--blockr-font-mono);
+  font-size: var(--blockr-font-size-sm);
+}
+
+.blockr-rpt-code pre {
+  margin: 0;
+  font-size: var(--blockr-font-size-sm);
+}
+
+/* A text row's tools sit by its first line. */
+.blockr-rpt-textrow .blockr-otl-row__tools {
+  top: 4px;
+  transform: none;
+}

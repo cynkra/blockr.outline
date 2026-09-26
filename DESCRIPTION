@@ -34,7 +34,6 @@ Imports:
     shiny,
     htmltools,
     commonmark,
-    shinyWidgets,
     utils,
     stats
 Suggests:
