@@ -1,0 +1,123 @@
+/* The slide block's controls (R/slide-block.R): the header row's capacity
+   meter and the layout tiles in the gear tray. The fields and the tray are
+   blockr.ui's. Meaning tokens only. */
+
+.slb-head {
+  align-items: center;
+}
+
+.slb-status {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* How many exhibits the layout draws: one cell per slot, filled left to
+   right, an amber cell per surplus input. A status, in 12px muted. */
+.slb-meter {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--blockr-font-size-xs);
+  color: var(--blockr-color-text-muted);
+}
+
+.slb-cells {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.slb-cell {
+  width: 14px;
+  height: 10px;
+  box-sizing: border-box;
+  border-radius: 2px;
+  border: 1px solid var(--blockr-color-border-strong);
+  background: var(--blockr-color-bg-surface);
+}
+
+.slb-cell--on {
+  background: var(--blockr-color-bg-accent);
+  border-color: var(--blockr-color-bg-accent);
+}
+
+.slb-cell--over {
+  background: var(--blockr-color-bg-warning);
+  border-color: var(--blockr-color-border-warning);
+}
+
+/* ---- the layouts: icon tiles -------------------------------------------
+   The pick in the accent tint. */
+.slb-layouts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: 8px;
+}
+
+.slb-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 8px;
+  font: inherit;
+  font-size: var(--blockr-font-size-xs);
+  text-align: left;
+  color: var(--blockr-color-text-muted);
+  background: var(--blockr-color-bg-surface);
+  border: 1px solid var(--blockr-color-border-default);
+  border-radius: var(--blockr-radius-lg);
+  cursor: pointer;
+  transition: background-color var(--blockr-transition),
+              border-color var(--blockr-transition),
+              color var(--blockr-transition);
+}
+
+.slb-tile:hover {
+  color: var(--blockr-color-text-default);
+  border-color: var(--blockr-color-border-strong);
+}
+
+.slb-tile:focus-visible {
+  outline: var(--blockr-focus-outline);
+  outline-offset: var(--blockr-focus-offset);
+}
+
+.slb-tile.is-selected,
+.slb-tile.is-selected:hover {
+  color: var(--blockr-color-text-accent);
+  background: var(--blockr-color-bg-accent-subtle);
+  border-color: var(--blockr-color-border-accent-subtle);
+  font-weight: var(--blockr-font-weight-medium);
+}
+
+.slb-tile-label {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* The schematic: the layout's own slot rects, each kind of stroke painted
+   from the tokens, on the surface. */
+.slb-thumb {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  box-sizing: border-box;
+  border: 1px solid var(--blockr-color-border-default);
+  border-radius: var(--blockr-radius-sm);
+  background: var(--blockr-color-bg-surface);
+  opacity: 0.8;
+}
+
+.slb-tile:hover .slb-thumb,
+.slb-tile.is-selected .slb-thumb {
+  opacity: 1;
+}
+
+.slb-ink { fill: var(--blockr-color-text-default); }
+.slb-line { fill: var(--blockr-color-border-strong); }
+.slb-faint { fill: var(--blockr-color-border-default); }
+.slb-exhibit { fill: color-mix(in srgb, var(--blockr-color-text-muted) 30%, transparent); }
+.slb-callout { fill: color-mix(in srgb, var(--blockr-color-border-accent) 35%, transparent); }
+.slb-accent { fill: var(--blockr-color-text-accent); }
