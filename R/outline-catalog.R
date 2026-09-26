@@ -56,10 +56,14 @@ outline_registry_entries <- memoise0(function() {
       package = reg_attr(ctor, "package", "local"),
       # The registry's glyph, raw, exactly as blockr.dock's block browser
       # renders it (`htmltools::HTML(meta$icon)`). Not run through
-      # `blk_icon_data_uri()`: that bakes in a colour, and the tile's tint
-      # comes from the category in CSS here, the same way the browser does
-      # it. A string costs less than 66 base64 encodings at startup.
+      # `blk_icon_data_uri()`: that bakes in a colour, and the mark's tint
+      # comes from `color` below, the same way the dock's own menu does it.
+      # A string costs less than 66 base64 encodings at startup.
       icon = reg_attr(ctor, "icon", ""),
+      # The category colour the block will carry on the board, for the
+      # picker row's mark: `blk_color()` is a pure function of the category,
+      # so the mark you pick is the mark the block gets.
+      color = unname(blockr.dock::blk_color(reg_attr(ctor, "category", "other"))),
       inputs = I(as.list(
         if (is.null(blk)) character() else blockr.core::block_inputs(blk)
       )),
