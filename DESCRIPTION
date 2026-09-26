@@ -1,6 +1,6 @@
 Package: blockr.outline
 Title: Board Outline, Code, Report and Workflow Extensions for 'blockr'
-Version: 0.0.196
+Version: 0.0.197
 Authors@R:
     c(person(given = "Christoph",
              family = "Sax",
@@ -25,10 +25,12 @@ Remotes:
     BristolMyersSquibb/blockr.core,
     BristolMyersSquibb/blockr.dock,
     BristolMyersSquibb/blockr.dag,
-    BristolMyersSquibb/blockr.viz
+    BristolMyersSquibb/blockr.viz,
+    BristolMyersSquibb/blockr.ui
 Imports:
     blockr.core,
     blockr.dock,
+    blockr.ui (>= 0.0.1.9030),
     shiny,
     htmltools,
     commonmark,
