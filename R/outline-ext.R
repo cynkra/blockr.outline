@@ -27,9 +27,11 @@
 #' - a stack the flow runs out of and back into cannot be drawn as one run of
 #'   rows: those links climb the right-hand gutter as dashed arrows and the
 #'   stack header offers to pull the blocks in the way into the group,
-#' - each row names the views it is shown on, current view first (or reads
-#'   `all views`); clicking a row shows it on the current view and clicking a
-#'   view's tag drops it from that view, right-click for the rest, and the
+#' - on a board with more than one view, and a panel wide enough to keep the
+#'   names readable beside them, each row names the views it is shown on,
+#'   current view first (or reads `all views`); clicking a row shows it on the
+#'   current view and clicking a view's tag drops it from that view,
+#'   right-click (or the row's "…" on a narrow panel) for the rest, and the
 #'   board's extensions do the same from the **Extensions** group at the foot,
 #' - block eval status (waiting / unset / failed) shows as a coloured dot
 #'   per row, identical in meaning to the DAG node badge.
@@ -71,14 +73,14 @@
 #' extension rows too: an extension is a panel like any other, and one sitting
 #' on another view -- or on no view at all -- comes to the view you are on
 #' rather than sending you to it. The current view is
-#' named first whenever the row is on it and tinted, because it is the one whose
+#' named first whenever the row is on it, because it is the one whose
 #' panel you can watch go; any other view's tag does the same thing to the view
-#' it points at. The `x` on hover is the mark saying the tag is clickable, not a
-#' separate target.
+#' it points at. The `x` on the tag under the pointer is the mark saying the
+#' tag is clickable, not a separate target.
 #'
-#' The `+n` count is a count, not a view, so it is not a button: the views
-#' behind it are reached through the menu's checklist rather than by expanding a
-#' tag list a row has no width for.
+#' The `+n` tag stands in for the views one tag leaves out: its tooltip lists
+#' them, and a click opens the row menu, whose checklist is the full surface
+#' for them.
 #'
 #' A **stack header carries no view tag at all**. A stack has no membership of
 #' its own -- a view's members are block panels -- so anything shown there could
@@ -180,11 +182,19 @@ outline_ext_ui <- function(id, board, ...) {
 #' See the header of `inst/assets/js/outline-rail.js` for the adapter
 #' contract.
 #'
+#' The rows are drawn with blockr.ui's design system: its tokens, chevron,
+#' icons, tooltip and menus. The dependency therefore brings
+#' [blockr.ui::controls_dep()] (and with it [blockr.ui::theme_dep()]) along,
+#' so a host without blockr.dock gets them too; on a dock board they are
+#' already on the page and de-duplicate by name.
+#'
 #' @return An [htmltools::htmlDependency()] list.
 #'
 #' @export
 outline_rail_dep <- memoise0(function() {
   htmltools::tagList(
+    # first: outline.css reads its tokens and outline-rail.js its `Blockr.*`
+    blockr.ui::controls_dep(),
     outline_css_dep(),
     htmlDependency(
       name = "outline-rail",

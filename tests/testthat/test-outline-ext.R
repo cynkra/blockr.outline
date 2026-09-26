@@ -364,6 +364,30 @@ test_that("the registry splits into add and append pools", {
   expect_true(nzchar(entry$name))
   expect_true(nzchar(entry$category))
   expect_true(nzchar(entry$package))
+
+  # the picker row's mark takes the colour the block will carry on the board
+  expect_identical(
+    entry$color,
+    unname(blockr.dock::blk_color(entry$category))
+  )
+})
+
+test_that("the rail brings blockr.ui's controls along, first", {
+
+  deps <- htmltools::resolveDependencies(
+    htmltools::findDependencies(outline_rail_dep())
+  )
+  nms <- vapply(deps, `[[`, "", "name")
+
+  # a host without blockr.dock gets the tokens, the chevron, the tooltip and
+  # the menu the rows are drawn with
+  expect_true(all(c("blockr-theme", "blockr-ui-js", "blockr-menu-css",
+                    "blockr-tooltip-css") %in% nms))
+
+  # and before the rail itself: outline.css reads the tokens, outline-rail.js
+  # the `Blockr` namespace
+  expect_lt(match("blockr-ui-js", nms), match("outline-rail", nms))
+  expect_lt(match("blockr-theme", nms), match("outline-css", nms))
 })
 
 test_that("a block inserted from the outline lands beside its origin", {

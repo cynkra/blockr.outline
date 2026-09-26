@@ -19,4 +19,10 @@ dots and gestures the board editor uses.
 \details{
 See the header of \code{inst/assets/js/outline-rail.js} for the adapter
 contract.
+
+The rows are drawn with blockr.ui's design system: its tokens, chevron,
+icons, tooltip and menus. The dependency therefore brings
+\code{\link[blockr.ui:controls_dep]{blockr.ui::controls_dep()}} (and with it \code{\link[blockr.ui:theme_dep]{blockr.ui::theme_dep()}}) along,
+so a host without blockr.dock gets them too; on a dock board they are
+already on the page and de-duplicate by name.
 }

@@ -44,9 +44,11 @@ take it out again (a selection moves together),
 \item a stack the flow runs out of and back into cannot be drawn as one run of
 rows: those links climb the right-hand gutter as dashed arrows and the
 stack header offers to pull the blocks in the way into the group,
-\item each row names the views it is shown on, current view first (or reads
-\verb{all views}); clicking a row shows it on the current view and clicking a
-view's tag drops it from that view, right-click for the rest, and the
+\item on a board with more than one view, and a panel wide enough to keep the
+names readable beside them, each row names the views it is shown on,
+current view first (or reads \verb{all views}); clicking a row shows it on the
+current view and clicking a view's tag drops it from that view,
+right-click (or the row's "…" on a narrow panel) for the rest, and the
 board's extensions do the same from the \strong{Extensions} group at the foot,
 \item block eval status (waiting / unset / failed) shows as a coloured dot
 per row, identical in meaning to the DAG node badge.
@@ -92,14 +94,14 @@ view's tag} drops the row from the view that tag names. That holds for the
 extension rows too: an extension is a panel like any other, and one sitting
 on another view -- or on no view at all -- comes to the view you are on
 rather than sending you to it. The current view is
-named first whenever the row is on it and tinted, because it is the one whose
+named first whenever the row is on it, because it is the one whose
 panel you can watch go; any other view's tag does the same thing to the view
-it points at. The \code{x} on hover is the mark saying the tag is clickable, not a
-separate target.
+it points at. The \code{x} on the tag under the pointer is the mark saying the
+tag is clickable, not a separate target.
 
-The \code{+n} count is a count, not a view, so it is not a button: the views
-behind it are reached through the menu's checklist rather than by expanding a
-tag list a row has no width for.
+The \code{+n} tag stands in for the views one tag leaves out: its tooltip lists
+them, and a click opens the row menu, whose checklist is the full surface
+for them.
 
 A \strong{stack header carries no view tag at all}. A stack has no membership of
 its own -- a view's members are block panels -- so anything shown there could
