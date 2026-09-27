@@ -672,3 +672,21 @@ test_that("a controlled write does not echo back through the input", {
     args = list(board = blind_board_args(), update = reactiveVal())
   )
 })
+
+test_that("a double-click rename on a deck row renames the block", {
+  upd <- reactiveVal()
+  testServer(
+    slides_ext_srv("plot", "Deck"),
+    {
+      session$flushReact()
+      session$setInputs(sld_rename = list(id = "plot", name = "Sepal plot"))
+      expect_identical(
+        upd(),
+        list(blocks = list(mod = list(plot = list(block_name = "Sepal plot"))))
+      )
+      # The deck itself does not change.
+      expect_identical(rv_slides(), "plot")
+    },
+    args = list(board = blind_board_args(), update = upd)
+  )
+})

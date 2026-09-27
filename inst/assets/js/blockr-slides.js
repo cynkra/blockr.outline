@@ -1,6 +1,6 @@
 // The slides panel's client (R/slides.R builds the markup): the deck's
-// rows (open, remove, drag, Alt+Up / Alt+Down), the "Add slide" menu and
-// the download menu's rows. One instance per panel, found by its root id;
+// rows (open, rename, the "…" menu, drag, Alt+Up / Alt+Down), the "Add
+// slide" menu and the download menu's rows. One instance per panel, found by its root id;
 // the server's messages carry that id.
 (function () {
   'use strict';
@@ -75,24 +75,57 @@
         return;
       }
 
-      var btn = t.closest('.blockr-sld-row [data-act]');
-      if (btn) {
-        act(btn.closest('.blockr-sld-row'), btn.getAttribute('data-act'));
+      // A name being renamed keeps its clicks.
+      if (t.closest('.blockr-otl-row__name.is-editing')) return;
+
+      // The row's "…": the actions that are not a click on the row.
+      var more = t.closest('.blockr-sld-row .blockr-otl-row__more');
+      if (more) {
+        var mrow = more.closest('.blockr-sld-row');
+        BlockrOutline.rowMenu(more, [
+          { label: 'Open block', onSelect: function () { open(mrow); } },
+          { divider: true },
+          { label: 'Remove from deck', icon: 'trash', danger: true,
+            onSelect: function () { act(mrow, 'rm'); } }
+        ]);
         return;
       }
 
       // A plain click on the row opens that block's panel: the deck lists
       // blocks, and the obvious question about one is "show me this one".
       var row = t.closest('.blockr-sld-row');
-      if (row) fire(id('sld_open'), { id: row.getAttribute('data-blk'), n: Math.random() });
+      if (row) open(row);
+    });
+
+    function open(row) {
+      fire(id('sld_open'), { id: row.getAttribute('data-blk'), n: Math.random() });
+    }
+
+    // A double-click on the name, or F2 on the row, renames the block.
+    function rename(row) {
+      var blk = row.getAttribute('data-blk');
+      BlockrOutline.renameRow(row.querySelector('.blockr-otl-row__name'), function (v) {
+        fire(id('sld_rename'), { id: blk, name: v, n: Math.random() });
+      });
+    }
+    root.addEventListener('dblclick', function (e) {
+      var nm = e.target.closest && e.target.closest('.blockr-sld-row .blockr-otl-row__name');
+      if (nm && root.contains(nm)) rename(nm.closest('.blockr-sld-row'));
     });
 
     root.addEventListener('keydown', function (e) {
       var row = e.target;
-      if (e.key !== 'Enter' || !row.classList || !row.classList.contains('blockr-sld-row')) return;
-      e.preventDefault();
-      fire(id('sld_open'), { id: row.getAttribute('data-blk'), n: Math.random() });
+      if (!row.classList || !row.classList.contains('blockr-sld-row')) return;
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        open(row);
+      } else if (e.key === 'F2') {
+        e.preventDefault();
+        rename(row);
+      }
     });
+
+    BlockrOutline.watchCurrent(list);
 
     // Keyboard moves: the list re-renders, so the moved row gets the focus
     // back once it is drawn again.
@@ -106,7 +139,7 @@
       var blk = refocus;
       setTimeout(function () {
         var r = root.querySelector('.blockr-sld-row[data-blk="' + blk + '"]');
-        if (r) r.focus();
+        if (r) BlockrOutline.keyFocus(r);
       }, 60);
       refocus = null;
       return e;

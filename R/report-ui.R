@@ -63,15 +63,20 @@ report_ext_ui <- function(id, board, ...) {
       class = "blockr-rpt-pane",
       `data-pane` = "builder",
       # The row host: filled and PATCHED by the blockr-report-rows push,
-      # never re-rendered wholesale. The empty message is the :empty
-      # rule in the stylesheet.
+      # never re-rendered wholesale.
+      # The empty line shows while the host has no rows (the stylesheet).
       div(
         class = "blockr-otl-list",
-        div(class = "blockr-rpt-rows", id = ns("rpt_rows"))
+        div(class = "blockr-rpt-rows", id = ns("rpt_rows")),
+        div(
+          class = "blockr-empty blockr-empty--panel blockr-rpt-empty",
+          "Nothing in the report yet. Add a block to start."
+        )
       ),
       otl_button(
         "Add block",
         kind = "quiet",
+        size = "s",
         icon = otl_icon("plus"),
         class = "blockr-otl-add"
       )
@@ -195,19 +200,6 @@ report_settings_tray <- function(ns) {
   )
 }
 
-# A pressed icon button on a row: the accent tint while on.
-report_press <- function(act, on, label_on, label_off, ico) {
-  tags$button(
-    type = "button",
-    class = "blockr-tool blockr-otl-press",
-    `data-act` = act,
-    `aria-pressed` = if (on) "true" else "false",
-    `aria-label` = if (on) label_on else label_off,
-    `data-blockr-tooltip` = if (on) label_on else label_off,
-    HTML(ico)
-  )
-}
-
 report_tool <- function(label, ico, ...) {
   tags$button(
     type = "button",
@@ -221,7 +213,8 @@ report_tool <- function(label, ico, ...) {
 
 # The row's "..." menu, described for blockr-report.js, which draws it with
 # Blockr.menu: figure size for chart rows, full width for block rows, the
-# text inserts for all, and Edit for a text row.
+# text inserts for all, Edit for a text row, and Remove last. Code and
+# output are on the row, so the menu does not repeat them.
 report_menu_btn <- function(item, meta) {
 
   is_text <- is.null(meta)
@@ -238,39 +231,24 @@ report_menu_btn <- function(item, meta) {
     )
   }
 
-  report_tool(
-    "More",
-    otl_icon("dots"),
-    class = "blockr-otl-row__more",
-    `data-menu` = spec
-  )
+  otl_row_more(`data-menu` = spec)
 }
 
-report_rm_btn <- function() {
-  report_tool(
-    "Remove from report",
-    otl_icon("x"),
-    class = "blockr-otl-row__rm",
-    `data-act` = "rm"
-  )
-}
-
-# One block row: number, the block's mark, its name and what the document
-# shows of it; on hover or focus, the two switches (code, output) as pressed
-# tools, the "..." menu and remove. A row whose two switches are both off is
-# in the document and renders nothing; it draws dimmed.
+# One block row (design system, "Block lists"): number, the block's mark,
+# its name, then the row's end. The end holds what the document shows of
+# the block, code and output, as two pressed tools that are always there:
+# pressed means shown, a click toggles it. The "..." follows them on hover
+# or keyboard focus.
 report_row <- function(item, k, meta, ns) {
 
   meta <- coal(meta, list())
   id <- item$block
   name <- coal(na_blank(meta$name), id)
-  silent <- !isTRUE(item$code) && !isTRUE(item$output)
+  code <- isTRUE(item$code)
+  out <- isTRUE(item$output)
 
   div(
-    class = paste(
-      "blockr-otl-row blockr-rpt-row",
-      if (silent) "is-silent"
-    ),
+    class = "blockr-otl-row blockr-rpt-row",
     `data-idx` = k,
     `data-blk` = id,
     `data-kind` = coal(meta$kind, ""),
@@ -278,40 +256,28 @@ report_row <- function(item, k, meta, ns) {
     tabindex = "0",
     span(class = "blockr-otl-row__num", k),
     otl_mark(meta$mark),
+    otl_row_name(name),
     span(
-      class = "blockr-otl-row__name",
-      `data-blockr-tooltip` = name,
-      `data-blockr-tooltip-overflow` = NA,
-      name
-    ),
-    # What the document shows of the block, readable down the column at
-    # rest; the tools that change it lie over the row's end on hover.
-    span(
-      class = "blockr-otl-row__state",
-      `aria-hidden` = "true",
-      if (isTRUE(item$code)) HTML(otl_icon("code")),
-      if (isTRUE(item$output)) HTML(otl_icon("eye"))
-    ),
-    span(
-      class = "blockr-otl-row__tools",
-      report_press(
-        "code", isTRUE(item$code),
-        "Code shown in the report", "Code hidden from the report",
-        otl_icon("code")
+      class = "blockr-otl-row__end",
+      otl_row_tool(
+        if (code) "Code shown in the report" else "Code hidden from the report",
+        otl_icon("code"),
+        pressed = code,
+        `data-act` = "code"
       ),
-      report_press(
-        "output", isTRUE(item$output),
-        "Output shown in the report", "Output hidden from the report",
-        otl_icon("eye")
+      otl_row_tool(
+        if (out) "Output shown in the report" else "Output hidden from the report",
+        otl_icon(if (out) "eye" else "eye_off"),
+        pressed = out,
+        `data-act` = "output"
       ),
-      report_menu_btn(item, meta),
-      report_rm_btn()
+      report_menu_btn(item, meta)
     )
   )
 }
 
-# One text row: markdown that stands on its own. A click opens its editor
-# (save-then-close, see the server).
+# One text row: markdown that stands on its own, two lines of it at most. A
+# click opens its editor (save-then-close, see the server).
 report_text_row <- function(item, k, editing, ns) {
 
   body <- if (editing) {
@@ -341,9 +307,8 @@ report_text_row <- function(item, k, editing, ns) {
     body,
     if (!editing) {
       span(
-        class = "blockr-otl-row__tools",
-        report_menu_btn(item, NULL),
-        report_rm_btn()
+        class = "blockr-otl-row__end",
+        report_menu_btn(item, NULL)
       )
     }
   )

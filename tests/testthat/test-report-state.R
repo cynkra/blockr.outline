@@ -284,3 +284,19 @@ test_that("cancelling a fresh, empty text item removes it again", {
     args = list(board = blind_board_args(), update = reactiveVal())
   )
 })
+
+test_that("a double-click rename on a row renames the block on the board", {
+  upd <- reactiveVal()
+  testServer(
+    report_ext_srv(list(list(block = "plot")), "Report", list()),
+    {
+      session$flushReact()
+      session$setInputs(rpt_rename = list(id = "plot", name = "Sepal plot"))
+      expect_identical(
+        upd(),
+        list(blocks = list(mod = list(plot = list(block_name = "Sepal plot"))))
+      )
+    },
+    args = list(board = blind_board_args(), update = upd)
+  )
+})

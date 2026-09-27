@@ -484,6 +484,16 @@ report_ext_srv <- function(items, title, settings) {
         )
 
 
+        # A double-click on a block row's name renames the block itself,
+        # as in the outline.
+        observeEvent(
+          input$rpt_rename,
+          {
+            delta <- rename_block_delta(board$board, input$rpt_rename)
+            if (!is.null(delta)) update(delta)
+          }
+        )
+
         # ---- row actions --------------------------------------------
         #
         # All row messages carry the item INDEX: text items have no id, and
