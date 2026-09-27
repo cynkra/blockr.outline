@@ -1,8 +1,0 @@
-/* The slides panel (R/slides.R). The header row, rows, buttons, the mark and
-   the drop caret are blockr-panels.css; the download tool and its menu are
-   blockr.ui's. What is left is the deck's own. Meaning tokens only. */
-
-/* The empty deck keeps the list's place, so "Add slide" does not jump. */
-.blockr-sld-panel .blockr-empty--panel {
-  padding-top: 10px;
-}

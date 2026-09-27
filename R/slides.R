@@ -206,6 +206,7 @@ slides_ext_ui <- function(id, board, ...) {
     otl_button(
       "Add slide",
       kind = "quiet",
+      size = "s",
       icon = otl_icon("plus"),
       class = "blockr-otl-add"
     ),
@@ -226,7 +227,6 @@ slides_dep <- function() {
     pkg_version(),
     src = pkg_file("assets"),
     script = "js/blockr-slides.js",
-    stylesheet = "css/blockr-slides.css",
     all_files = FALSE
   )
 }
@@ -384,6 +384,18 @@ slides_ext_srv <- function(slides, title, format = "pptx") {
             rv_slides(
               append(rest, blk, after = if (isTRUE(input$sld_move$after)) at else at - 1L)
             )
+          }
+        )
+
+        # ---- rename a block ------------------------------------------
+        #
+        # A double-click on a row's name renames the block itself, as in
+        # the outline.
+        observeEvent(
+          input$sld_rename,
+          {
+            delta <- rename_block_delta(board$board, input$sld_rename)
+            if (!is.null(delta)) update(delta)
           }
         )
 
@@ -849,10 +861,11 @@ slides_ext_srv <- function(slides, title, format = "pptx") {
   }
 }
 
-# One row of the deck list. Pure markup, no Shiny inputs: the remove tool
-# reports through one delegated handler (blockr-slides.js), so the list can
-# be re-rendered without anything to rebind. The whole row drags; Alt+Up and
-# Alt+Down move the focused row.
+# One row of the deck list (design system, "Block lists"). Pure markup, no
+# Shiny inputs: the "..." and its menu report through one delegated handler
+# (blockr-slides.js), so the list can be re-rendered without anything to
+# rebind. A click opens the block, a double-click on the name renames it, the
+# whole row drags; Alt+Up and Alt+Down move the focused row.
 slides_row <- function(id, k, meta) {
 
   meta <- coal(meta, list())
@@ -868,24 +881,25 @@ slides_row <- function(id, k, meta) {
     # positional, drawn from the row's place in the list and never stored.
     span(class = "blockr-otl-row__num blockr-sld-num", k),
     otl_mark(meta$mark),
-    span(
-      class = "blockr-otl-row__name",
-      `data-blockr-tooltip` = name,
-      `data-blockr-tooltip-overflow` = NA,
-      name
-    ),
-    span(
-      class = "blockr-otl-row__tools",
-      tags$button(
-        type = "button",
-        class = "blockr-tool blockr-otl-row__rm",
-        `data-act` = "rm",
-        `aria-label` = "Remove slide",
-        `data-blockr-tooltip` = "Remove slide",
-        HTML(otl_icon("x"))
-      )
-    )
+    otl_row_name(name),
+    span(class = "blockr-otl-row__end", otl_row_more())
   )
+}
+
+# The board update that renames a block from a list row: `msg` is the
+# client's {id, name}. NULL for a block that is not on the board, or an
+# empty name (the row refuses that in place already).
+rename_block_delta <- function(board, msg) {
+
+  id <- msg$id
+  nm <- trimws(as.character(coal(msg$name, "")))
+
+  if (!is.character(id) || length(id) != 1L || length(nm) != 1L ||
+        !nzchar(nm) || !id %in% blockr.core::board_block_ids(board)) {
+    return(NULL)
+  }
+
+  list(blocks = list(mod = setNames(list(list(block_name = nm)), id)))
 }
 
 # The title, as a filename stem. A deck called "Q3 review / EU" must not

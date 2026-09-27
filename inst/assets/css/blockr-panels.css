@@ -180,16 +180,20 @@
   height: 12px;
 }
 
-/* "Add block" under the list: a quiet button whose words start on the
-   rows' edge. */
+/* "Add block" / "Add slide" under the list: a quiet 30px button whose plus
+   sits under the rows' marks (row padding 6 + number 14 + gap 8 puts the
+   24px mark at 28px; the 12px plus centres on it inside the button's 8px
+   padding). */
 .blockr-otl-add {
-  margin: 6px 0 0 -2px;
+  margin: 6px 0 0 26px;
 }
 
-/* ---- list rows -------------------------------------------------------------
-   Plain rows with a hover fill, as in a menu: the whole row drags (the grab
-   cursor), Alt+Up / Alt+Down moves the focused one. Number, the block's
-   mark, its name, then the row's tools. */
+/* ---- block lists -------------------------------------------------------------
+   The report's and the deck's rows (design system, "Block lists"): 34px,
+   radius 6, 8px between the parts, no space between rows. The order number,
+   the block's 24px mark, the name on one line, then the row's end. Hover and
+   keyboard focus: bg-hover, and the "…" appears last; the name gives way to
+   it. The block open in the dock is the current row. The whole row drags. */
 .blockr-otl-list {
   position: relative;
 }
@@ -199,22 +203,36 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 34px;
-  padding: 4px 4px 4px 6px;
+  height: 34px;
+  padding: 0 4px 0 6px;
   box-sizing: border-box;
   border-radius: var(--blockr-radius-md);
+  font-size: var(--blockr-font-size-base);
+  color: var(--blockr-color-text-default);
   cursor: grab;
   user-select: none;
   transition: background-color var(--blockr-transition);
 }
 
-.blockr-otl-row:hover {
+.blockr-otl-row:hover,
+.blockr-otl-row:focus-visible,
+.blockr-otl-row.is-key-focus,
+.blockr-otl-row:has(:focus-visible),
+.blockr-otl-row.is-menu-open {
   background: var(--blockr-color-bg-hover);
 }
 
-.blockr-otl-row:focus-visible {
+.blockr-otl-row:focus-visible,
+.blockr-otl-row.is-key-focus {
   outline: var(--blockr-focus-outline);
   outline-offset: calc(-1 * var(--blockr-focus-offset));
+}
+
+/* The current row keeps its look under the pointer. */
+.blockr-otl-row.is-current,
+.blockr-otl-row.is-current:hover {
+  background: var(--blockr-color-bg-selected);
+  color: var(--blockr-color-text-accent);
 }
 
 .blockr-otl-row.is-dragging {
@@ -230,74 +248,148 @@
   color: var(--blockr-color-text-muted);
 }
 
+.blockr-otl-row.is-current .blockr-otl-row__num {
+  color: var(--blockr-color-text-accent);
+}
+
 .blockr-otl-row__name {
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  line-height: 1.5;
 }
 
-/* No muted text on a hover fill. */
-.blockr-otl-row:hover .blockr-otl-row__num,
-.blockr-otl-row:hover .blockr-tool {
+/* The row drags from anywhere, the name included: the grab cursor wins
+   over the renamable text's text cursor. */
+.blockr-otl-row [data-blockr-editable] {
+  cursor: inherit;
+}
+
+/* Renaming: the name is a field at its own size. */
+.blockr-otl-row.is-renaming {
+  cursor: default;
+}
+
+.blockr-otl-row__name.is-editing {
+  position: relative;
+  overflow: visible;
+}
+
+.blockr-otl-row__input {
+  display: block;
+  width: calc(100% + 8px);
+  height: 26px;
+  box-sizing: border-box;
+  margin: 0 -4px;
+  padding: 0 3px;
+  font: inherit;
   color: var(--blockr-color-text-default);
+  background: var(--blockr-color-bg-surface);
+  border: 1px solid var(--blockr-color-border-accent);
+  border-radius: var(--blockr-radius-sm);
+  box-shadow: var(--blockr-focus-ring);
+  outline: none;
+  cursor: text;
+  user-select: text;
 }
 
-/* What a row's switches are set to, at rest: small muted glyphs. */
-.blockr-otl-row__state {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  flex: 0 0 auto;
-  color: var(--blockr-color-text-muted);
+.blockr-otl-row__input.is-invalid {
+  border-color: var(--blockr-color-border-danger);
 }
 
-.blockr-otl-row__state:empty {
+.blockr-otl-row__error {
+  position: absolute;
+  top: 100%;
+  left: -4px;
+  z-index: 6;
+  margin-top: 4px;
+  padding: 2px 4px;
+  font-size: var(--blockr-font-size-xs);
+  line-height: 1.4;
+  white-space: nowrap;
+  color: var(--blockr-color-text-danger);
+  background: var(--blockr-color-bg-surface);
+  border-radius: var(--blockr-radius-sm);
+}
+
+.blockr-otl-row__error[hidden] {
   display: none;
 }
 
-/* The row's tools lie over its end on hover or keyboard focus, on the
-   row's own hover fill, so a narrow panel keeps the name readable at rest.
-   Remove turns red on its own hover. */
-.blockr-otl-row__tools {
-  position: absolute;
-  top: 50%;
-  right: 4px;
+/* The row's end: what the reader needs at rest (the report's code and
+   output), then the "…" on hover or keyboard focus. */
+.blockr-otl-row__end {
   display: flex;
   align-items: center;
-  padding-left: 6px;
-  border-radius: var(--blockr-radius-md);
-  background-color: var(--blockr-color-bg-surface);
-  background-image: linear-gradient(var(--blockr-color-bg-hover), var(--blockr-color-bg-hover));
-  transform: translateY(-50%);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity var(--blockr-transition);
+  gap: 2px;
+  flex: 0 0 auto;
 }
 
-.blockr-otl-row:hover .blockr-otl-row__tools,
-.blockr-otl-row:focus-within .blockr-otl-row__tools,
-.blockr-otl-row.is-menu-open .blockr-otl-row__tools {
-  opacity: 1;
-  pointer-events: auto;
+.blockr-otl-row__end:empty {
+  display: none;
 }
 
-.blockr-otl-row .blockr-otl-row__rm:hover {
-  color: var(--blockr-color-text-danger);
+/* A 24px tool on the row: bare, the icon text-muted; its own hover washes
+   it and the icon turns default. Restated in full here, not borrowed from
+   blockr.ui's 26px .blockr-tool, whose stylesheet an older copy can
+   shadow. */
+.blockr-otl-rtool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+  color: var(--blockr-color-text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--blockr-radius-sm);
+  cursor: pointer;
+  transition: color var(--blockr-transition), background-color var(--blockr-transition);
 }
 
-/* A pressed tool: on, in the accent tint. */
-.blockr-tool.blockr-otl-press[aria-pressed="true"],
-.blockr-otl-row:hover .blockr-tool.blockr-otl-press[aria-pressed="true"] {
+.blockr-otl-rtool:hover,
+.blockr-otl-rtool[aria-expanded="true"] {
+  color: var(--blockr-color-text-default);
+  background: var(--blockr-color-bg-hover);
+}
+
+.blockr-otl-rtool:focus-visible {
+  outline: var(--blockr-focus-outline);
+  outline-offset: calc(-1 * var(--blockr-focus-offset));
+}
+
+/* Pressed: the accent tint (shown in the document). */
+.blockr-otl-rtool[aria-pressed="true"] {
   color: var(--blockr-color-text-accent);
   background: var(--blockr-color-bg-accent-subtle);
   border-color: var(--blockr-color-border-accent-subtle);
 }
 
-.blockr-tool.blockr-otl-press[aria-pressed="true"]:hover {
+.blockr-otl-rtool[aria-pressed="true"]:hover {
   background: var(--blockr-color-bg-accent-subtle-hover);
   border-color: var(--blockr-color-border-accent);
+}
+
+.blockr-otl-row__more {
+  display: none;
+}
+
+.blockr-otl-row:hover .blockr-otl-row__more,
+.blockr-otl-row:focus-visible .blockr-otl-row__more,
+.blockr-otl-row.is-key-focus .blockr-otl-row__more,
+.blockr-otl-row:has(:focus-visible) .blockr-otl-row__more,
+.blockr-otl-row.is-menu-open .blockr-otl-row__more {
+  display: inline-flex;
+}
+
+.blockr-otl-row.is-renaming .blockr-otl-row__more {
+  display: none;
 }
 
 /* A block's mark in a row: 24px, its glyph in the category colour on an 18%
@@ -319,11 +411,11 @@
   height: 14px;
 }
 
-/* The drop caret: a 2px line with an open notch, in the gap the drop
-   targets. One per list, moved by the panel's script. */
+/* Where a dragged row will land: a 2px border-accent line in the gap
+   between two rows. One per list, moved by the panel's script. */
 .blockr-otl-caret {
   position: absolute;
-  left: 8px;
+  left: 0;
   right: 0;
   height: 2px;
   border-radius: 1px;
@@ -333,22 +425,23 @@
   pointer-events: none;
 }
 
-.blockr-otl-caret::before {
-  content: "";
-  position: absolute;
-  left: -8px;
-  top: 50%;
-  width: 8px;
-  height: 8px;
-  box-sizing: border-box;
-  transform: translateY(-50%);
-  border: 2px solid var(--blockr-color-border-accent);
-  border-radius: 50%;
-  background: var(--blockr-color-bg-surface);
-}
-
 .blockr-otl-caret[hidden] {
   display: none;
+}
+
+/* An empty list: one line. blockr.ui's .blockr-empty, restated for these
+   panels (an older copy of its stylesheet can shadow it). */
+.blockr-otl-pnl .blockr-empty {
+  margin: 0;
+  font-size: var(--blockr-font-size-sm);
+  font-style: italic;
+  line-height: 1.5;
+  color: var(--blockr-color-text-muted);
+}
+
+/* On the rows' edge, in the place the first row would take. */
+.blockr-otl-pnl .blockr-empty--panel {
+  padding: 7px 6px;
 }
 
 /* ---- fields ----------------------------------------------------------------

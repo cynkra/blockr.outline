@@ -9,22 +9,14 @@
 
 /* ---- rows ------------------------------------------------------------ */
 
-/* Both switches off: in the document, renders nothing. Present, dimmed. */
-.blockr-rpt-row.is-silent .blockr-otl-row__name {
-  color: var(--blockr-color-text-muted);
-}
-
-.blockr-rpt-row.is-silent .blockr-otl-mark {
-  opacity: 0.5;
-}
-
-.blockr-rpt-row.is-silent:hover .blockr-otl-row__name {
-  color: var(--blockr-color-text-default);
-}
-
-/* A text row anchors its number and mark to the first line of the text. */
+/* A text row: the text wraps to two lines at most, so it grows past 34px;
+   its number and mark stay by the first line. */
 .blockr-rpt-textrow {
+  height: auto;
+  min-height: 34px;
   align-items: flex-start;
+  padding-top: 5px;
+  padding-bottom: 5px;
 }
 
 .blockr-rpt-textrow .blockr-otl-row__num {
@@ -35,6 +27,7 @@
   cursor: default;
 }
 
+.blockr-rpt-textrow.is-editing,
 .blockr-rpt-textrow.is-editing:hover {
   background: transparent;
 }
@@ -50,58 +43,53 @@
   background: color-mix(in srgb, var(--blockr-color-text-muted) 14%, var(--blockr-color-bg-surface));
 }
 
+/* The text on its row: the markdown's inline look (bold, italic, code), run
+   together into one paragraph and cut after two lines. Headings and list
+   items read as sentences of it. */
 .blockr-rpt-prose {
   flex: 1 1 auto;
   min-width: 0;
-  padding-top: 2px;
+  padding-top: 1px;
   font-size: var(--blockr-font-size-base);
   line-height: 1.5;
   color: var(--blockr-color-text-default);
+  overflow: hidden;
   overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
 }
 
-.blockr-rpt-prose > *:first-child { margin-top: 0; }
-.blockr-rpt-prose > *:last-child { margin-bottom: 0; }
-.blockr-rpt-prose p { margin: 0 0 6px; }
-.blockr-rpt-prose ul,
-.blockr-rpt-prose ol { margin: 0 0 6px; padding-left: 18px; }
+.blockr-rpt-prose :is(p, h1, h2, h3, h4, h5, h6, ul, ol, li, blockquote, pre) {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+}
 
-/* The levels read as levels inside a list entry, never larger than a
-   block's title. */
-.blockr-rpt-prose h1,
-.blockr-rpt-prose h2,
-.blockr-rpt-prose h3,
-.blockr-rpt-prose h4,
-.blockr-rpt-prose h5,
-.blockr-rpt-prose h6 {
-  margin: 6px 0 2px;
-  font-size: var(--blockr-font-size-base);
+.blockr-rpt-prose :is(p, h1, h2, h3, h4, h5, h6, li, blockquote, pre)::after {
+  content: " ";
+}
+
+.blockr-rpt-prose :is(h1, h2, h3, h4, h5, h6) {
   font-weight: var(--blockr-font-weight-semibold);
-  line-height: 1.35;
-  color: var(--blockr-color-text-default);
 }
-
-.blockr-rpt-prose h1 { font-size: var(--blockr-font-size-lg); }
 
 .blockr-rpt-prose.is-empty {
-  font-size: var(--blockr-font-size-sm);
   font-style: italic;
   color: var(--blockr-color-text-muted);
 }
 
-.blockr-otl-row:hover .blockr-rpt-prose.is-empty {
-  color: var(--blockr-color-text-default);
+/* Nothing in the report: one line where the rows would be. */
+.blockr-rpt-empty {
+  display: none;
 }
 
-/* Nothing in the report: one italic line where the rows would be. */
-.blockr-rpt-rows:empty::before {
-  content: "Nothing in the report yet. Add a block to start.";
+.blockr-rpt-rows:empty + .blockr-rpt-empty {
   display: block;
-  padding: 18px 0 14px;
-  font-size: var(--blockr-font-size-sm);
-  font-style: italic;
-  line-height: 1.5;
-  color: var(--blockr-color-text-muted);
 }
 
 /* ---- the text editor ----------------------------------------------------
@@ -238,10 +226,4 @@
 .blockr-rpt-code pre {
   margin: 0;
   font-size: var(--blockr-font-size-sm);
-}
-
-/* A text row's tools sit by its first line. */
-.blockr-rpt-textrow .blockr-otl-row__tools {
-  top: 4px;
-  transform: none;
 }

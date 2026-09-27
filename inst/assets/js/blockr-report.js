@@ -154,12 +154,16 @@
         return;
       }
 
+      // A name being renamed keeps its clicks.
+      if (t.closest('.blockr-otl-row__name.is-editing')) return;
+
       var more = t.closest('.blockr-otl-row__more');
       if (more) {
         rowMenu(more);
         return;
       }
 
+      // The row's pressed tools (code, output) toggle in place.
       var btn = t.closest('.blockr-otl-row [data-act]');
       if (btn) {
         e.preventDefault();
@@ -193,10 +197,10 @@
     });
 
     // ---- the row's "..." menu ------------------------------------------
-    var menuFor = null;
+    // The actions that are not on the row: figure size (charts), full
+    // width (blocks), the text inserts, Edit (text rows), and Remove last
+    // after a divider.
     function rowMenu(btn) {
-      // A second click on the same "..." closes its menu.
-      if (menuFor && menuFor.btn === btn) { menuFor.handle.close(); return; }
       var row = btn.closest('.blockr-otl-row');
       var at = rowIdx(row);
       var spec = {};
@@ -207,6 +211,7 @@
       var items = [];
       if (spec.text) {
         items.push({ label: 'Edit text', onSelect: act('edit') });
+        items.push({ divider: true });
       }
       if (spec.fig) {
         var fig = function (w, h) {
@@ -234,18 +239,33 @@
       }
       items.push({ label: 'Add text above', onSelect: act('text_above') });
       items.push({ label: 'Add text below', onSelect: act('text_below') });
-      // The row keeps its tools up while its menu is open.
-      row.classList.add('is-menu-open');
-      var handle = Blockr.menu(btn, {
-        items: items,
-        align: 'end',
-        onClose: function () {
-          row.classList.remove('is-menu-open');
-          if (menuFor && menuFor.btn === btn) menuFor = null;
-        }
-      });
-      menuFor = { btn: btn, handle: handle };
+      items.push({ divider: true });
+      items.push({ label: 'Remove from report', icon: 'trash', danger: true, onSelect: act('rm') });
+      BlockrOutline.rowMenu(btn, items);
     }
+
+    // ---- renaming a block row's block ---------------------------------
+    function rename(row) {
+      var blk = row && row.getAttribute('data-blk');
+      if (!blk) return;
+      BlockrOutline.renameRow(row.querySelector('.blockr-otl-row__name'), function (v) {
+        fire(id('rpt_rename'), { id: blk, name: v, n: Math.random() });
+      });
+    }
+    root.addEventListener('dblclick', function (e) {
+      var nm = e.target.closest && e.target.closest('.blockr-rpt-row[data-blk] .blockr-otl-row__name');
+      if (nm && root.contains(nm)) rename(nm.closest('.blockr-rpt-row'));
+    });
+    root.addEventListener('keydown', function (e) {
+      if (e.key !== 'F2') return;
+      var row = e.target;
+      if (row.classList && row.classList.contains('blockr-rpt-row')) {
+        e.preventDefault();
+        rename(row);
+      }
+    });
+
+    BlockrOutline.watchCurrent(list);
 
     // ---- "Add block": the board's blocks ------------------------------
     function addMenu(btn) {
@@ -371,7 +391,7 @@
       if (p.refocus) {
         var row = host.children[p.refocus - 1];
         p.refocus = null;
-        if (row) row.focus();
+        if (row) BlockrOutline.keyFocus(row);
       }
     });
 

@@ -14,8 +14,10 @@
 // never echoes back.
 //
 // Also here: the gear tray (a .blockr-gear-btn with data-blockr-tray opens
-// the tray of that id, through Blockr.gearTray), and the menu that picks
-// blocks already on the board (BlockrOutline.boardMenu).
+// the tray of that id, through Blockr.gearTray), the menu that picks
+// blocks already on the board (BlockrOutline.boardMenu), and what the
+// report's and the deck's block lists share: the current row, the row's
+// "…" menu, renaming a row's block in place, keyboard moves.
 //
 // Needs blockr.ui's controls_dep() (Blockr.*), loaded before this file.
 (function () {
@@ -429,9 +431,161 @@
     });
   }
 
+  // ---- block lists: the current row ------------------------------------
+
+  // The block open in the dock is the current row of every block list
+  // (design system, "Block lists"). dockViewR announces each activation as
+  // a bubbling `dockview:active-panel` event on its dock, with the panel id;
+  // a block's panel id is `block_panel-<block id>`. Other panels (these
+  // panels themselves, the outline) leave the current block as it was, so a
+  // click in the report does not unmark the block the dock shows. The event
+  // reports changes only, so this listener is bound when the file loads,
+  // before the dock's first activation.
+  var PANEL_PREFIX = 'block_panel-';
+  var currentBlock = null;
+
+  function paintCurrent(list) {
+    list.querySelectorAll('.blockr-otl-row[data-blk]').forEach(function (r) {
+      var on = currentBlock !== null && r.getAttribute('data-blk') === currentBlock;
+      if (r.classList.contains('is-current') === on) return;
+      r.classList.toggle('is-current', on);
+      if (on) r.setAttribute('aria-current', 'true');
+      else r.removeAttribute('aria-current');
+    });
+  }
+
+  document.addEventListener('dockview:active-panel', function (e) {
+    var id = e.detail && e.detail.id;
+    if (typeof id !== 'string' || id.indexOf(PANEL_PREFIX) !== 0) return;
+    currentBlock = id.slice(PANEL_PREFIX.length);
+    document.querySelectorAll('[data-otl-current-list]').forEach(paintCurrent);
+  });
+
+  // Keep `list` painted: now, on every activation, and whenever its rows
+  // are drawn again (the report patches rows, the deck re-renders).
+  function watchCurrent(list) {
+    if (!list || list.hasAttribute('data-otl-current-list')) return;
+    list.setAttribute('data-otl-current-list', '');
+    paintCurrent(list);
+    new MutationObserver(function () { paintCurrent(list); })
+      .observe(list, { childList: true, subtree: true });
+  }
+
+  // ---- block lists: the row's "…" menu ---------------------------------
+
+  // Opens the row's action menu under its "…" (Blockr.menu, lined up with
+  // the trigger's right edge). A second click on the same "…" closes it. The
+  // row keeps its tools up while the menu is open.
+  var rowMenuOpen = null;
+  function rowMenu(btn, items) {
+    if (rowMenuOpen && rowMenuOpen.btn === btn) { rowMenuOpen.handle.close(); return; }
+    var row = btn.closest('.blockr-otl-row');
+    if (row) row.classList.add('is-menu-open');
+    btn.setAttribute('aria-expanded', 'true');
+    var handle = Blockr.menu(btn, {
+      items: items,
+      align: 'end',
+      onClose: function () {
+        if (row) row.classList.remove('is-menu-open');
+        btn.setAttribute('aria-expanded', 'false');
+        if (rowMenuOpen && rowMenuOpen.btn === btn) rowMenuOpen = null;
+      }
+    });
+    rowMenuOpen = { btn: btn, handle: handle };
+  }
+
+  // ---- block lists: renaming a row's block in place ---------------------
+
+  // The name turns into a field at its own size (design system, "Renaming
+  // in place"). Enter or a click elsewhere commits, Escape restores; an
+  // empty name is refused in place. `onCommit(name)` gets a changed,
+  // non-empty name. While the field is up the row does not drag, so the
+  // pointer can select text in it.
+  function renameRow(nameEl, onCommit) {
+    if (!nameEl || nameEl.classList.contains('is-editing')) return;
+    var row = nameEl.closest('.blockr-otl-row');
+    var old = (nameEl.textContent || '').trim();
+    var input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'blockr-otl-row__input';
+    input.value = old;
+    input.setAttribute('aria-label', 'Block name');
+    var msg = document.createElement('div');
+    msg.className = 'blockr-otl-row__error';
+    msg.hidden = true;
+    msg.textContent = 'A name cannot be empty';
+    if (Blockr.tooltip && Blockr.tooltip.hide) Blockr.tooltip.hide();
+    nameEl.textContent = '';
+    nameEl.classList.add('is-editing');
+    nameEl.appendChild(input);
+    nameEl.appendChild(msg);
+    if (row) {
+      row.classList.add('is-renaming');
+      row.setAttribute('draggable', 'false');
+    }
+    var done = false;
+    var finish = function (commit) {
+      if (done) return;
+      var v = input.value.trim();
+      if (commit && !v) {
+        input.classList.add('is-invalid');
+        msg.hidden = false;
+        input.focus();
+        return;
+      }
+      done = true;
+      nameEl.classList.remove('is-editing');
+      nameEl.textContent = commit && v ? v : old;
+      if (row) {
+        row.classList.remove('is-renaming');
+        row.setAttribute('draggable', 'true');
+        if (row.isConnected) row.focus();
+      }
+      if (commit && v && v !== old) onCommit(v);
+    };
+    input.addEventListener('keydown', function (e) {
+      e.stopPropagation();
+      if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+      else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+    });
+    input.addEventListener('input', function () {
+      input.classList.remove('is-invalid');
+      msg.hidden = true;
+    });
+    // The field's own clicks are not the row's (open, drag).
+    ['click', 'dblclick', 'mousedown'].forEach(function (t) {
+      input.addEventListener(t, function (e) { e.stopPropagation(); });
+    });
+    input.addEventListener('blur', function () {
+      if (done) return;
+      finish(!!input.value.trim());
+    });
+    input.focus();
+    input.select();
+  }
+
+  // Focus a row redrawn after a keyboard move. The redrawn row is a new
+  // element focused from script, which the browser does not count as
+  // keyboard focus, so the row carries the keyboard look itself until it
+  // loses the focus.
+  function keyFocus(row) {
+    if (!row) return;
+    row.focus();
+    row.classList.add('is-key-focus');
+    row.addEventListener('blur', function off() {
+      row.classList.remove('is-key-focus');
+      row.removeEventListener('blur', off);
+    });
+  }
+
   window.BlockrOutline = {
     boardMenu: boardMenu,
     rowKeys: rowKeys,
+    keyFocus: keyFocus,
+    rowMenu: rowMenu,
+    renameRow: renameRow,
+    watchCurrent: watchCurrent,
+    currentBlock: function () { return currentBlock; },
     checkSvg: CHECK_SVG
   };
 })();

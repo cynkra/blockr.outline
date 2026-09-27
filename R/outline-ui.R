@@ -280,6 +280,51 @@ otl_button <- function(label, kind = c("secondary", "main", "quiet"),
   )
 }
 
+# ---- block list rows --------------------------------------------------------
+
+# The parts of a row in a block list (design system, "Block lists"), shared
+# by the report and the deck. The row itself is the caller's: number, mark,
+# name, then the row's end.
+
+# A block's name on its row: one line, cut with an ellipsis. It renames in
+# place on a double-click (blockr.ui's `data-blockr-editable` gives it the
+# tooltip, which leads with the whole name while the name is cut).
+otl_row_name <- function(name) {
+  span(
+    class = "blockr-otl-row__name",
+    `data-blockr-editable` = "",
+    name
+  )
+}
+
+# A 24px tool on a row's end. `pressed` makes it a pressed icon button: the
+# accent tint while on.
+otl_row_tool <- function(label, icon, class = NULL, pressed = NULL, ...) {
+  tags$button(
+    type = "button",
+    class = paste(c("blockr-otl-rtool", class), collapse = " "),
+    `aria-label` = label,
+    `aria-pressed` = if (!is.null(pressed)) {
+      if (isTRUE(pressed)) "true" else "false"
+    },
+    `data-blockr-tooltip` = label,
+    ...,
+    HTML(icon)
+  )
+}
+
+# The row's "…": shown on hover and keyboard focus, last on the row. It
+# opens the row's action menu, drawn by the panel's script.
+otl_row_more <- function(...) {
+  otl_row_tool(
+    "Actions",
+    otl_icon("dots"),
+    class = "blockr-otl-row__more",
+    `aria-haspopup` = "menu",
+    ...
+  )
+}
+
 # ---- block marks ----------------------------------------------------------
 
 # A block's mark in a list row: 24px, its glyph in the category colour on an
@@ -402,6 +447,14 @@ otl_icon <- function(name) {
       paste0(
         "<path d=\"M1.2 8S3.8 3.2 8 3.2 14.8 8 14.8 8 12.2 12.8 8 12.8 1.2 8 ",
         "1.2 8z\"/><circle cx=\"8\" cy=\"8\" r=\"2.2\"/>"
+      )
+    ),
+    eye_off = svg(
+      paste0(
+        "<path d=\"M6.4 3.4A7 7 0 0 1 8 3.2c4.2 0 6.8 4.8 6.8 4.8a12.7 12.7 0 ",
+        "0 1-1.9 2.5M4.3 4.4C2.3 5.7 1.2 8 1.2 8s2.6 4.8 6.8 4.8c1.4 0 2.6",
+        "-.5 3.6-1.2\"/><path d=\"M6.5 6.6a2.2 2.2 0 0 0 3 3\"/>",
+        "<path d=\"M2 2l12 12\"/>"
       )
     ),
     text = svg(
