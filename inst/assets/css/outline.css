@@ -659,7 +659,10 @@
   top: calc(50% - 15px);
   z-index: 1;
 }
-.outline .md-status.on { visibility: visible; }
+/* `inherit`, not `visible`: dockview hides a tab behind another with
+   `visibility: hidden` on its overlay, and a child set to `visible` shows
+   through that, leaving the dots on top of the tab in front. */
+.outline .md-status.on { visibility: inherit; }
 
 /* A neighbour's collapsed row inside a focused view: the whole row hops. */
 .outline .md-chip.md-hop { cursor: pointer; }
