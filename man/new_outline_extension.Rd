@@ -32,24 +32,29 @@ slots, variadic blocks never fill up),
 \item release the drag on empty space (the left gutter works at any scroll
 position) to append a new block: a picker opens at the release point,
 browsing the catalogue by category at rest and filtering as you type.
-The \code{+} on a row appends after it. A block with no input at all -- the
-start of a flow -- comes from the dashed \strong{Add a block} row at the foot of
-the list, where such a block sorts, or from right-clicking the empty space
-below it (which is also the only home for \strong{Paste}),
-\item click a row to reveal that block's panel, double-click to rename,
+\strong{Append a block} in a row's "…" menu appends after it. A block with no
+input at all -- the start of a flow -- comes from the \strong{Add block} button
+at the foot of the list, where such a block sorts, or from right-clicking
+the empty space below it (which is also the only home for \strong{Paste}),
+\item click a row to reveal that block's panel, double-click the name to rename;
+the row of the block open in the dock is marked as the current one,
+\item hover a row (or give it keyboard focus) for its "…", which opens the row's
+menu with every action on it, \strong{Remove} last,
 \item click a dot (or hover a rail edge) to inspect and remove connections,
-\item board stacks show as named frames; collapse them to a single row, drag a
-row into a frame to add that block to the stack and out of every frame to
-take it out again (a selection moves together),
+\item board stacks show as tinted bands; fold them to their header row, drag a
+row into a band to add that block to the stack and out of every band to
+take it out again (a selection moves together; a line shows where it
+lands). With the keyboard, the arrows move between rows, Enter opens one
+and Alt+Up/Down moves it into the band above or below, or out of its own,
 \item a stack the flow runs out of and back into cannot be drawn as one run of
 rows: those links climb the right-hand gutter as dashed arrows and the
 stack header offers to pull the blocks in the way into the group,
 \item on a board with more than one view, and a panel wide enough to keep the
 names readable beside them, each row names the views it is shown on,
 current view first (or reads \verb{all views}); clicking a row shows it on the
-current view and clicking a view's tag drops it from that view,
-right-click (or the row's "…" on a narrow panel) for the rest, and the
-board's extensions do the same from the \strong{Extensions} group at the foot,
+current view, the row's "…" (or a right-click) is where the views are
+changed, and the board's extensions do the same from the \strong{Extensions}
+group at the foot,
 \item block eval status (waiting / unset / failed) shows as a coloured dot
 per row, identical in meaning to the DAG node badge.
 }
@@ -88,22 +93,18 @@ open, since it is usually done more than once.
 view: "send it there" in one click.
 }
 
-The quick pair does not need the menu at all: \strong{clicking a row} shows it on
-the current view, adding it if the view does not hold it, and \strong{clicking a
-view's tag} drops the row from the view that tag names. That holds for the
+One gesture does not need the menu at all: \strong{clicking a row} shows it on
+the current view, adding it if the view does not hold it. That holds for the
 extension rows too: an extension is a panel like any other, and one sitting
 on another view -- or on no view at all -- comes to the view you are on
-rather than sending you to it. The current view is
-named first whenever the row is on it, because it is the one whose
-panel you can watch go; any other view's tag does the same thing to the view
-it points at. The \code{x} on the tag under the pointer is the mark saying the
-tag is clickable, not a separate target.
+rather than sending you to it.
 
-The \code{+n} tag stands in for the views one tag leaves out: its tooltip lists
-them, and a click opens the row menu, whose checklist is the full surface
-for them.
+The views a row is on are meta text at its end: the current view first
+whenever the row is on it, then \code{+n} for the rest. The \code{+n} lists them in
+its tooltip, and a click opens the row menu, whose checklist is the full
+surface for them.
 
-A \strong{stack header carries no view tag at all}. A stack has no membership of
+A \strong{stack header names no views at all}. A stack has no membership of
 its own -- a view's members are block panels -- so anything shown there could
 only be a union over its members, which reads as a fact about the stack and
 is not one. Expanded, the member rows say it exactly; collapsed,
@@ -115,11 +116,11 @@ the way a file manager does: right-clicking a selected row speaks for all of
 them, and right-clicking an unselected one collapses the selection to it
 first. On a collapsed stack header it speaks for the stack's members.
 
-Below the views it carries only the operations that have no discoverable
-gesture of their own -- rename, copy, cut, remove -- and deliberately \emph{not}
-connect or append: the rail dot and the row's \code{+} are better affordances than
-a menu entry, and naming them here would teach the wrong gesture for the
-thing the rail is best at.
+Below the views it carries the row's actions: rename, append a block, copy,
+cut and remove (on a stack: rename, show only this group, dissolve). It
+deliberately does \emph{not} connect: the rail dot is the better affordance, and
+naming it here would teach the wrong gesture for the thing the rail is best
+at.
 
 Clearing the outline's own tick on the view it is shown in removes the panel
 you are clicking in, so that one box arms on the first click and commits on
