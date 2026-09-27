@@ -29,7 +29,7 @@ Remotes:
     BristolMyersSquibb/blockr.ui
 Imports:
     blockr.core,
-    blockr.dock,
+    blockr.dock (>= 0.1.4.9005),
     blockr.ui (>= 0.0.1.9030),
     shiny,
     htmltools,

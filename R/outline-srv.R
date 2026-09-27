@@ -91,6 +91,13 @@ outline_ext_srv <- function(id, board, update, actions, ...) {
           inps[1L]
         }
 
+        # A new input on a block that takes any number is offered as "": it
+        # gets a name, the next free number, as an inserted block's does, so
+        # the link menu has an input to name and rename.
+        if (!nzchar(slot)) {
+          slot <- outline_new_input(board$board, msg$to)
+        }
+
         update(list(links = list(add = blockr.core::as_links(
           blockr.core::new_link(from = msg$from, to = msg$to, input = slot)
         ))))
@@ -106,40 +113,42 @@ outline_ext_srv <- function(id, board, update, actions, ...) {
         }
       })
 
-      # Remove a block; when it sits in a straight chain (exactly one
-      # incoming and one outgoing link) the chain is healed by wiring the
-      # parent into the freed slot of the child. `augment_board_update()`
-      # cascades the incident link removals and stack pruning.
+      # A link's input renamed (into a block that takes any number of
+      # inputs) or moved to another free one, from the link's menu. The
+      # client refuses a taken name in place; this is the authoritative
+      # check, the same one blockr.dock's edit-link menu makes.
+      shiny::observeEvent(input$link_mod, {
+        msg <- input$link_mod
+        delta <- outline_link_mod_delta(board$board, msg$id, msg$input)
+        if (is.character(delta)) {
+          shiny::showNotification(delta, type = "warning")
+        } else if (!is.null(delta)) {
+          update(delta)
+        }
+      })
+
+      # "Insert a block here" on a link, or "Insert a block before" on a
+      # row: blockr.dock's insert action, which opens its "+" menu captioned
+      # for the link and splits it with the block picked there.
+      shiny::observeEvent(input$link_insert, {
+        id <- as.character(input$link_insert$id)
+        if (length(id) == 1L &&
+              id %in% names(blockr.core::board_links(board$board))) {
+          actions[["insert_block_action"]](id)
+        }
+      })
+
+      # Remove blocks (one from a row's menu or its ×, several from a
+      # selection or a stack). A block with exactly one link into it is
+      # bridged, by blockr.dock's rule: see `outline_rm_delta()`.
       shiny::observeEvent(input$block_rm, {
-        id_rm <- input$block_rm$id
-
-        if (!id_rm %in% names(blockr.core::board_blocks(board$board))) {
-          return()
-        }
-
-        links <- blockr.core::board_links(board$board)
-        ins <- links[links$to == id_rm]
-        outs <- links[links$from == id_rm]
-
-        upd <- list(blocks = list(rm = id_rm))
-
-        dup <- length(ins) == 1L && length(outs) == 1L && any(
-          links$from == ins$from &
-            links$to == outs$to &
-            links$input == outs$input
+        msg <- input$block_rm
+        delta <- outline_rm_delta(
+          board$board, as.character(c(unlist(msg$ids), unlist(msg$id)))
         )
-
-        if (length(ins) == 1L && length(outs) == 1L && !dup) {
-          upd$links <- list(add = blockr.core::as_links(
-            blockr.core::new_link(
-              from = ins$from,
-              to = outs$to,
-              input = outs$input
-            )
-          ))
+        if (!is.null(delta)) {
+          update(delta)
         }
-
-        update(upd)
       })
 
       shiny::observeEvent(input$block_rename, {
@@ -371,24 +380,9 @@ outline_ext_srv <- function(id, board, update, actions, ...) {
           return()
         }
 
-        # A stack whose every member is going goes too. The core cascade
-        # prunes the members out of it but keeps the stack, which after
-        # cutting a whole stack leaves an empty husk on the board -- and the
-        # gesture plainly meant "remove this stack".
-        stacks <- blockr.core::board_stacks(board$board)
-        gone <- names(stacks)[vapply(
-          stacks,
-          function(s) all(blockr.core::stack_blocks(s) %in% ids),
-          logical(1)
-        )]
-
-        upd <- list(blocks = list(rm = ids))
-
-        if (length(gone)) {
-          upd$stacks <- list(rm = gone)
-        }
-
-        update(upd)
+        # Bridged as a removal is, and a stack whose every member goes goes
+        # too (`outline_rm_delta()`).
+        update(outline_rm_delta(board$board, ids))
       })
 
       shiny::observeEvent(input$block_paste, {

@@ -482,14 +482,14 @@
 .outline .md-deck.md-focused .md-edge { opacity: 0.1; }
 .outline .md-deck.md-focused .md-edge.md-rel { opacity: 1; }
 
-/* A drop target while a dot is dragged: the accent tint and edge on the row
-   that would take the link, a danger edge on one that would refuse it (the
-   tip at the pointer says why). The edge is drawn inside the row, so the row
-   keeps its size. */
+/* A drop target while a dot is dragged: the accent tint on the row that
+   would take the link (design system, "Links in the outline"), a danger edge
+   on one that would refuse it (the tip at the pointer says why). The edge is
+   drawn inside the row, so the row keeps its size. */
 .outline .md-chip.drop-ok,
 .outline .md-chip.drop-ok:hover {
-  background: var(--blockr-color-bg-accent-subtle-hover);
-  box-shadow: inset 0 0 0 1px var(--blockr-color-border-accent);
+  background: var(--blockr-color-bg-accent-subtle);
+  box-shadow: inset 0 0 0 1px var(--blockr-color-border-accent-subtle);
 }
 .outline .md-chip.drop-no {
   box-shadow: inset 0 0 0 1px var(--blockr-color-border-danger-subtle);
@@ -818,23 +818,100 @@
   cursor: pointer;
 }
 .outline .md-deck svg.md-rail path.md-edge { transition: opacity var(--blockr-transition); }
-/* The remove mark on a hovered edge: 22px (the search field's clear button),
-   raised off the rail it rides on; red on its own hover. */
-.outline .md-edge-x {
-  position: absolute;
-  z-index: 12;
-  flex: none;
-  width: 22px;
-  height: 22px;
-  background: var(--blockr-color-bg-raised);
-  border-color: var(--blockr-color-border-default);
-  box-shadow: var(--blockr-shadow-md);
+/* A link under the pointer, or with its menu open, thickens in the accent
+   colour (design system, "Links in the outline"). Nothing is drawn on it. */
+.outline .md-deck svg.md-rail path.md-edge.md-hot {
+  stroke: var(--blockr-color-border-accent);
+  stroke-width: 3px;
+  opacity: 1;
 }
-.outline .md-edge-x:hover {
+
+/* --- input markers --- */
+
+/* After the name: an 8px open circle (1.5px border-strong) per named input
+   with nothing linked into it, "∞" (13px text-muted) for a block that takes
+   any number. Each is a 16px target; hover is the hover wash and
+   text-default. */
+.outline .md-pips {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.outline .md-pip {
+  flex: none;
+  box-sizing: border-box;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+  border: 0;
+  border-radius: var(--blockr-radius-sm);
+  background: transparent;
+  color: var(--blockr-color-text-muted);
+  font: inherit;
+  cursor: pointer;
+}
+.outline .md-pip::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  /* the 1.5px ring as an inset shadow: a 1.5px border snaps to 1px on a
+     1x screen */
+  box-shadow: inset 0 0 0 1.5px var(--blockr-color-border-strong);
+}
+.outline .md-pip--inf::before { display: none; }
+.outline .md-pip--inf {
+  width: auto;
+  min-width: 16px;
+  padding: 0 3px;
+  font-size: 13px;
+  line-height: 16px;
+}
+.outline .md-pip:hover,
+.outline .md-pip:focus-visible {
+  background: var(--blockr-color-bg-hover);
+  color: var(--blockr-color-text-default);
+  outline: none;
+}
+.outline .md-pip:hover::before,
+.outline .md-pip:focus-visible::before {
+  box-shadow: inset 0 0 0 1.5px var(--blockr-color-text-default);
+}
+.outline .md-renaming .md-pips { display: none; }
+
+/* --- a field in a menu: Rename input --- */
+
+/* The menu is portalled to <body>, so these are not scoped to `.outline`.
+   The design system's rename field: the accent edge, the focus ring,
+   bg-surface, the text selected; a refused name gets the danger edge and one
+   12px line under the field. */
+.blockr-menu .md-menu-field { padding: 2px 4px 4px; }
+.blockr-menu .md-menu-field__input {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  height: 34px;
+  padding: 6px 10px;
+  border: 1px solid var(--blockr-color-border-accent);
+  border-radius: var(--blockr-radius-lg);
+  background: var(--blockr-color-bg-surface);
+  box-shadow: var(--blockr-focus-ring);
+  color: var(--blockr-color-text-default);
+  font: inherit;
+  font-size: var(--blockr-font-size-base);
+  outline: none;
+}
+.blockr-menu .md-menu-field.md-bad .md-menu-field__input {
+  border-color: var(--blockr-color-border-danger);
+}
+.blockr-menu .md-menu-field__error {
+  padding: 4px 2px 0;
+  font-size: var(--blockr-font-size-xs);
+  line-height: 1.4;
   color: var(--blockr-color-text-danger);
-  background: linear-gradient(var(--blockr-color-bg-danger), var(--blockr-color-bg-danger)),
-    var(--blockr-color-bg-raised);
-  border-color: var(--blockr-color-border-danger-subtle);
 }
 
 /* --- selection action bar --- */

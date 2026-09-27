@@ -8,20 +8,79 @@
  * One instance per `.outline[data-ns]` container. The R side pushes the full
  * board model ('outline-data') and per-block status badges ('outline-badge');
  * user gestures come back out of the renderer as `emit(name, payload)` and go
- * on as event-priority Shiny inputs (link_add, link_rm, block_rm,
- * block_rename, block_select, block_append, block_add, stack_add,
- * stack_rename, stack_rm, stack_join, stack_leave). The client never mutates
- * the model itself — every edit round-trips through the board and comes back
- * as a data push.
+ * on as event-priority Shiny inputs (link_add, link_rm, link_mod,
+ * link_insert, block_rm, block_rename, block_select, block_append, block_add,
+ * stack_add, stack_rename, stack_rm, stack_join, stack_leave). The client
+ * never mutates the model itself: every edit round-trips through the board
+ * and comes back as a data push.
  *
- * Model: blocks [{id, name, category, color, icon, inputs[], variadic}],
+ * Model: blocks [{id, name, category, color, icon, inputs[], variadic, drops}],
  * links [{id, from, to, input}], stacks [{id, name, color, blocks[]}].
  * A named input slot is FULL when a link with that (to, input) exists;
  * variadic blocks accept unlimited links on the '' slot (blockr.core
  * semantics — mirrored here for instant feedback, enforced again in R).
  */
+/* Board arity, as pure functions of the model so `node --test` can hold
+ * them to blockr.core's rules (tests/js/outline-board.test.js). A block's
+ * named inputs fill one link each; a variadic block takes any number, on
+ * inputs it names itself, and never fills up. */
+(function (root, factory) {
+  'use strict';
+  const api = factory();
+  if (typeof module === 'object' && module.exports) module.exports = api;
+  if (root) root.outlineBoard = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+  'use strict';
+
+  const linksInto = (links, id) => links.filter((l) => l.to === id);
+
+  // The inputs a new link into `b` could take: its free named inputs, and
+  // '' (a new one) when it takes any number.
+  const freeSlots = (b, links) => {
+    const occ = new Set(linksInto(links, b.id).map((l) => l.input));
+    const free = (b.inputs || []).filter((s) => !occ.has(s));
+    if (b.variadic) free.push('');
+    return free;
+  };
+
+  // What the row's input markers show: the named inputs nothing is linked
+  // into, and whether the block takes any number. A linked input draws
+  // nothing; the rail shows it.
+  const inputMarkers = (b, links) => {
+    const occ = new Set(linksInto(links, b.id).map((l) => l.input));
+    const inputs = (b.inputs || []).filter((s) => !occ.has(s));
+    return inputs.length || b.variadic
+      ? { inputs: inputs, variadic: !!b.variadic } : null;
+  };
+
+  // What a link's menu can do to its input. Into a block that takes any
+  // number of inputs the input is a name, so it can be renamed (to one no
+  // other link into the block uses); into a block with fixed inputs the
+  // link can move to another free one. Neither when there is nothing to do.
+  const linkEdit = (l, blocks, links) => {
+    const to = blocks.find((b) => b.id === l.to);
+    if (!to) return null;
+    const others = linksInto(links, to.id).filter((x) => x.id !== l.id);
+    if (to.variadic) {
+      return { rename: true, taken: others.map((x) => x.input) };
+    }
+    const used = new Set(others.map((x) => x.input));
+    const move = (to.inputs || []).filter((s) => s !== l.input && !used.has(s));
+    return move.length ? { move: move } : null;
+  };
+
+  // The links into `id`, for "Insert a block before".
+  const inputLinks = (id, links) => linksInto(links, id);
+
+  return { freeSlots, inputMarkers, linkEdit, inputLinks };
+});
+
 (() => {
   'use strict';
+
+  // In node (the tests require this file for `outlineBoard`) there is no
+  // page to adapt to.
+  if (typeof document === 'undefined') return;
 
   const registry = new Map();
 
@@ -140,7 +199,7 @@
 
     const push = (name, payload) => {
       if (name === 'block_insert' || name === 'block_add' ||
-          name === 'block_append') {
+          name === 'block_append' || name === 'link_insert') {
         const f = rail.stackFocus();
         pendingJoin = f ? { stack: f, at: Date.now() } : null;
       }
@@ -159,16 +218,8 @@
     let armedTick = null;             // '<extension id>@<view id>' while armed
 
     const blockOf = (id) => blocks.find((b) => b.id === id);
-    const linksInto = (id) => links.filter((l) => l.to === id);
-
-    // free input slots of a block: unoccupied named slots, plus the ''
-    // (variadic) slot which never fills up
-    const freeSlots = (b) => {
-      const occ = new Set(linksInto(b.id).map((l) => l.input));
-      const free = (b.inputs || []).filter((s) => !occ.has(s));
-      if (b.variadic) free.push('');
-      return free;
-    };
+    const linksInto = (id) => outlineBoard.inputLinks(id, links);
+    const freeSlots = (b) => outlineBoard.freeSlots(b, links);
 
     // The glyph comes from the catalogue, keyed by the block's type, because
     // an icon belongs to a type and not to a board: it arrives once instead
@@ -179,6 +230,10 @@
     const iconFor = (type) => {
       const m = registry.byType && registry.byType.get(type);
       return m && m.icon ? m.icon : null;
+    };
+    const typeName = (b) => {
+      const m = registry.byType && registry.byType.get(b.type);
+      return m && m.name ? m.name : b.type;
     };
 
     // The block's mark, as the design system draws it in a list: the glyph
@@ -240,9 +295,8 @@
       },
 
       // The row is the design system's block list row: the mark, the name,
-      // the row's end. The free-slot pips that used to follow the mark are
-      // not part of it; a block's inputs are on the rail and in the
-      // connections menu of its dot.
+      // the row's end. Linked inputs are on the rail; the free ones are
+      // markers after the name (`inputMarkers`).
       nodeLead: (b) => kindIcon(b),
 
       // a board constrains the CONSUMER: the edge occupies one of `to`'s
@@ -250,9 +304,24 @@
       slotsFor: (from, to) => freeSlots(to),
 
       // an auto-named variadic link is not a slot anyone chose, so the
-      // connections popover keeps quiet about it
+      // edge labels keep quiet about it
       showSlot: (l) => l.input !== '' &&
         ((blockOf(l.to) || {}).inputs || []).includes(l.input),
+
+      // Links (design system, "Links in the outline"). Every input has a
+      // name on a board, a variadic one too, and the link's tooltip and
+      // menu say which.
+      linkInput: (l) => l.input,
+      // blockr.dock's insert action: its "+" menu, captioned for the link
+      linkInsert: (l) => push('link_insert', { id: l.id }),
+      linkEdit: (l) => outlineBoard.linkEdit(l, blocks, links),
+      inputMarkers: (b) => outlineBoard.inputMarkers(b, links),
+      // a block in a menu that lists the board's blocks: its mark, and its
+      // type as meta text (the catalogue's name for it)
+      nodeItem: (b) => ({
+        mark: { icon: iconFor(b.type) || '', color: b.color || '' },
+        meta: typeName(b)
+      }),
 
       // The row's one tool, shown on hover or keyboard focus: the "…" that
       // opens the row menu, which carries every action of the row (Append
@@ -468,10 +537,9 @@
     /* ---- the row menu ----------------------------------------------------
      *
      * The one place membership is written. It carries the whole answer: three
-     * presets, then a tick per view, then the row operations that have no
-     * discoverable gesture. Connecting and appending are NOT here -- the rail
-     * dot and the row's `+` are better affordances than a dialog, and a menu
-     * entry would teach the wrong gesture for the thing the rail is best at.
+     * presets, then a tick per view, then the row operations: rename, the
+     * link gestures (insert before, append, connect to), so every one of
+     * them has a keyboard path, then copy, cut and remove.
      *
      * It acts on the SELECTION, the way a file manager does: right-clicking a
      * selected row speaks for all of them, and right-clicking an unselected one
@@ -692,6 +760,15 @@
             closeMenu();
             rail.editName(id);
           }));
+          // The link gestures, so each has a keyboard path (design system,
+          // "Links in the outline"): into the block's input link, after it,
+          // and from it into another block.
+          if (linksInto(id).length) {
+            box.appendChild(menuBtn('Insert a block before', '', null, () => {
+              closeMenu();
+              insertBefore(id);
+            }));
+          }
           // appending after this row: the rail's drag does the same
           if (registry.append.length) {
             box.appendChild(menuBtn('Append a block', '', null, () => {
@@ -699,6 +776,10 @@
               openPicker(id, rowOf(id), null);
             }));
           }
+          box.appendChild(menuBtn('Connect to\u2026', '', null, () => {
+            closeMenu();
+            rail.connectFrom(id, rowOf(id));
+          }));
         }
         if (spec.kind === 'stack') {
           const sid = spec.stack;
@@ -734,13 +815,19 @@
         }));
 
         box.appendChild(el('blockr-menu__divider', 'div'));
+        // A block with one input is bridged when it goes (its parent takes
+        // its output links); any other block with links loses them, and the
+        // row says so.
+        const one = spec.blocks.length === 1 ? blockOf(spec.blocks[0]) : null;
         box.appendChild(menuBtn(
           spec.blocks.length > 1
             ? 'Remove ' + spec.blocks.length + ' blocks'
             : 'Remove block',
-          '', { danger: true, icon: 'trash' }, () => {
+          one && one.drops ? 'its links are dropped' : '',
+          { danger: true, icon: 'trash' }, () => {
             closeMenu();
-            spec.blocks.forEach((id) => push('block_rm', { id: id }));
+            // in one message, so a chain of removed blocks bridges through
+            push('block_rm', { ids: spec.blocks });
           }
         ));
       }
@@ -819,6 +906,29 @@
 
     const rowOf = (id) => rootEl.querySelector(
       '.md-chip[data-id="' + CSS.escape(id) + '"]');
+
+    // "Insert a block before": into the block's input link, or, with
+    // several, into the one picked from a list of them.
+    const insertBefore = (id) => {
+      const ins = linksInto(id);
+      if (ins.length === 1) {
+        push('link_insert', { id: ins[0].id });
+        return;
+      }
+      const row = rowOf(id);
+      if (!ins.length || !row || !window.Blockr || !Blockr.menu) return;
+      Blockr.menu(row, {
+        caption: 'Insert a block before ' + ((blockOf(id) || {}).name || id),
+        items: ins.map((l) => {
+          const from = blockOf(l.from);
+          return {
+            label: from ? from.name : l.from,
+            meta: 'into ' + l.input,
+            onSelect: () => push('link_insert', { id: l.id })
+          };
+        })
+      });
+    };
 
     const blockSpec = (ids) => ({
       kind: 'block', blocks: ids, extensions: [],
@@ -1166,7 +1276,9 @@
       blocks = asArr(msg.blocks).map((b) => ({
         id: b.id, name: b.name, type: b.type || '',
         category: b.category || '', color: b.color,
-        inputs: asArr(b.inputs), variadic: !!b.variadic
+        inputs: asArr(b.inputs), variadic: !!b.variadic,
+        // removing it drops its links rather than bridging them
+        drops: !!b.drops
       }));
       links = asArr(msg.links).map((l) => ({
         id: l.id, from: l.from, to: l.to,

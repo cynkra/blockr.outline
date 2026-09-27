@@ -40,7 +40,18 @@ the empty space below it (which is also the only home for \strong{Paste}),
 the row of the block open in the dock is marked as the current one,
 \item hover a row (or give it keyboard focus) for its "…", which opens the row's
 menu with every action on it, \strong{Remove} last,
-\item click a dot (or hover a rail edge) to inspect and remove connections,
+\item point at a link on the rail to name it (source, target and input), click
+it for its menu: insert a block into it, rename its input (on a block
+that takes any number of inputs) or move it to another free input, remove
+it. A click on a row's dot lists the block's links, each opening that
+menu,
+\item a block's free named inputs show as open circles after its name, and a
+block that takes any number of inputs as ∞; a click lists the blocks
+that can feed it. \strong{Connect to…} and \strong{Insert a block before} in the
+row's menu are the keyboard way to the same,
+\item removing a block with exactly one link into it links its parent to each
+of its children in its place (blockr.dock's \code{bridge_links()}); any other
+block takes its links with it, and its \strong{Remove} row says so,
 \item board stacks show as tinted bands; fold them to their header row, drag a
 row into a band to add that block to the stack and out of every band to
 take it out again (a selection moves together; a line shows where it

@@ -23,7 +23,18 @@
 #'   the row of the block open in the dock is marked as the current one,
 #' - hover a row (or give it keyboard focus) for its "…", which opens the row's
 #'   menu with every action on it, **Remove** last,
-#' - click a dot (or hover a rail edge) to inspect and remove connections,
+#' - point at a link on the rail to name it (source, target and input), click
+#'   it for its menu: insert a block into it, rename its input (on a block
+#'   that takes any number of inputs) or move it to another free input, remove
+#'   it. A click on a row's dot lists the block's links, each opening that
+#'   menu,
+#' - a block's free named inputs show as open circles after its name, and a
+#'   block that takes any number of inputs as ∞; a click lists the blocks
+#'   that can feed it. **Connect to…** and **Insert a block before** in the
+#'   row's menu are the keyboard way to the same,
+#' - removing a block with exactly one link into it links its parent to each
+#'   of its children in its place (blockr.dock's `bridge_links()`); any other
+#'   block takes its links with it, and its **Remove** row says so,
 #' - board stacks show as tinted bands; fold them to their header row, drag a
 #'   row into a band to add that block to the stack and out of every band to
 #'   take it out again (a selection moves together; a line shows where it
@@ -250,16 +261,22 @@ outline_payload <- function(board) {
   # websocket does not compress, so those were 93 KB on the wire each time a
   # filter moved. A type the catalogue does not know falls back to the
   # letter tile client-side.
+  linked <- unique(c(links$from, links$to))
+
   blk_entry <- function(i) {
     b <- blocks[[i]]
+    id <- names(blocks)[i]
     list(
-      id = names(blocks)[i],
+      id = id,
       name = blockr.core::block_name(b),
       type = class(b)[[1L]],
       category = meta$category[i],
       color = meta$color[i],
       inputs = I(as.list(blockr.core::block_inputs(b))),
-      variadic = is.na(blockr.core::block_arity(b))
+      variadic = is.na(blockr.core::block_arity(b)),
+      # Removing it drops its links rather than bridging them: the row
+      # menu's Remove says so (design system, "Links in the outline").
+      drops = id %in% linked && !blockr.dock::bridges_block(board, id)
     )
   }
 
@@ -290,6 +307,100 @@ outline_payload <- function(board) {
     views = outline_views(board),
     extensions = outline_extensions(board)
   )
+}
+
+# Removing blocks from the outline. A block with exactly one input is
+# bridged: its parent takes each of its output links, into the same inputs.
+# The rule is blockr.dock's (`bridge_links()`), so the outline, the DAG and
+# the dock header remove alike; blockr.core drops the links incident to the
+# removed blocks in the same update, which frees the inputs the bridge links
+# go into. A stack whose every member goes goes too: the core cascade prunes
+# the members but keeps the stack, which would leave an empty husk.
+outline_rm_delta <- function(board, ids) {
+
+  ids <- intersect(ids, names(blockr.core::board_blocks(board)))
+
+  if (!length(ids)) {
+    return(NULL)
+  }
+
+  upd <- list(blocks = list(rm = ids))
+
+  add <- blockr.dock::bridge_links(board, ids)
+
+  if (length(add)) {
+    upd$links <- list(add = add)
+  }
+
+  stacks <- blockr.core::board_stacks(board)
+  gone <- names(stacks)[vapply(
+    stacks,
+    function(s) all(blockr.core::stack_blocks(s) %in% ids),
+    logical(1)
+  )]
+
+  if (length(gone)) {
+    upd$stacks <- list(rm = gone)
+  }
+
+  upd
+}
+
+# The name a new input of block `to` gets when it takes any number of
+# inputs: the smallest positive number no link into it uses yet.
+outline_new_input <- function(board, to) {
+  links <- blockr.core::board_links(board)
+  used <- links$input[links$to == to]
+  i <- 1L
+  while (as.character(i) %in% used) {
+    i <- i + 1L
+  }
+  as.character(i)
+}
+
+# Rename a link's input, or move it to another input, as a `links$mod`
+# update. Checked as blockr.dock's edit-link menu checks it: into a block that
+# takes any number of inputs the name must be one no other link into it uses;
+# into a block with fixed inputs it must be a free one. The ends do not change,
+# so no cycle can appear.
+#
+# NULL when there is nothing to do (an unknown link, the same input), a
+# string saying why when the input is refused, else the update.
+outline_link_mod_delta <- function(board, id, input) {
+
+  links <- blockr.core::board_links(board)
+  input <- trimws(as.character(input))
+
+  if (length(id) != 1L || !isTRUE(id %in% names(links)) ||
+        length(input) != 1L || is.na(input)) {
+    return(NULL)
+  }
+
+  pos <- match(id, names(links))
+  to <- links$to[pos]
+
+  if (identical(links$input[pos], input)) {
+    return(NULL)
+  }
+
+  if (!nzchar(input)) {
+    return("An input needs a name.")
+  }
+
+  blk <- blockr.core::board_blocks(board)[[to]]
+  others <- links$input[links$to == to & names(links) != id]
+
+  if (is.na(blockr.core::block_arity(blk))) {
+    if (input %in% others) {
+      return(sprintf("Another input of %s is called %s.",
+                     blockr.core::block_name(blk), input))
+    }
+  } else if (!input %in% setdiff(blockr.core::block_inputs(blk), others)) {
+    return(sprintf("%s is not a free input of %s.", input,
+                   blockr.core::block_name(blk)))
+  }
+
+  list(links = list(mod = stats::setNames(list(list(input = input)), id)))
 }
 
 # Views as the outline sees them: membership stated in OBJECT ids (block ids and

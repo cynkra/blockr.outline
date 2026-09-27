@@ -13,7 +13,8 @@
  * and the host is expected to push a new model back.
  *
  * adapter = {
- *   emit(name, payload)          gestures out: link_add, link_rm, block_rm,
+ *   emit(name, payload)          gestures out: link_add, link_rm, link_mod,
+ *                                block_rm,
  *                                block_rename, block_select, block_append,
  *                                block_add, stack_add, stack_rename, stack_rm,
  *                                stack_join, stack_leave, stack_focus
@@ -44,6 +45,27 @@
  *                                (which outcome does this branch leave on).
  *   slotPrompt(from, to)         caption of the slot picker
  *   showSlot(link) -> bool       whether that slot is worth naming
+ *
+ *   Links (design system, "Links in the outline"). A link lights up under
+ *   the pointer and a click opens its menu, which always has Remove link.
+ *   Each hook below is optional; a host without it gets no such row.
+ *   linkInput(link) -> string    the input a link goes into, as the tooltip
+ *                                ("into data") and the menu head name it;
+ *                                default: the slot where `showSlot` says so
+ *   linkInsert(link)             "Insert a block here" in the link menu
+ *   linkEdit(link) -> {rename: true, taken: []} | {move: []} | null
+ *                                "Rename input" (the name becomes a field in
+ *                                the menu; `taken` are refused in place) or
+ *                                "Move to input" (a Select.menu of `move`);
+ *                                the rail emits `link_mod` {id, input}
+ *   inputMarkers(node) -> {inputs: [], variadic: bool} | null
+ *                                markers after the name: an open circle per
+ *                                free named input, "∞" when it takes any
+ *                                number; a click lists the blocks that can
+ *                                feed it and emits `link_add`
+ *   nodeItem(node) -> {mark, meta}
+ *                                how a node is drawn as a row of a menu that
+ *                                lists blocks (`Blockr.menu` item fields)
  *   opts { search, searchMin, stacks, remove, status, allowCycles, nameEdit,
  *          edgeLabels, labelPad, searchPlaceholder, searchEmptyText, emptyText,
  *          emptyAddText, metrics, stackNoun, stackUnit, stackIcon, stackAddText,
@@ -198,6 +220,64 @@
     return { tops: tops, gaps: gaps, height: y };
   };
 
+  /* ---- links: who can connect to whom -----------------------------------
+   *
+   * Pure, so `node --test` can hold them to the rules. `slotsFor(from, to)`
+   * is the adapter's: the inputs of `to` a link from `from` could take, ''
+   * for a new one on a block that takes any number.
+   */
+
+  // Every block reachable from `id` along the links, downwards (its
+  // descendants) or upwards (its ancestors). `id` itself is not included.
+  const linkReach = (links, id, down) => {
+    const seen = new Set();
+    const q = [id];
+    while (q.length) {
+      const x = q.shift();
+      links.forEach((l) => {
+        const a = down ? l.from : l.to, b = down ? l.to : l.from;
+        if (a === x && !seen.has(b)) { seen.add(b); q.push(b); }
+      });
+    }
+    return seen;
+  };
+
+  // The blocks that can feed input `input` of `to` ('' for a new input on a
+  // block that takes any number): not `to` itself, nothing downstream of it
+  // (that would close a cycle), and on a new input, nothing already feeding
+  // it.
+  const feedersFor = (blocks, links, to, input, slotsFor) => {
+    const down = linkReach(links, to.id, true);
+    const into = new Set(links.filter((l) => l.to === to.id).map((l) => l.from));
+    return blocks.filter((b) => b.id !== to.id && !down.has(b.id) &&
+      !(input === '' && into.has(b.id)) &&
+      slotsFor(b, to).indexOf(input) >= 0);
+  };
+
+  // The blocks `from` can connect to ("Connect to…"): a free input or a new
+  // one, not `from` itself, nothing upstream of it. A block that takes any
+  // number of inputs and already reads `from` is left out: a second link
+  // would hand it the same data twice.
+  const targetsFor = (blocks, links, from, slotsFor) => {
+    const up = linkReach(links, from.id, false);
+    return blocks.filter((b) => {
+      if (b.id === from.id || up.has(b.id)) return false;
+      const free = slotsFor(from, b);
+      if (!free.length) return false;
+      const onlyNew = free.every((s) => s === '');
+      return !(onlyNew && links.some((l) => l.from === from.id && l.to === b.id));
+    });
+  };
+
+  // Why an input name is refused ('' when it is not): the design system's
+  // rename rules, an empty name or one another input of the block has.
+  const inputNameError = (name, taken) => {
+    const v = String(name == null ? '' : name).trim();
+    if (!v) return 'An input needs a name';
+    if ((taken || []).indexOf(v) >= 0) return 'Another input is called ' + v;
+    return '';
+  };
+
   let uidCounter = 0;
 
   function create(rootEl, adapter) {
@@ -246,6 +326,12 @@
       ((from, to) => 'Into which input of ' + to.name + '?');
     // whether the connections popover names the slot an edge occupies
     const showSlot = adapter.showSlot || ((l) => l.input !== '');
+    // the link hooks (see the header); absent ones leave their rows out
+    const linkInput = adapter.linkInput || ((l) => showSlot(l) ? l.input : '');
+    const linkInsert = adapter.linkInsert || null;
+    const linkEdit = adapter.linkEdit || (() => null);
+    const inputMarkers = adapter.inputMarkers || null;
+    const nodeItem = adapter.nodeItem || (() => ({}));
 
     /* ---- skeleton ---- */
 
@@ -716,7 +802,6 @@
       if (dragging || editing()) { pendingRender = true; return; }
       pendingRender = false;
       if (closePicker) closePicker();
-      hideEdgeXNow();
       // The relatedness focus is painted on rows this rebuild is about to
       // destroy, so it has to be dropped -- but it is HOVER state, and the
       // pointer has not moved. Clearing it and leaving it cleared is what
@@ -823,8 +908,10 @@
       // Siblings share their producer's bus, so their drawn paths overlap
       // above the first consumer. Hovering has to stay unambiguous: each edge
       // owns only the stretch of bus BELOW the previous consumer -- that band
-      // is where its ✕ appears and where the hover highlight fires.
+      // is where the hover lights it and where a click opens its menu (the
+      // siblings still running down the same stretch are listed first).
       const hitFrom = new Map();
+      const vRun = new Map();
       const byFrom = new Map();
       edges.forEach((e) => {
         const arr = byFrom.get(e.from) || [];
@@ -852,6 +939,9 @@
           y = y2;
         }
         const yIn = xE !== xT ? yT - PITCH : yT;
+        // the stretch this edge runs straight down its lane: where siblings
+        // out of the same producer can lie on top of it
+        vRun.set(e, { x: xE, y0: y, y1: Math.max(y, yIn) });
         if (yIn > y) { d += ' L' + xE + ',' + yIn; y = yIn; }
         if (xE !== xT) {
           d += ' C' + xE + ',' + (y + PITCH * 0.8) + ' ' + xT + ',' + (yT - PITCH * 0.8) + ' ' + xT + ',' + yT;
@@ -880,10 +970,10 @@
         hit.setAttribute('stroke', 'transparent');
         hit.setAttribute('stroke-width', '12');
         hit.setAttribute('class', 'md-edge-hit');
-        hit.addEventListener('mouseenter', () => showEdgeX(e, p, hit));
-        hit.addEventListener('mouseleave', hideEdgeXSoon);
+        wireEdge(e, p, hit);
         svg.appendChild(hit);
       });
+      edgeGeo = { edges: edges, vRun: vRun };
 
       // Loop-backs climb the right-hand gutter, dashed and arrowed: they run
       // against the reading direction, so they are drawn as the exception
@@ -919,8 +1009,7 @@
         hit.setAttribute('stroke', 'transparent');
         hit.setAttribute('stroke-width', '12');
         hit.setAttribute('class', 'md-edge-hit');
-        hit.addEventListener('mouseenter', () => showEdgeX(e, p, hit));
-        hit.addEventListener('mouseleave', hideEdgeXSoon);
+        wireEdge(e, p, hit, true);
         svg.appendChild(hit);
       });
 
@@ -1183,6 +1272,10 @@
 
       const name = nameEl(b, (nm) => emit('block_rename', { id: b.id, name: nm }));
       el.appendChild(name);
+
+      // the inputs with nothing linked into them, after the name
+      const pips = markersEl(b);
+      if (pips) el.appendChild(pips);
 
       const trail = nodeTrail(b);
       if (trail) el.appendChild(trail);
@@ -2047,56 +2140,130 @@
       selcountEl.textContent = selection.size + ' ' + opts.stackUnit;
     };
 
-    /* ---- unlink: hover a rail edge for a ✕ at its midpoint ---- */
+    /* ---- links: a thing you point at (design system, "Links in the outline")
+     *
+     * A link under the pointer thickens in the accent colour and its tooltip
+     * names it ("Two species → Sepal ratio", "into data" muted). Nothing is
+     * drawn on it. A click opens its menu: Insert a block here, Rename input
+     * or Move to input (whichever the target allows), then Remove link after
+     * a divider. Every row but Remove comes from an adapter hook, so a host
+     * without it gets a menu of one.
+     */
 
-    let edgeXEl = null, edgeXTimer = null, edgeXPath = null;
+    // The last drawn edges and their straight runs, for a click to find the
+    // siblings lying on the same stretch of bus.
+    let edgeGeo = { edges: [], vRun: new Map() };
+    // The edge whose menu is open stays lit.
+    let heldPath = null;
 
     const linksBehind = (railFrom, railTo) =>
       links.filter((l) => railIdOf(l.from) === railFrom && railIdOf(l.to) === railTo);
 
-    // `path` is what lights up, `band` the stretch this edge owns alone (they
-    // differ once siblings share a bus) -- the ✕ goes on the band, so two
-    // edges out of one block never put their ✕ in the same place.
-    const showEdgeX = (e, path, band) => {
-      if (dragging) return;
-      clearTimeout(edgeXTimer);
-      hideEdgeXNow();
-      path.setAttribute('stroke-width', '3.2');
-      edgeXPath = path;
-      const at = band || path;
-      const m = at.getPointAtLength(at.getTotalLength() / 2);
+    // A row of the rail by id: a block's name, or a folded stack's.
+    const railName = (id) => {
+      if (String(id).startsWith('stack:')) {
+        const s = stacks.find((x) => x.id === id.slice(6));
+        return s ? s.name : id;
+      }
+      const b = blockOf(id);
+      return b ? b.name : id;
+    };
+    const linkTitle = (l) => railName(l.from) + ' → ' + railName(l.to);
+
+    // The links under a click on an edge's band (x, y in rail coordinates):
+    // its own, then the siblings out of the same producer whose straight run
+    // passes the same point, nearest first.
+    const linksAt = (e, back, x, y) => {
+      const own = linksBehind(e.from, e.to);
+      if (back) return own;
+      const on = (o) => {
+        const v = edgeGeo.vRun.get(o);
+        return v && Math.abs(v.x - x) <= 4 && y > v.y0 + 1 && y < v.y1 - 1;
+      };
+      const more = edgeGeo.edges
+        .filter((o) => o !== e && o.from === e.from && on(o))
+        .sort((a, b) => edgeGeo.vRun.get(a).y1 - edgeGeo.vRun.get(b).y1)
+        .flatMap((o) => linksBehind(o.from, o.to));
+      return own.concat(more);
+    };
+
+    // The tooltip naming a link is the design system's light card, shown at
+    // the pointer after the tooltip's 300ms rest. Blockr.tooltip would place
+    // it above the path's bounding box, which on a link between two rows is
+    // on top of the row the link comes from.
+    let edgeTipTimer = null;
+    const edgeTip = (e, ev) => {
       const behind = linksBehind(e.from, e.to);
-      // 22px, the size of the search field's clear button: a remove mark
-      // riding on a line, which a 26px square would bury
-      edgeXEl = toolBtn('md-edge-x', icon('x'), behind.length > 1
-        ? 'Remove connection (' + behind.length + ' links)'
-        : 'Remove connection');
-      edgeXEl.style.left = (m.x - 11) + 'px';
-      edgeXEl.style.top = (m.y - 11) + 'px';
-      edgeXEl.addEventListener('mouseenter', () => clearTimeout(edgeXTimer));
-      edgeXEl.addEventListener('mouseleave', hideEdgeXSoon);
-      edgeXEl.addEventListener('click', () => {
-        emit('link_rm', { ids: behind.map((l) => l.id) });
-        hideEdgeXNow();
+      if (!behind.length) return;
+      const inp = linkInput(behind[0]);
+      sayAt(ev, linkTitle(behind[0]), false,
+        (inp ? 'into ' + inp : '') +
+        (behind.length > 1 ? (inp ? ', ' : '') + (behind.length - 1) + ' more' : ''));
+    };
+    const edgeTipOff = () => {
+      clearTimeout(edgeTipTimer);
+      edgeTipTimer = null;
+      if (!dragging) unsay();
+    };
+
+    const wireEdge = (e, path, hit, back) => {
+      hit.addEventListener('mouseenter', (ev) => {
+        if (dragging) return;
+        path.classList.add('md-hot');
+        clearTimeout(edgeTipTimer);
+        edgeTipTimer = setTimeout(() => edgeTip(e, ev), 300);
       });
-      deckEl.appendChild(edgeXEl);
+      hit.addEventListener('mousemove', (ev) => {
+        if (dragging) return;
+        if (dragTipEl) edgeTip(e, ev);
+        else {
+          clearTimeout(edgeTipTimer);
+          edgeTipTimer = setTimeout(() => edgeTip(e, ev), 300);
+        }
+      });
+      hit.addEventListener('mouseleave', () => {
+        if (heldPath !== path) path.classList.remove('md-hot');
+        edgeTipOff();
+      });
+      hit.setAttribute('aria-label', linksBehind(e.from, e.to).map(linkTitle).join(', '));
+      hit.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        edgeTipOff();
+        const at = { el: null, x: ev.clientX, y: ev.clientY };
+        const box = hit.ownerSVGElement.getBoundingClientRect();
+        const all = linksAt(e, back, ev.clientX - box.left, ev.clientY - box.top);
+        const hold = () => {
+          heldPath = path;
+          path.classList.add('md-hot');
+        };
+        const release = () => {
+          if (heldPath === path) heldPath = null;
+          path.classList.remove('md-hot');
+        };
+        if (all.length === 1) {
+          hold();
+          openLinkMenu(all[0], at, false, release);
+          return;
+        }
+        if (!all.length) return;
+        hold();
+        openAt(at, {
+          caption: all.length + ' links run here',
+          items: all.map((l) => ({
+            label: linkTitle(l),
+            meta: linkInput(l) || undefined,
+            onSelect: () => { hold(); openLinkMenu(l, at, false, release); }
+          }))
+        }, release);
+      });
     };
 
-    const hideEdgeXNow = () => {
-      if (edgeXPath) { edgeXPath.setAttribute('stroke-width', '2'); edgeXPath = null; }
-      if (edgeXEl) { edgeXEl.remove(); edgeXEl = null; }
-    };
-    const hideEdgeXSoon = () => {
-      clearTimeout(edgeXTimer);
-      edgeXTimer = setTimeout(hideEdgeXNow, 300);
-    };
-
-    /* ---- connections and slots: menus -----------------------------------
+    /* ---- menus ------------------------------------------------------------
      *
-     * Both are the design system's action menu (`Blockr.menu`), placed by
-     * `Blockr.place`: the connections of a row under that row, the slot a
-     * new link takes at the point the drag was released. Every row does one
-     * thing and the menu closes.
+     * The design system's action menu (`Blockr.menu`), placed by
+     * `Blockr.place`: under a row, or at the point a link was clicked or a
+     * drag released. A pick in one menu can open the next (a link in the
+     * connections list opens that link's menu) at the same place.
      */
 
     const slotLabel = (input) => input === '' ? 'new input' : input;
@@ -2104,38 +2271,206 @@
     // Open a menu and remember how to close it, so a render (which rebuilds
     // the rows it hangs from) takes it away rather than leaving it pointing
     // at a detached row.
-    const openMenu = (anchor, config, temp) => {
+    const openMenu = (anchor, config, temp, onClose) => {
       if (closePicker) closePicker();
       const B = ui();
-      if (!B || !B.menu) { if (temp) temp.remove(); return; }
+      if (!B || !B.menu) { if (temp) temp.remove(); return null; }
       let m = null;
       m = B.menu(anchor, Object.assign({}, config, {
         onClose: () => {
           if (temp) temp.remove();
           if (m && closePicker === m.close) closePicker = null;
+          if (onClose) onClose();
         }
       }));
       closePicker = m.close;
+      return m;
     };
 
+    // Where a menu goes: `{el}` hangs it under an element while that is on
+    // the page, else it opens at the point `{x, y}` (viewport) the element
+    // was at, which is what a chain of menus needs once the first is gone.
+    const atOf = (el) => {
+      const r = el.getBoundingClientRect();
+      return { el: el, x: r.left, y: r.bottom };
+    };
+    const anchorOf = (at) => {
+      if (at.el && at.el.isConnected) return { el: at.el, temp: null };
+      const a = pointAnchor(at.x, at.y);
+      return { el: a, temp: a };
+    };
+    const openAt = (at, config, onClose) => {
+      const a = anchorOf(at);
+      return openMenu(a.el, config, a.temp, onClose);
+    };
+
+    // Blocks in the order the list draws them, the ones not drawn (inside a
+    // folded stack, outside a search) after them in board order.
+    const inRowOrder = (list) => list.slice().sort((a, b) =>
+      (lastPos.get('n:' + a.id) ?? 1e9) - (lastPos.get('n:' + b.id) ?? 1e9));
+
+    // A block as a menu row: the adapter's mark and meta (the block type).
+    const blockItem = (b, onSelect) => Object.assign(
+      { label: b.name || b.id, keywords: b.id }, nodeItem(b) || {},
+      { onSelect: onSelect });
+
+    /* A link's menu. The head names it (from → to, and the input). */
+    const openLinkMenu = (l, at, renaming, onClose) => {
+      const edit = linkEdit(l) || null;
+      const items = [];
+      if (linkInsert) {
+        items.push({
+          label: 'Insert a block here', icon: 'plus',
+          onSelect: () => linkInsert(l)
+        });
+      }
+      // Rename and Move open the next surface at the same place, so the
+      // menu closing on the way does not end the hold on the link: a pick
+      // closes the menu first and runs the row after, so the end of the
+      // hold waits a tick to see whether a row chained on.
+      let chained = false;
+      const chain = (fn) => () => { chained = true; fn(); };
+      if (edit && edit.rename) {
+        items.push({
+          label: 'Rename input',
+          onSelect: chain(() => openLinkMenu(l, at, true, onClose))
+        });
+      } else if (edit && edit.move && edit.move.length) {
+        items.push({
+          label: 'Move to input',
+          onSelect: chain(() => openMoveInput(l, edit.move, at, onClose))
+        });
+      }
+      if (items.length) items.push({ divider: true });
+      items.push({
+        label: 'Remove link', icon: 'trash', danger: true,
+        onSelect: () => emit('link_rm', { ids: [l.id] })
+      });
+      const inp = linkInput(l);
+      const m = openAt(at, {
+        head: { title: linkTitle(l), text: inp ? 'into input ' + inp : undefined },
+        items: items
+      }, () => setTimeout(() => { if (!chained && onClose) onClose(); }, 0));
+      if (renaming && m && edit && edit.rename) {
+        renameField(m, l, edit, chain(() => openLinkMenu(l, at, false, onClose)));
+      }
+      return m;
+    };
+
+    /* Rename input: the row turns into a field in place, the name selected.
+     * Enter commits, Escape restores the row, a click elsewhere commits. An
+     * empty name, or one another input of the block has, is refused in
+     * place: the danger edge and one line under the field. */
+    const renameField = (m, l, edit, restore) => {
+      const row = [...m.el.querySelectorAll('.blockr-menu__item')]
+        .find((r) => r.textContent.trim() === 'Rename input');
+      if (!row) return;
+      const wrap = document.createElement('div');
+      wrap.className = 'md-menu-field';
+      const inp = document.createElement('input');
+      inp.type = 'text';
+      inp.className = 'md-menu-field__input';
+      inp.value = l.input;
+      inp.spellcheck = false;
+      inp.autocomplete = 'off';
+      inp.setAttribute('aria-label', 'Input name');
+      const err = document.createElement('div');
+      err.className = 'md-menu-field__error';
+      err.setAttribute('role', 'alert');
+      err.hidden = true;
+      wrap.appendChild(inp);
+      wrap.appendChild(err);
+      row.replaceWith(wrap);
+      inp.focus({ preventScroll: true });
+      inp.select();
+
+      let done = false;
+      const verdict = () => {
+        const v = inp.value.trim();
+        return v === l.input ? '' : inputNameError(v, edit.taken);
+      };
+      const commit = () => {
+        const v = inp.value.trim();
+        if (v && v !== l.input && !verdict()) emit('link_mod', { id: l.id, input: v });
+      };
+      inp.addEventListener('input', () => {
+        wrap.classList.remove('md-bad');
+        err.hidden = true;
+      });
+      // The menu's own keys (arrows, Enter picks, Space, Escape closes) are
+      // the field's while it has the focus.
+      inp.addEventListener('keydown', (e) => {
+        e.stopPropagation();
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          const bad = verdict();
+          if (bad) {
+            wrap.classList.add('md-bad');
+            err.textContent = bad;
+            err.hidden = false;
+            return;
+          }
+          done = true;
+          commit();
+          m.close();
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          done = true;
+          restore();
+        } else if (e.key === 'Tab') {
+          m.close();
+        }
+      });
+      // a click elsewhere closes the menu, and commits a name that passes
+      const panel = m.el;
+      const obs = new MutationObserver(() => {
+        if (panel.isConnected) return;
+        obs.disconnect();
+        if (!done) { done = true; commit(); }
+      });
+      obs.observe(document.body, { childList: true });
+    };
+
+    /* Move to input: a Select.menu of the target's other free named inputs,
+     * the current one selected. */
+    const openMoveInput = (l, free, at, onClose) => {
+      const B = ui();
+      if (!B || !B.Select || !B.Select.menu) { if (onClose) onClose(); return; }
+      if (closePicker) closePicker();
+      const a = anchorOf(at);
+      const h = B.Select.menu(a.el, {
+        options: [l.input].concat(free.filter((s) => s !== l.input)),
+        selected: l.input,
+        title: 'Move to input',
+        search: false,
+        onChange: (v) => {
+          if (v && v !== l.input) emit('link_mod', { id: l.id, input: v });
+        },
+        onClose: () => {
+          if (a.temp) a.temp.remove();
+          if (closePicker === h.close) closePicker = null;
+          if (onClose) onClose();
+        }
+      });
+      closePicker = h.close;
+    };
+
+    /* A click on a row's dot: the block's connections, inputs then outputs,
+     * each with the input it goes into as meta text. A click on one opens
+     * that link's menu, under the same row. */
     const openConn = (el, railId) => {
       const ins = links.filter((l) => railIdOf(l.to) === railId && railIdOf(l.from) !== railId);
       const outs = links.filter((l) => railIdOf(l.from) === railId && railIdOf(l.to) !== railId);
       const items = [];
-      // A connection row removes that connection: it is the one thing a row
-      // here can do, so the rows carry the bin and turn red under the
-      // pointer, as a destructive row does.
+      const at = atOf(el);
       const section = (title, list, other) => {
         if (!list.length) return;
         items.push({ title: title });
         list.forEach((l) => {
-          const nm = blockOf(other(l));
           items.push({
-            label: nm ? nm.name : other(l),
-            meta: showSlot(l) ? l.input : undefined,
-            icon: 'trash',
-            danger: true,
-            onSelect: () => emit('link_rm', { ids: [l.id] })
+            label: railName(railIdOf(other(l))),
+            meta: linkInput(l) || undefined,
+            onSelect: () => openLinkMenu(l, at)
           });
         });
       };
@@ -2144,15 +2479,95 @@
       if (!items.length) {
         items.push({
           label: 'No connections yet', disabled: true,
-          reason: 'Drag this row\u2019s dot onto another row to connect them'
+          reason: 'Drag this row’s dot onto another row to connect them'
         });
       }
-      const self = blockOf(railId);
-      openMenu(el, {
-        caption: items.length > 1 ? 'Remove a connection' +
-          (self ? ' of ' + self.name : '') : undefined,
+      openAt(at, {
+        caption: 'Connections of ' + railName(railId),
         items: items
       });
+    };
+
+    /* A click on an input marker: the board's blocks that can feed that
+     * input ('' for a new input on a block that takes any number). */
+    const openFeeders = (to, input, at) => {
+      const cands = inRowOrder(feedersFor(blocks, links, to, input, slotsFor));
+      const items = cands.length
+        ? cands.map((b) => blockItem(b, () =>
+          emit('link_add', { from: b.id, to: to.id, input: input })))
+        : [{
+          label: 'No block can feed it', disabled: true,
+          reason: 'Every other block reads from ' + to.name
+        }];
+      openAt(at, {
+        caption: input ? 'Connect a block to ' + input : 'Connect a block',
+        filter: cands.length > 8 ? 'Search blocks on the board' : false,
+        minWidth: 260,
+        items: items
+      });
+    };
+
+    /* "Connect to…" in a row menu: this block's output into another block,
+     * then the input when it has several free. */
+    const connectFrom = (fromId, at) => {
+      const from = blockOf(fromId);
+      if (!from) return;
+      const cands = inRowOrder(targetsFor(blocks, links, from, slotsFor));
+      const pick = (b) => {
+        const free = slotsFor(from, b);
+        if (free.length === 1) {
+          emit('link_add', { from: fromId, to: b.id, input: free[0] });
+          return;
+        }
+        openAt(at, {
+          caption: slotPrompt(from, b),
+          items: free.map((slot) => ({
+            label: slotLabel(slot),
+            onSelect: () => emit('link_add', { from: fromId, to: b.id, input: slot })
+          }))
+        });
+      };
+      openAt(at, {
+        caption: 'Connect ' + from.name + ' to',
+        filter: cands.length > 8 ? 'Search blocks on the board' : false,
+        minWidth: 260,
+        items: cands.length ? cands.map((b) => blockItem(b, () => pick(b)))
+          : [{
+            label: 'No block can take it', disabled: true,
+            reason: 'Every other block has its inputs taken or feeds ' + from.name
+          }]
+      });
+    };
+
+    // The input markers after a row's name: an 8px open circle per free
+    // named input, "∞" for a block that takes any number. Each is a 16px
+    // target; a click lists the blocks that can feed it.
+    const markersEl = (b) => {
+      if (!inputMarkers) return null;
+      const mk = inputMarkers(b);
+      if (!mk || (!(mk.inputs || []).length && !mk.variadic)) return null;
+      const wrap = document.createElement('span');
+      wrap.className = 'md-pips';
+      const one = (input, cls, text, label, lines) => {
+        const p = document.createElement('button');
+        p.type = 'button';
+        p.className = 'md-pip' + (cls ? ' ' + cls : '');
+        if (text) p.textContent = text;
+        p.setAttribute('aria-label', label);
+        tip(p, lines);
+        p.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          openFeeders(b, input, atOf(p));
+        });
+        wrap.appendChild(p);
+      };
+      (mk.inputs || []).forEach((s) => one(s, '', '', s + ': not connected',
+        { name: s, label: 'not connected' }));
+      if (mk.variadic) {
+        one('', 'md-pip--inf', '∞', 'Takes any number of inputs',
+          'Takes any number of inputs');
+      }
+      return wrap;
     };
 
     /* ---- slot picker: which slot the new edge occupies ---- */
@@ -2177,7 +2592,8 @@
      * danger text when the release would be refused.
      */
     let dragTipEl = null;
-    const sayAt = (e, text, bad) => {
+    // `muted`: a second part in text-muted, as a tooltip's meta text
+    const sayAt = (e, text, bad, muted) => {
       if (!dragTipEl) {
         dragTipEl = document.createElement('div');
         dragTipEl.className = 'blockr-tooltip md-droptip';
@@ -2185,6 +2601,12 @@
         document.body.appendChild(dragTipEl);
       }
       dragTipEl.textContent = text;
+      if (muted) {
+        const m = document.createElement('span');
+        m.className = 'blockr-tooltip__meta';
+        m.textContent = muted;
+        dragTipEl.append(' ', m);
+      }
       dragTipEl.classList.toggle('no', !!bad);
       dragTipEl.style.left = (e.clientX + 14) + 'px';
       dragTipEl.style.top = (e.clientY + 16) + 'px';
@@ -2318,7 +2740,6 @@
           dragging = true;
           rootEl.classList.add('md-dragging');
           clearFocus();
-          hideEdgeXNow();
           if (closePicker) closePicker();
           el.classList.add('md-moving');
           deckBox = deckEl.getBoundingClientRect();
@@ -2410,7 +2831,6 @@
       e.preventDefault();
       e.stopPropagation();
       if (closePicker) closePicker();
-      hideEdgeXNow();
       clearFocus();
       const wire = deckEl.querySelector('svg.md-wire');
       const deckBox = deckEl.getBoundingClientRect();
@@ -2483,7 +2903,14 @@
           // why a drop would be refused, said at the pointer
           if (verdict === 'full') sayAt(ev, 'All inputs are taken', true);
           else if (verdict === 'cycle') sayAt(ev, 'That would make a cycle', true);
-          else unsay();
+          else if (verdict === 'ok') {
+            // what the release does: the block it connects to, and the
+            // input when there is one to name
+            const tb = targetBlock(railId, band);
+            const free = tb ? slotsFor(blockOf(sinkOf(railId)), tb) : [];
+            sayAt(ev, 'Connect to ' + (tb ? tb.name : railName(band)), false,
+              free.length === 1 && free[0] !== '' ? 'into ' + free[0] : '');
+          } else unsay();
           if (verdict === 'ok') target = band;
         } else if (!band && moved) {
           unsay();
@@ -2608,6 +3035,16 @@
       // right-click on a row OUTSIDE it has to collapse to that row first, or
       // the menu would speak for rows carrying no mark.
       selection: () => [...selection],
+      // The link gestures a host reaches from its own menus (the board's row
+      // menu): a link's menu, and "Connect to…". `anchor` is the element to
+      // hang the menu under.
+      openLinkMenu: (id, anchor) => {
+        const l = links.find((x) => x.id === id);
+        if (l && anchor) openLinkMenu(l, atOf(anchor));
+      },
+      connectFrom: (id, anchor) => {
+        if (anchor) connectFrom(String(id), atOf(anchor));
+      },
       // Start the inline rename on a row, by block id or `stack:<id>`. The
       // gesture is a double-click on the name; a host adapter with a menu needs
       // to reach the same editor, and putting the caret in the row is the only
@@ -2659,6 +3096,7 @@
   // the same whoever built it.
   return {
     create, LANE_COLORS, escapeHtml, hexA, toolBtn, icon, tip, pointAnchor,
-    rowTops: rowTopsFor, DEFAULT_METRICS
+    rowTops: rowTopsFor, DEFAULT_METRICS,
+    linkReach, feedersFor, targetsFor, inputNameError
   };
 });
