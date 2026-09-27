@@ -429,7 +429,10 @@
   box-shadow: 0 0 0 2px #fff;
   visibility: hidden;
 }
-.outline .md-status.on { visibility: visible; }
+/* `inherit`, not `visible`: dockview hides a tab behind another with
+   `visibility: hidden` on its overlay, and a child set to `visible` shows
+   through that, leaving the dots on top of the tab in front. */
+.outline .md-status.on { visibility: inherit; }
 
 .outline .md-rm,
 .outline .md-chev {
