@@ -805,11 +805,11 @@
           }));
         }
 
-        box.appendChild(menuBtn('Copy', CLIP_KEY + 'C', null, () => {
+        box.appendChild(menuBtn('Copy', Blockr.keys('Mod+C'), null, () => {
           closeMenu();
           document.execCommand('copy');
         }));
-        box.appendChild(menuBtn('Cut', CLIP_KEY + 'X', null, () => {
+        box.appendChild(menuBtn('Cut', Blockr.keys('Mod+X'), null, () => {
           closeMenu();
           document.execCommand('cut');
         }));
@@ -832,8 +832,6 @@
         ));
       }
     };
-
-    const CLIP_KEY = /Mac|iP/.test(navigator.platform || '') ? '⌘' : 'Ctrl+';
 
     // Reads the clipboard the way blockr.dag's Paste entry does. A menu cannot
     // know in advance whether the clipboard holds a subboard (reading it is
@@ -864,7 +862,7 @@
           // where the menu was opened: the gesture had a position, and the
           // picker is about to insert something there
           { label: 'Add a block', onSelect: () => requestAdd(null, at) },
-          { label: 'Paste', meta: CLIP_KEY + 'V', onSelect: pasteFromClipboard }
+          { label: 'Paste', meta: Blockr.keys('Mod+V'), onSelect: pasteFromClipboard }
         ],
         onClose: () => a.remove()
       });
