@@ -1,6 +1,6 @@
 Package: blockr.outline
 Title: Board Outline, Code, Report and Workflow Extensions for 'blockr'
-Version: 0.0.202
+Version: 0.0.203
 Authors@R:
     c(person(given = "Christoph",
              family = "Sax",
@@ -30,7 +30,7 @@ Remotes:
 Imports:
     blockr.core,
     blockr.dock (>= 0.1.4.9005),
-    blockr.ui (>= 0.0.1.9030),
+    blockr.ui (>= 0.0.1.9041),
     shiny,
     htmltools,
     commonmark,
