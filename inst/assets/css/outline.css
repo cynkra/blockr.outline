@@ -8,8 +8,9 @@
    either are mixed here, onto the surface, so they follow the dark scheme.
    The rail's lane colours are data too, and are drawn as SVG attributes.
 
-   Local settings are `--blockr-outline-*`: the row height and gap (set by
-   the renderer from its metrics), and the two data colours above. */
+   Local settings are `--blockr-outline-*`: the row height and a stack
+   band's padding (set by the renderer from its metrics, which also place the
+   rail's dots), and the two data colours above. */
 
 .outline {
   /* The membership column steps on the panel's width, never the viewport's
@@ -308,24 +309,23 @@
 
 .outline .md-deck { position: relative; margin-top: 10px; }
 
-/* Add a block with no parent, under the last row: a quiet button, as "Add
-   condition" under a list of rows -- 26px, 12px weight 500, text-muted with
-   the plus, a hover wash. It sizes to its words; its left margin (the rail's
-   width, which depends on how many lanes the board needs) is set inline by
-   the renderer.
-
-   No `margin-top`: `.md-rows` already ends with one row-gap of trailing space. */
+/* The end of the list (design system, "Block lists"): a quiet button named
+   for what lands in it, 30px, 13px weight 500, text-muted with a 12px plus,
+   8px side padding and the hover wash. Its left margin (the rail's width,
+   which depends on how many lanes the board needs) is set inline by the
+   renderer, 4px in, so the plus sits under the centre of the marks above. */
 .outline .md-addrow {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  height: var(--blockr-control-h-xs);
+  gap: 6px;
+  height: var(--blockr-control-h-sm);
+  margin-top: 6px;
   padding: 0 8px;
   border: none;
-  border-radius: var(--blockr-radius-sm);
+  border-radius: var(--blockr-radius-md);
   background: none;
   font: inherit;
-  font-size: var(--blockr-font-size-xs);
+  font-size: var(--blockr-font-size-sm);
   font-weight: var(--blockr-font-weight-medium);
   color: var(--blockr-color-text-muted);
   white-space: nowrap;
@@ -344,7 +344,9 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.outline .md-addrow-icon svg { width: 14px; height: 14px; }
+.outline .md-addrow-icon svg { width: 12px; height: 12px; }
+/* under the empty state's line, the button starts the list */
+.outline .md-empty + .md-addrow { margin-top: 0; }
 
 .outline .md-deck svg.md-rail {
   position: absolute;
@@ -377,65 +379,83 @@
 .outline .md-rail .md-dot-hit { cursor: crosshair; }
 .outline .md-wire .md-wire-path { stroke: var(--blockr-color-border-accent); }
 
+
 /* --- rows --- */
 
-/* Two steps on the panel's width (`@container md-outline` below): under
-   300px the rows keep their room for the names -- 6px gaps, no count badge
-   on a stack, and a row's tools laid over the end of its name only while it
-   is hovered; from 300px the gaps are 8px and the tools sit in the row. */
+/* The design system's block list row ("Block lists"): 34px, radius 6, 8px
+   between its parts, no space between rows. From the left: the block's 24px
+   mark, the name at 14px text-default on one line, then the row's end. The
+   height is a metric the renderer sets (`--blockr-outline-row-h`), so the
+   rail's dots stay on the row centres. */
 .outline .md-chip,
 .outline .md-stackhead {
-  --blockr-outline-gap: 6px;
+  --blockr-outline-gap: 8px;
   position: relative;
   display: flex;
   align-items: center;
   gap: var(--blockr-outline-gap);
-  height: var(--blockr-outline-row-h, 28px);
+  height: var(--blockr-outline-row-h, 34px);
   box-sizing: border-box;
-  margin-bottom: var(--blockr-outline-row-gap, 9px);
-  padding: 0 6px;
+  padding: 0 4px 0 6px;
   border-radius: var(--blockr-radius-md);
-  transition: opacity var(--blockr-transition),
-    background-color var(--blockr-transition);
-}
-.outline .md-chip {
-  /* Flush at rest, and a plain list row: the hover wash is the only thing
-     that sets a row apart (design system, "Rows": a list of plain rows with
-     a hover fill has no border and no handle; the whole row drags). The
-     stack frame -- a box drawn BEHIND the rows -- stays the one filled thing
-     on screen. */
-  background: transparent;
-  border: 1px solid transparent;
-  cursor: pointer;
+  font-size: var(--blockr-font-size-base);
+  color: var(--blockr-color-text-default);
+  outline: none;
   /* shift-clicking a range would otherwise drag a text highlight across
-     every row it passed; a row is chrome, not prose. The rename control is
+     every row it passed; a row is chrome, not prose. The rename field is
      the exception -- there the text IS the point. */
   user-select: none;
+  transition: opacity var(--blockr-transition),
+    background-color var(--blockr-transition),
+    box-shadow var(--blockr-transition);
 }
-.outline .md-chip:hover { background: var(--blockr-color-bg-hover); }
+.outline .md-chip { cursor: pointer; }
+/* The whole row drags (into a stack, or out of one), so it has the grab
+   cursor wherever there is a stack to drop it on. */
+.outline.md-can-drag .md-rows .md-chip:not(.md-stackchip) { cursor: grab; }
 .outline .md-chip input,
-.outline .md-chip [contenteditable="true"] { user-select: text; }
+.outline .md-chip [contenteditable="true"],
+.outline .md-stackhead [contenteditable="true"] { user-select: text; }
 .outline .md-chip.dim,
 .outline .md-stackhead.dim { opacity: 0.25; }
 
+/* Hover and keyboard focus (the same look): the hover wash. A stack's own
+   row is the exception: the band behind it answers instead (see stacks). */
+.outline .md-chip:hover,
+.outline .md-chip:focus-visible,
+.outline .md-chip.md-menu-open { background: var(--blockr-color-bg-hover); }
+
 /* Muted text and icons never sit on a hover or selected fill: on a hovered
-   row they turn default, on a selected one text-accent with the rest of the
-   row. */
+   row they turn default, on the current one text-accent with the rest of
+   the row. */
 .outline .md-chip:hover .md-tool,
-.outline .md-stackhead:hover .md-tool:not(.active) {
+.outline .md-stackhead:hover .md-tool:not(.active),
+.outline .md-stackchip:hover .md-tool {
   color: var(--blockr-color-text-default);
 }
 
-/* The selected row: bg-selected, its text in text-accent, no edge. Hovering
-   keeps the look. */
-.outline .md-chip.sel,
-.outline .md-chip.sel:hover {
+/* The current row, the block open in the dock: bg-selected, its text in
+   text-accent. Hovering keeps the look. */
+.outline .md-chip.md-current,
+.outline .md-chip.md-current:hover,
+.outline .md-chip.md-current:focus-visible {
   background: var(--blockr-color-bg-selected);
 }
-.outline .md-chip.sel .md-name,
-.outline .md-chip.sel .md-tool,
-.outline .md-chip.sel .md-pip-inf {
+.outline .md-chip.md-current .md-name,
+.outline .md-chip.md-current .md-count,
+.outline .md-chip.md-current .md-views,
+.outline .md-chip.md-current .md-vmore,
+.outline .md-chip.md-current .md-tool {
   color: var(--blockr-color-text-accent);
+}
+/* A selection of two or more rows (ctrl- or shift-click, a whole stack),
+   which "Stack them" and the clipboard act on: the same fill, the text left
+   as it is. One selected row is the row just clicked and has no look of its
+   own; the dock shows it, and it is the current row. */
+.outline .md-deck.md-multi .md-chip.sel,
+.outline .md-deck.md-multi .md-chip.sel:hover,
+.outline .md-deck.md-multi .md-stackhead.sel {
+  background: var(--blockr-color-bg-selected);
 }
 
 /* While a search is on. The list is NARROWED, not dimmed -- what is here is
@@ -462,15 +482,18 @@
 .outline .md-deck.md-focused .md-edge { opacity: 0.1; }
 .outline .md-deck.md-focused .md-edge.md-rel { opacity: 1; }
 
-/* A drop target while a dot is dragged: the accent tint on the row that
-   would take the link, a danger edge on one that would refuse it (the tip
-   at the pointer says why). */
+/* A drop target while a dot is dragged: the accent tint and edge on the row
+   that would take the link, a danger edge on one that would refuse it (the
+   tip at the pointer says why). The edge is drawn inside the row, so the row
+   keeps its size. */
 .outline .md-chip.drop-ok,
 .outline .md-chip.drop-ok:hover {
-  border-color: var(--blockr-color-border-accent);
   background: var(--blockr-color-bg-accent-subtle-hover);
+  box-shadow: inset 0 0 0 1px var(--blockr-color-border-accent);
 }
-.outline .md-chip.drop-no { border-color: var(--blockr-color-border-danger-subtle); }
+.outline .md-chip.drop-no {
+  box-shadow: inset 0 0 0 1px var(--blockr-color-border-danger-subtle);
+}
 
 /* The right end of a row: its tools, then what keeps the right edge (the
    views, a stack's chevron). */
@@ -480,154 +503,90 @@
   align-items: center;
   gap: var(--blockr-outline-gap);
   flex: 0 10 auto;
-  min-width: 0;
+  /* what shrinks in here is the meta text; a tool or the chevron never
+     does, so the end is never narrower than they are. The meta text never
+     takes more than 45% of the row from the name. */
+  min-width: min-content;
+  max-width: 45%;
 }
-.outline .md-end:empty { display: none; }
+.outline .md-end .md-tool {
+  flex-basis: 24px;
+  width: 24px;
+  height: 24px;
+}
+/* The fold's chevron is a 12px glyph at the end of the row, not a tool: its
+   hit area is the row's height and only as wide as it needs. */
+.outline .md-end .md-chev {
+  flex-basis: 16px;
+  width: 16px;
+}
+/* While a row or a dot is dragged, the rows do not answer the pointer:
+   the drag reads positions, and a hover wash or a tooltip on each row it
+   passes would say something the drag does not mean. */
+.outline.md-dragging .md-rows { pointer-events: none; }
 
-/* A row's tools (append, remove, a stack's focus). On a narrow panel they
-   take no space: they lie over the end of the name while the row is hovered
-   or has keyboard focus, painted in the colour the row shows there (the
-   hover wash, or the selection, over what is under the row: the surface or
-   a stack frame's fill). */
-.outline {
-  --blockr-outline-under: var(--blockr-color-bg-surface);
-}
-.outline .md-chip.instack,
-.outline .md-stackhead {
-  --blockr-outline-under: var(--blockr-color-bg-subtle);
-}
-.outline .md-chip.instack.md-tinted,
-.outline .md-stackhead.md-tinted {
-  --blockr-outline-under: color-mix(in srgb, var(--blockr-outline-stack) 6%, var(--blockr-color-bg-surface));
-}
+/* A row's tools. With a row menu (the board) there is ONE, the "…", and it
+   appears on hover, on keyboard focus and while its menu is open; at rest it
+   takes no space, and when it shows it takes the place of the meta text, in
+   the row, so it never covers the name. */
 .outline .md-rowtools {
   display: none;
   align-items: center;
   gap: 2px;
-  position: absolute;
-  right: 100%;
-  top: 50%;
-  transform: translateY(-50%);
-  padding-left: 4px;
-  background: var(--blockr-outline-under);
 }
-.outline .md-chip .md-rowtools {
-  background: linear-gradient(var(--blockr-color-bg-hover), var(--blockr-color-bg-hover)),
-    var(--blockr-outline-under);
+.outline.md-rowmenu :is(.md-chip, .md-stackhead):is(:hover, :focus-visible, :has(:focus-visible), .md-menu-open) > .md-end > .md-rowtools {
+  display: flex;
 }
-.outline .md-chip.sel .md-rowtools {
-  background: linear-gradient(var(--blockr-color-bg-selected), var(--blockr-color-bg-selected)),
-    var(--blockr-outline-under);
+.outline.md-rowmenu :is(.md-chip, .md-stackhead):is(:hover, :focus-visible, :has(:focus-visible), .md-menu-open) > .md-end > .md-views,
+.outline.md-rowmenu :is(.md-stackhead, .md-stackchip):is(:hover, :focus-visible, :has(:focus-visible), .md-menu-open) > .md-count {
+  display: none;
 }
-.outline .md-chip:hover .md-rowtools,
-.outline .md-chip:focus-within .md-rowtools,
-.outline .md-chip.md-menu-open .md-rowtools,
-.outline .md-stackhead:hover .md-rowtools,
-.outline .md-stackhead:focus-within .md-rowtools,
-.outline .md-stackhead.md-menu-open .md-rowtools { display: flex; }
+/* A host without one (blockr.process): the tools stay in the row, and the
+   ones marked `md-reveal` (remove) appear on hover or keyboard focus. */
+.outline:not(.md-rowmenu) .md-rowtools { display: flex; }
+.outline:not(.md-rowmenu) .md-rowtools > .md-reveal { display: none; }
+.outline:not(.md-rowmenu) :is(.md-chip, .md-stackhead):is(:hover, :focus-within) .md-rowtools > .md-reveal {
+  display: inline-flex;
+}
 .outline .md-rowtools:empty,
 .outline .md-renaming .md-rowtools { display: none !important; }
 .outline .md-rm:hover { color: var(--blockr-color-text-danger); }
-/* A host with a row menu (the board): on a narrow panel its "…" is the one
-   tool, and the menu carries the rest. Elsewhere the "…" does not show. */
-.outline .md-rowtools > .md-narrow { display: none; }
-.outline.md-rowmenu .md-rowtools > * { display: none; }
-.outline.md-rowmenu .md-rowtools > .md-narrow { display: inline-flex; }
 
-/* A stack's count gives way to its name on a narrow panel. */
-.outline .md-stackhead .md-badge,
-.outline .md-stackchip .md-badge { display: none; }
-
-@container md-outline (min-width: 300px) {
-  .outline .md-chip,
-  .outline .md-stackhead { --blockr-outline-gap: 8px; }
-  .outline .md-stackhead .md-badge,
-  .outline .md-stackchip .md-badge { display: inline-flex; }
-  /* in the row, in flow: the ones marked `md-reveal` (append, remove)
-     appear on hover or keyboard focus, the rest (a stack's focus) stay */
-  .outline .md-rowtools {
-    display: flex;
-    position: static;
-    transform: none;
-    padding: 0;
-    background: none;
-  }
-  .outline .md-chip .md-rowtools,
-  .outline .md-chip.sel .md-rowtools { background: none; }
-  .outline .md-rowtools > *,
-  .outline.md-rowmenu .md-rowtools > * { display: inline-flex; }
-  .outline .md-rowtools > .md-narrow,
-  .outline.md-rowmenu .md-rowtools > .md-narrow,
-  .outline .md-rowtools > .md-reveal,
-  .outline.md-rowmenu .md-rowtools > .md-reveal { display: none; }
-  .outline .md-chip:hover .md-rowtools > .md-reveal,
-  .outline .md-chip:focus-within .md-rowtools > .md-reveal,
-  .outline .md-stackhead:hover .md-rowtools > .md-reveal,
-  .outline .md-stackhead:focus-within .md-rowtools > .md-reveal { display: inline-flex; }
-}
-
-/* A block's mark in a row: its glyph in the category colour on an 18% tint
-   of it, 20px with a 12px glyph (the size of the compact dock header's). A
-   block with no colour takes text-muted. */
+/* A block's mark: its glyph in the category colour on an 18% tint of it,
+   24px, radius 6, a 14px glyph. A block with no colour takes text-muted. */
 .outline .md-kind,
 .outline .md-cap {
-  flex: 0 0 20px;
-  width: 20px;
-  height: 20px;
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
   display: grid;
   place-items: center;
   box-sizing: border-box;
-  border-radius: var(--blockr-radius-sm);
+  border-radius: var(--blockr-radius-md);
   color: var(--blockr-outline-mark, var(--blockr-color-text-muted));
   background: color-mix(in srgb,
     var(--blockr-outline-mark, var(--blockr-color-text-muted)) 18%,
     var(--blockr-color-bg-surface));
-  font-size: 11px;
+  font-size: var(--blockr-font-size-xs);
   font-weight: var(--blockr-font-weight-semibold);
   line-height: 1;
   overflow: hidden;
 }
 .outline .md-kind img,
 .outline .md-kind svg,
-.outline .md-cap svg { width: 12px; height: 12px; display: block; }
+.outline .md-cap svg { width: 14px; height: 14px; display: block; }
+/* a catalogue icon sizes itself at 1em inline, so the em is set here */
+.outline .md-kind svg { font-size: 14px; }
 
-/* Input slots: an open circle per free named slot, drawn as a small mark in
-   text-muted; the variadic "unlimited" as a muted glyph. */
-.outline .md-ports {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 3px;
-}
-.outline .md-pip {
-  width: 7px;
-  height: 7px;
-  border-radius: var(--blockr-radius-pill);
-  border: 1.5px solid var(--blockr-color-text-muted);
-  background: var(--blockr-color-bg-surface);
-  box-sizing: border-box;
-}
-.outline .md-pip.filled {
-  border-color: var(--blockr-color-border-accent);
-  background: var(--blockr-color-bg-accent);
-}
-.outline .md-pip-inf {
-  width: auto;
-  height: auto;
-  border: none;
-  background: none;
-  font-size: 11px;
-  line-height: 1;
-  color: var(--blockr-color-text-muted);
-  font-weight: var(--blockr-font-weight-semibold);
-}
-
-/* The name. It gives way last: the membership column shrinks before it, and
-   a name cut off carries its whole text as a tooltip. */
+/* The name: 14px, one line, cut with an ellipsis; a name cut off carries its
+   whole text in the tooltip. It gives way last: the meta text shrinks
+   before it. */
 .outline .md-name {
   flex: 0 1 auto;
-  min-width: 0;
-  font-size: var(--blockr-font-size-sm);
+  /* enough for a letter and the ellipsis: a name never shrinks to nothing */
+  min-width: 32px;
+  font-size: var(--blockr-font-size-base);
+  color: var(--blockr-color-text-default);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -678,14 +637,14 @@
    would otherwise cost when there is none. */
 .outline .md-spring {
   flex: 1 1 auto;
-  margin-right: calc(-1 * var(--blockr-outline-gap, 6px));
+  margin-right: calc(-1 * var(--blockr-outline-gap, 8px));
 }
 
 /* Row status (see chip() in outline-rail.js): the design system's block
    status, an 8px dot with a 2px surface ring ON the block's mark, at its top
    right corner as in the dock header; its fill is blockr.dock's status
    colour. On the mark it costs the name no width, and a block going amber
-   mid-evaluation moves nothing. The mark is the row's first 20px, 6px in. */
+   mid-evaluation moves nothing. The mark is the row's first 24px, 6px in. */
 .outline .md-status {
   flex: 0 0 8px;
   width: 8px;
@@ -696,8 +655,8 @@
 }
 .outline .md-chip > .md-status {
   position: absolute;
-  left: 20px;
-  top: calc(50% - 12px);
+  left: 25px;
+  top: calc(50% - 15px);
   z-index: 1;
 }
 .outline .md-status.on { visibility: visible; }
@@ -707,54 +666,69 @@
 
 /* --- stacks --- */
 
-.outline .md-stackhead { padding-left: 4px; }
-.outline .md-stackhead .md-name {
-  font-weight: var(--blockr-font-weight-semibold);
-  color: var(--blockr-color-text-default);
-}
-
-/* The frame IS the stack, so it is what carries the selection -- the accent
-   edge, drawn around the group. The frame's edge and its faint fill are the
-   stack's own colour where it has one. */
+/* A stack is a tinted band (design system, "Block lists"): no border, the
+   stack's colour at 7% on the surface, radius 8, 2px padding around its
+   header and members. Its colour is data and comes in as
+   `--blockr-outline-stack`; a stack without one takes text-muted. */
 .outline .md-stackframe {
-  position: absolute;
-  z-index: 1;
-  border: 1px solid var(--blockr-color-border-default);
-  background: var(--blockr-color-bg-subtle);
+  --blockr-outline-stack: var(--blockr-color-text-muted);
+  display: flex;
+  flex-direction: column;
+  padding: var(--blockr-outline-stack-pad, 2px);
   border-radius: var(--blockr-radius-lg);
-  pointer-events: none;
+  background: color-mix(in srgb, var(--blockr-outline-stack) 7%,
+    var(--blockr-color-bg-surface));
+  transition: background-color var(--blockr-transition),
+    box-shadow var(--blockr-transition);
 }
-.outline .md-stackframe.md-tinted {
-  border-color: var(--blockr-outline-stack);
-  background: color-mix(in srgb, var(--blockr-outline-stack) 6%, var(--blockr-color-bg-surface));
-}
-.outline .md-stackframe.sel {
-  border-color: var(--blockr-color-border-accent);
-  box-shadow: 0 0 0 1px var(--blockr-color-border-accent);
-}
-
-/* Dropping a row into a group, or taking it out of the one it is in. The
-   frame answers, not the row: a group gaining a member is a change to the
-   group, and the pointer is over the frame when it happens. */
+/* The pointer (or the keyboard) on the header deepens the whole band to 14%:
+   a click, a rename or the "…" on the header acts on the stack. A row
+   dragged over the band to join it does the same. */
+.outline .md-stackframe:has(> :is(.md-stackhead, .md-stackchip):is(:hover, :focus-visible, .md-menu-open)),
+.outline .md-stackframe:has(> :is(.md-stackhead, .md-stackchip) :focus-visible),
 .outline .md-stackframe.drop-ok {
-  border-color: var(--blockr-color-border-accent);
-  border-style: dashed;
-  background: var(--blockr-color-bg-accent-subtle);
+  background: color-mix(in srgb, var(--blockr-outline-stack) 14%,
+    var(--blockr-color-bg-surface));
+}
+.outline .md-stackframe > .md-stackchip:not(.md-current):is(:hover, :focus-visible, .md-menu-open) {
+  background: transparent;
 }
 .outline .md-stackframe.drop-no {
-  border-color: var(--blockr-color-border-danger);
-  border-style: dashed;
+  box-shadow: inset 0 0 0 1px var(--blockr-color-border-danger);
 }
-.outline .md-stackframe.drop-out {
-  border-style: dashed;
-  opacity: 0.6;
+
+/* The header is a row: the stack's 24px mark in the stack colour, the name
+   at weight 600, the member count in 13px text-muted, the fold chevron at
+   the end. A folded stack is the same row, alone in its band. */
+.outline .md-stackhead { cursor: pointer; }
+.outline .md-stackhead .md-name,
+.outline .md-stackchip .md-name {
+  font-weight: var(--blockr-font-weight-semibold);
 }
+.outline .md-count {
+  flex: none;
+  font-size: var(--blockr-font-size-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--blockr-color-text-muted);
+}
+
 /* The row being moved stays where it is (it has no position of its own to
-   drag) and says so by receding: the tip at the pointer carries the news. */
+   drag) and says so by receding: the line and the tip carry the news. */
 .outline .md-chip.md-moving {
   opacity: 0.45;
   cursor: grabbing;
 }
+/* Where a dragged row will land: a 2px border-accent line, placed by the
+   renderer on the boundary the row will come to. */
+.outline .md-dropline {
+  position: absolute;
+  z-index: 9;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--blockr-color-border-accent);
+  pointer-events: none;
+}
+.outline .md-dropline[hidden] { display: none; }
 
 /* What a drag will do, at the pointer: the design system's light tooltip
    card (`.blockr-tooltip`, fixed to the viewport), in the danger text when
@@ -770,7 +744,7 @@
   align-items: center;
   gap: 4px;
   flex: 0 0 auto;
-  height: var(--blockr-control-h-xs);
+  height: 24px;
   box-sizing: border-box;
   padding: 0 8px;
   border: 1px solid var(--blockr-color-border-warning-subtle);
@@ -787,17 +761,6 @@
 .outline .md-warn:hover { border-color: var(--blockr-color-border-warning); }
 .outline .md-warn svg { width: 14px; height: 14px; flex: none; }
 
-/* A collapsed stack: one row, filled as the frame is, so it still reads as
-   a group. */
-.outline .md-chip.md-stackchip {
-  background: var(--blockr-color-bg-subtle);
-  border-color: var(--blockr-color-border-default);
-}
-.outline .md-chip.md-stackchip:hover { background: var(--blockr-color-bg-hover); }
-.outline .md-chip.md-stackchip .md-name {
-  font-weight: var(--blockr-font-weight-semibold);
-  color: var(--blockr-color-text-default);
-}
 
 /* --- the kind picker a host builds itself (blockr.process) ---
    Drawn as the design system's menu: bg-raised, the border, radius 10,
@@ -975,93 +938,64 @@
 }
 
 /* --- views: which views a row is shown on --------------------------------
-   Past the spring and ordered last, so it reads as a column down the
-   outline. A column is worth its width only on a panel wide enough to keep
-   the names readable beside it; below that the row menu is where membership
-   is read and changed, and the names get the room. It is never drawn on a
-   board with one view (outline.js). */
+   Meta text at the row's end (design system, "Block lists"): 13px
+   text-muted, the first view, then "+N" in text-accent. Only on a panel
+   wide enough to keep the names readable beside it (360px); below that the
+   row menu is where membership is read and changed, and the names get the
+   room. It is never drawn on a board with one view (outline.js). It gives
+   way to the "…" on hover (see the row's tools). */
 
 .outline .md-views {
   display: none;
-  align-items: center;
+  align-items: baseline;
   gap: 4px;
   flex: 0 10 auto;
   min-width: 0;
   margin-left: auto;
   padding-left: 8px;
+  font-size: var(--blockr-font-size-sm);
+  line-height: 1.4;
+  color: var(--blockr-color-text-muted);
+  white-space: nowrap;
   overflow: hidden;
 }
 @container md-outline (min-width: 360px) {
   .outline .md-views { display: flex; }
 }
-/* A view is a tag (design system, "Tags"): 24px, radius 4, the border,
-   bg-surface, 13px text-default, 8px padding. Clicking it drops the row from
-   that view; its x shows on the tag under the pointer, with its space kept,
-   and turns red on its own hover. */
-.outline .md-vtag {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  flex: 0 1 auto;
-  min-width: 0;
-  height: 24px;
-  box-sizing: border-box;
-  padding: 0 8px;
-  border: 1px solid var(--blockr-color-border-default);
-  border-radius: var(--blockr-radius-sm);
-  background: var(--blockr-color-bg-surface);
-  color: var(--blockr-color-text-default);
-  font: inherit;
-  font-size: var(--blockr-font-size-sm);
-  line-height: 1;
-  white-space: nowrap;
-}
-.outline .md-vtag-label {
+.outline .md-vname {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.outline .md-vdrop { padding-right: 4px; cursor: pointer; }
-.outline .md-vdrop:hover { border-color: var(--blockr-color-border-strong); }
-.outline .md-vx {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  width: 14px;
-  height: 14px;
-  color: var(--blockr-color-text-muted);
-  visibility: hidden;
-}
-.outline .md-vx svg { width: 10px; height: 10px; }
-.outline .md-vdrop:hover .md-vx,
-.outline .md-vdrop:focus-visible .md-vx { visibility: visible; }
-.outline .md-vx:hover { color: var(--blockr-color-text-danger); }
-/* "+N": the views one tag leaves out, in tag geometry and the accent tint.
-   A click opens the row menu, whose checklist lists them all. */
+/* "+N": the views the first one leaves out. A click opens the row menu,
+   whose checklist lists them all. */
 .outline .md-vmore {
   flex: none;
-  color: var(--blockr-color-text-accent);
-  background: var(--blockr-color-bg-accent-subtle);
-  border-color: var(--blockr-color-border-accent-subtle);
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  line-height: inherit;
   font-weight: var(--blockr-font-weight-medium);
+  color: var(--blockr-color-text-accent);
   cursor: pointer;
 }
-.outline .md-vmore:hover {
-  background: var(--blockr-color-bg-accent-subtle-hover);
-  border-color: var(--blockr-color-border-accent);
+.outline .md-vmore:focus-visible {
+  outline: var(--blockr-focus-outline);
+  outline-offset: var(--blockr-focus-offset);
 }
 
 /* --- the extensions group ---------------------------------------------------
    Extensions as rows, after the flow, under a section title: 24px of space
-   and the title, no rule. A round mark, where a block's is square: the one
-   thing that says "not a block" without a word spent on it. */
+   and the title, no rule. The same row as a block's, with a round mark where
+   a block's is square: the one thing that says "not a block" without a word
+   spent on it. */
 .outline .md-exts { margin-top: 24px; }
 .outline .md-extshead {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 0 6px 10px;
+  padding: 0 6px 8px;
   font-size: var(--blockr-font-size-xs);
   font-weight: var(--blockr-font-weight-semibold);
   text-transform: uppercase;
@@ -1076,6 +1010,7 @@
 }
 .outline .md-ext .md-extkind { border-radius: var(--blockr-radius-pill); }
 .outline .md-ext.md-self { cursor: default; }
+
 
 /* --- the row menu ------------------------------------------------------
    Drawn by blockr.ui's menu classes (`.blockr-menu`, `.blockr-menu__item`,

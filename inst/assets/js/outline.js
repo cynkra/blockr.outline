@@ -47,6 +47,7 @@
       if (!el) return null;
       inst = createInstance(el);
       registry.set(elId, inst);
+      if (currentBlock) inst.setCurrent(currentBlock);
       // Announce a mount that happens after the socket is up. The server
       // skips a push whose model equals the last one it sent, so a panel
       // remounted mid-session has to ask, or it stays empty until the next
@@ -92,6 +93,23 @@
       if (inst) inst.setClipboard(msg.json);
     });
   }
+
+  /* The current row is the block open in the dock (design system, "Block
+   * lists"). dockViewR fires a bubbling `dockview:active-panel` event on its
+   * dock with the panel id, and a block's panel id is `block_panel-<id>`.
+   * Other panels (the outline itself, the report) leave the current block as
+   * it was, so a click in them does not unmark the block the dock shows. The
+   * event reports changes only, so this is bound when the file loads, before
+   * the dock's first activation, and an outline mounted later is handed the
+   * block from here. */
+  const PANEL_PREFIX = 'block_panel-';
+  let currentBlock = null;
+  document.addEventListener('dockview:active-panel', (e) => {
+    const id = e.detail && e.detail.id;
+    if (typeof id !== 'string' || id.indexOf(PANEL_PREFIX) !== 0) return;
+    currentBlock = id.slice(PANEL_PREFIX.length);
+    registry.forEach((inst) => inst.setCurrent(currentBlock));
+  });
 
   // test/inspection hook
   window._outline = (elId) => {
@@ -180,45 +198,6 @@
       return k;
     };
 
-    // input-slot pips: an open circle per FREE named slot, an ∞ pip for
-    // variadic blocks; data blocks (no inputs) show nothing.
-    //
-    // A pip only when it has news. A SATISFIED slot draws nothing: the rail
-    // already draws what feeds it and the connections popover has the detail,
-    // so a filled pip only restated the icon's colour on every row of a board
-    // of one-input transforms -- and did it in the position the eye reads as
-    // status. A free slot is the news ("this block still wants an input"), and
-    // it is legible at rest, which it never was before.
-    const portsStrip = (b) => {
-      const wrap = document.createElement('span');
-      wrap.className = 'md-ports';
-      const occ = new Map();
-      linksInto(b.id).forEach((l) => occ.set(l.input, l.from));
-      (b.inputs || []).forEach((slot) => {
-        if (occ.has(slot)) return;
-        const pip = document.createElement('span');
-        pip.className = 'md-pip';
-        pip.setAttribute('role', 'img');
-        pip.setAttribute('aria-label', slot + ', free');
-        wrap.appendChild(pip);
-      });
-      if (b.variadic) {
-        const n = linksInto(b.id).filter((l) =>
-          !(b.inputs || []).includes(l.input)).length;
-        // A variadic block never fills up, so the ∞ stays: it says "more may
-        // land here", which the absence of a pip could not. Untinted now --
-        // the block-coloured version competed with the status dot beside it.
-        const pip = document.createElement('span');
-        pip.className = 'md-pip md-pip-inf';
-        pip.textContent = '∞';
-        pip.setAttribute('role', 'img');
-        pip.setAttribute('aria-label',
-          n ? n + ' inputs, unlimited' : 'unlimited inputs');
-        wrap.appendChild(pip);
-      }
-      return wrap;
-    };
-
     const rail = outlineRail.create(rootEl, {
       // Renderer options go under `opts`; the rest of this object is the adapter
       // contract (emit, nodeLead, ...).
@@ -260,19 +239,11 @@
         push(name, payload);
       },
 
-      // a fragment, so icon and pips stay DIRECT children of the row: the
-      // chip is a flex line and a wrapper span would collapse them into one
-      // item with its own gap
-      nodeLead: (b) => {
-        const lead = document.createDocumentFragment();
-        lead.appendChild(kindIcon(b));
-        // only when it has pips in it: an empty strip still costs the row's
-        // 7px flex gap, which would push every fully-wired row's status dot
-        // and name off the alignment the unwired ones keep
-        const ports = portsStrip(b);
-        if (ports.childElementCount) lead.appendChild(ports);
-        return lead;
-      },
+      // The row is the design system's block list row: the mark, the name,
+      // the row's end. The free-slot pips that used to follow the mark are
+      // not part of it; a block's inputs are on the rail and in the
+      // connections menu of its dot.
+      nodeLead: (b) => kindIcon(b),
 
       // a board constrains the CONSUMER: the edge occupies one of `to`'s
       // free input slots, and an empty answer is what refuses the drop
@@ -283,24 +254,10 @@
       showSlot: (l) => l.input !== '' &&
         ((blockOf(l.to) || {}).inputs || []).includes(l.input),
 
-      // The row's tools, shown on hover: its `+` (append after it) beside
-      // the renderer's remove, and on a narrow panel, in their place, one
-      // "…" that opens the row menu, which carries them all -- two tools
-      // there would take the width the name needs.
-      nodeTools: (b) => {
-        const frag = document.createDocumentFragment();
-        frag.appendChild(moreBtn(() => ({ ids: [b.id], kind: 'blocks' })));
-        if (registry.append.length) {
-          const plus = toolBtn('md-rowadd md-reveal', ui.icon('plus'),
-            'Append a block');
-          plus.addEventListener('click', (ev) => {
-            ev.stopPropagation();
-            openPicker(b.id, ev.currentTarget.closest('.md-chip'), null);
-          });
-          frag.appendChild(plus);
-        }
-        return frag;
-      },
+      // The row's one tool, shown on hover or keyboard focus: the "…" that
+      // opens the row menu, which carries every action of the row (Append
+      // a block, Rename, ..., Remove last).
+      nodeTools: (b) => moreBtn(() => ({ ids: [b.id], kind: 'blocks' })),
       stackTools: (stack) => moreBtn(() => ({ stack: stack.id })),
 
       // Past the spring: the views the row is on.
@@ -360,54 +317,18 @@
       const whole = ids.length && views.every((v) =>
         ids.every((id) => memberIds(v, kind).includes(id)));
 
-      // A view's tag IS the button that takes the row off that view. Clicking a
-      // row already adds it to the current view (`outline_reveal_delta()` adds
-      // when the view does not hold it), so the current view's tag completes a
-      // pair whose undo is the gesture you just used -- and every other view's
-      // tag does the same thing to the view it names, because a tag that means
-      // "shown here" should mean the same wherever it points.
-      //
-      // The whole tag is the target; its x, shown on the tag under the
-      // pointer, is the mark saying so. Tags are neutral: the current view
-      // is told apart by coming first.
-      const dropTag = (t, view) => {
-        t.classList.add('md-vdrop');
-        t.setAttribute('role', 'button');
-        t.tabIndex = 0;
-        t.setAttribute('aria-label', t.textContent + ': drop it from ' +
-          view.name);
-        const x = el('md-vx');
-        x.innerHTML = ui.icon('remove');
-        t.appendChild(x);
-        const drop = (ev) => {
-          ev.stopPropagation();          // not a reveal
-          push('membership', {
-            blocks: kind === 'blocks' ? ids : [],
-            extensions: kind === 'extensions' ? ids : [],
-            mode: 'rm', view: view.id
-          });
-        };
-        t.addEventListener('click', drop);
-        t.addEventListener('keydown', (ev) => {
-          if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); drop(ev); }
-        });
-        return t;
-      };
-
-      const tagEl = (text) => {
-        const t = el('md-vtag');
-        const lbl = el('md-vtag-label');
-        lbl.textContent = text;
-        t.appendChild(lbl);
-        ui.tip(lbl, text, { overflow: true });
+      // Meta text (design system, "Block lists"): 13px text-muted, state the
+      // reader needs without opening anything. It is not a control; the row
+      // menu is where membership is written.
+      const textEl = (text) => {
+        const t = el('md-vname');
+        t.textContent = text;
+        ui.tip(t, text, { overflow: true });
         return t;
       };
 
       if (whole) {
-        // "all views" names no single view, so it drops from the one you are on:
-        // the only view whose panel you can watch go.
-        const t = tagEl('all views');
-        wrap.appendChild(cur ? dropTag(t, cur) : t);
+        wrap.appendChild(textEl('all views'));
         return wrap;
       }
 
@@ -426,14 +347,13 @@
       const first = onCur ? cur : mine[0];
       const others = onCur ? rest : mine.slice(1);
 
-      wrap.appendChild(dropTag(tagEl(first.name), first));
+      wrap.appendChild(textEl(first.name));
 
-      // The "+N" overflow stands in for the views one tag leaves out: tag
-      // geometry in the accent tint, the hidden views in its tooltip, one per
-      // line, and a click opens the row menu, whose checklist is the full
-      // surface for them.
+      // "+N" in text-accent stands in for the views the first one leaves out:
+      // the hidden views in its tooltip, one per line, and a click opens the
+      // row menu, whose checklist is the full surface for them.
       if (others.length) {
-        const more = el('md-vtag md-vmore', 'button');
+        const more = el('md-vmore', 'button');
         more.type = 'button';
         more.textContent = '+' + others.length;
         more.setAttribute('aria-label', 'Also on ' +
@@ -477,8 +397,31 @@
 
       row.appendChild(el('md-spring'));
 
+      // The row's end, as on a block row: the views as meta text at rest,
+      // the "…" on hover or keyboard focus. The menu is about views only, so
+      // it is there only where there is a second view.
+      const end = el('md-end');
+      const tools = el('md-rowtools');
+      if (views.length >= 2) {
+        const more = toolBtn('md-more', MORE_ICON, 'Actions');
+        more.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          openRowMenuFor(more, [t.id], 'extensions');
+        });
+        tools.appendChild(more);
+      }
+      end.appendChild(tools);
       const mem = membershipEl([t.id], 'extensions');
-      if (mem) row.appendChild(mem);
+      if (mem) end.appendChild(mem);
+      row.appendChild(end);
+
+      row.tabIndex = 0;
+      row.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter' && ev.target === row) {
+          ev.preventDefault();
+          row.click();
+        }
+      });
 
       // Same gesture as a block row, and the same answer: show it HERE. An
       // extension on no view has no other way back onto a page, and one on
@@ -749,7 +692,7 @@
             closeMenu();
             rail.editName(id);
           }));
-          // the row's `+`, for a panel too narrow to show it
+          // appending after this row: the rail's drag does the same
           if (registry.append.length) {
             box.appendChild(menuBtn('Append a block', '', null, () => {
               closeMenu();
@@ -763,11 +706,16 @@
             closeMenu();
             rail.editName('stack:' + sid);
           }));
-          // the header's focus and dissolve tools, likewise
+          // the stack's focus and dissolve, which have no tool on the row
           if (rail.stackFocus() !== sid) {
             box.appendChild(menuBtn('Show only this group', '', null, () => {
               closeMenu();
               rail.focusStack(sid);
+            }));
+          } else {
+            box.appendChild(menuBtn('Show the whole board', '', null, () => {
+              closeMenu();
+              rail.focusStack(null);
             }));
           }
           box.appendChild(menuBtn('Dissolve group', '', null, () => {
@@ -904,13 +852,13 @@
       openMenu(blockSpec(ids), anchor);
     };
 
-    // "…": the row menu from a tool, for a narrow panel (`md-narrow`).
+    // "…": the row's one tool, which opens its menu.
     const MORE_ICON = '<svg width="14" height="14" viewBox="0 0 16 16" ' +
       'fill="currentColor"><circle cx="3.5" cy="8" r="1.25"></circle>' +
       '<circle cx="8" cy="8" r="1.25"></circle>' +
       '<circle cx="12.5" cy="8" r="1.25"></circle></svg>';
     const moreBtn = (what) => {
-      const b = toolBtn('md-more md-narrow', MORE_ICON, 'Actions');
+      const b = toolBtn('md-more', MORE_ICON, 'Actions');
       b.addEventListener('click', (ev) => {
         ev.stopPropagation();
         const w = what();
@@ -1289,6 +1237,7 @@
       setRegistry,
       setClipboard,
       setBadge: rail.setBadge,
+      setCurrent: rail.setCurrent,
       inspect: rail.inspect
     };
   }

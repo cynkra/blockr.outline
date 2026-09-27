@@ -29,11 +29,12 @@
  *                                entirely by the renderer, so this is their
  *                                only adapter hook.
  *   nodeTools(node) -> Element   optional: tools of the row, shown with its
- *                                remove button on hover (the board's "append
- *                                after this row"); give them `md-reveal`.
- *                                With `opts.rowMenu`, one of them is a menu
- *                                of all the row's tools, marked `md-narrow`:
- *                                on a narrow panel it is the only one shown
+ *                                remove button on hover; give them
+ *                                `md-reveal`. With `opts.rowMenu` the host
+ *                                gives ONE, the "…" that opens the row's
+ *                                action menu (Remove included), and the
+ *                                renderer draws no remove or focus tools of
+ *                                its own (design system, "Block lists")
  *   stackTools(stack, collapsed) the same, for a stack header and the
  *                                collapsed stack row
  *   slotsFor(from, to) -> []     which slots this edge could occupy; EMPTY
@@ -76,29 +77,16 @@
   'use strict';
 
   const DEFAULT_METRICS = {
-    // GAP is what a stack frame has to live inside. A frame claims
-    // FRAME_PAD_Y above and below its rows, and whatever is left over is the
-    // air between two adjacent frames: GAP - 2 * FRAME_PAD_Y. At GAP 6 with
-    // 3px padding that was zero, which is why two stacks touched. 9 with 3px
-    // padding leaves 3px on both counts -- inside a frame and between two of
-    // them -- which is the one thing this arithmetic can be asked to keep
-    // equal.
-    LANE_W: 16, ROW_H: 28, GAP: 9, RAIL_L: 10, RAIL_R: 8, DOT_R: 4,
-    // Air between a stack frame and the rows it encloses. The frame is drawn
-    // as an absolute box behind the rows, so this is the ONLY thing that
-    // insets them -- and it has to be applied on all four sides by hand:
-    // FRAME_PAD_X is subtracted on the left and taken off the row width on
-    // the right. Y is a third of X because rows sit GAP apart and a frame has
-    // to fit its padding twice into that gap, where the sides have the whole
-    // gutter to play with.
-    //
-    // 2 was not enough: a selected member's ring sits at the edge of its own
-    // box, so it left 2px between two 1px borders -- and when the stack's
-    // colour is the blue the selection already uses (the default for the first
-    // lane), those two lines merged into one thick one. The ring is drawn
-    // inward now (see `.md-chip.sel`), and this is the air it needs to read as
-    // a separate mark.
-    FRAME_PAD_X: 6, FRAME_PAD_Y: 3
+    // The design system's block list row (design system, "Block lists"):
+    // 34px, no space between rows.
+    LANE_W: 16, ROW_H: 34, GAP: 0, RAIL_L: 10, RAIL_R: 8, DOT_R: 4,
+    // A stack is a tinted band around its header and members: STACK_PAD
+    // inside it on every side, STACK_GAP of air between it and whatever is
+    // above or below it. Row positions are worked out from these numbers
+    // (`rowTops`), and the list sets the same numbers as margins and padding,
+    // so the rail's dots sit on the row centres without measuring the DOM
+    // (which reads 0 in a dock tab that is not showing).
+    STACK_PAD: 2, STACK_GAP: 4
   };
   const LANE_COLORS = ['#9ca3af', '#2563eb', '#0d9488', '#7c3aed', '#b45309', '#be185d'];
   const STATUS_RANK = { failed: 3, waiting: 2, unset: 1 };
@@ -178,6 +166,38 @@
     return 'rgba(' + r + ',' + g + ',' + b + ',' + a + ')';
   };
 
+  /* Where each drawn row sits, top edge, in deck coordinates, for the rows
+   * `outlineLayout.displayRows()` returns. A stack header and a folded stack
+   * open a band: STACK_GAP of air (unless it is the first row), then
+   * STACK_PAD. The band closes after its last member with STACK_PAD, and
+   * whatever follows a band gets STACK_GAP of air. `gaps[i]` is the margin
+   * row i (or the band it opens) gets in the list, so the DOM is laid out
+   * from the same numbers the rail draws its dots at. Pure, so `node --test`
+   * can hold it to the rows. */
+  const opensBand = (r) => r.t === 'header' || r.t === 'stack';
+  const bandOf = (r) => opensBand(r) ? r.stack.id
+    : r.inStack ? r.inStack.id : null;
+  const rowTopsFor = (rows, M) => {
+    const { ROW_H, GAP, STACK_PAD, STACK_GAP } = Object.assign({}, DEFAULT_METRICS, M || {});
+    const tops = [], gaps = [];
+    let y = 0, afterBand = false;
+    rows.forEach((r, i) => {
+      const opens = opensBand(r);
+      const g = !i ? 0 : opens || afterBand ? STACK_GAP : GAP;
+      gaps.push(g);
+      y += g + (opens ? STACK_PAD : 0);
+      tops.push(y);
+      y += ROW_H;
+      const next = rows[i + 1];
+      const band = bandOf(r);
+      const closes = band !== null &&
+        !(next && !opensBand(next) && bandOf(next) === band);
+      if (closes) y += STACK_PAD;
+      afterBand = closes;
+    });
+    return { tops: tops, gaps: gaps, height: y };
+  };
+
   let uidCounter = 0;
 
   function create(rootEl, adapter) {
@@ -196,8 +216,8 @@
       searchPlaceholder: 'Search…',
       searchEmptyText: 'No block matches',
       emptyText: 'No blocks yet.',
-      emptyAddText: 'Add a block',
-      addRowText: 'Add a block',
+      emptyAddText: 'Add block',
+      addRowText: 'Add block',
       stackNoun: 'Stack', stackUnit: 'blocks', stackIcon: STACK_ICON,
       stackAddText: 'Stack them', stackRmTitle: 'Dissolve stack (blocks stay)',
       // The stack-focus view: a focus button on every stack row, and the
@@ -209,7 +229,10 @@
     }, adapter.opts || {});
     const M = Object.assign({}, DEFAULT_METRICS, opts.metrics || {});
     const { LANE_W, ROW_H, GAP, RAIL_L, RAIL_R, DOT_R } = M;
-    const { FRAME_PAD_X, FRAME_PAD_Y } = M;
+    const { STACK_PAD, STACK_GAP } = M;
+    // The length a lane change is drawn over, and the step of the tail
+    // under the list. Rows are not evenly spaced any more (a stack's band
+    // adds its padding and air), so where a row IS comes from `rowTops`.
     const PITCH = ROW_H + GAP;
 
     const slotsFor = adapter.slotsFor;
@@ -237,7 +260,7 @@
     // The row height is a metric, so CSS reads it from here rather than
     // hard-coding 28px: a process step row is taller than a block row.
     rootEl.style.setProperty('--blockr-outline-row-h', ROW_H + 'px');
-    rootEl.style.setProperty('--blockr-outline-row-gap', GAP + 'px');
+    rootEl.style.setProperty('--blockr-outline-stack-pad', STACK_PAD + 'px');
 
     // Everything that is ABOUT the list rather than in it -- search, and the
     // selection actions -- rides in one sticky header. On a 92-row board the
@@ -390,6 +413,14 @@
     let selAnchor = null;
     let lastPos = new Map();
     let closePicker = null, dragging = false, pendingRender = false;
+    // the row that takes Tab: a block id, or `stack:<id>` for a stack's row
+    let kbKey = null, kbMoved = false;
+    // The current row: the block open in the dock, as the host reports it
+    // (`setCurrent`). Not the selection, which is what a click or a
+    // ctrl-click gathers for "Stack them" and the clipboard.
+    let current = null;
+    const rowKey = (el) => el.dataset.id ||
+      (el.dataset.stack ? 'stack:' + el.dataset.stack : null);
 
     const blockOf = (id) => blocks.find((b) => b.id === id);
     const stackOf = (id) => stacks.find((s) => s.blocks.includes(id)) || null;
@@ -601,7 +632,24 @@
     const layout = (entries, rl, rowOf, back) => G.layout(entries, rl, rowOf, back);
 
     const laneX = (l) => RAIL_L + l * LANE_W;
-    const dotY = (r) => r * PITCH + ROW_H / 2;
+
+    const rowTops = (rows) => rowTopsFor(rows, M);
+
+    // The last drawn layout: the drags read it to tell which row the
+    // pointer is over.
+    let geo = { rows: [], tops: [], gaps: [], height: 0 };
+    const dotY = (r) => geo.tops[r] + ROW_H / 2;
+    // The row under a deck y, or -1. Each row owns half the air on either
+    // side of it, so the gaps between rows and bands are never dead.
+    const rowAtY = (y) => {
+      const t = geo.tops, n = t.length;
+      if (!n || y < -8) return -1;
+      for (let i = 0; i < n; i++) {
+        const end = i + 1 < n ? (t[i] + ROW_H + t[i + 1]) / 2 : geo.height + 12;
+        if (y < end) return i;
+      }
+      return -1;
+    };
 
     /* ---- rail id -> concrete endpoints (slot-aware) ---- */
 
@@ -678,6 +726,14 @@
       // So remember it here and repaint it below, once the rows exist again.
       const refocus = focusId;
       clearFocus();
+      // Keyboard focus on a row survives the rebuild: the row is found again
+      // by its key and focused (a keyboard move pushes a new model, and the
+      // row it moved has to keep the keyboard).
+      const act = document.activeElement;
+      const actRow = act && deckEl.contains(act)
+        ? act.closest('.md-chip, .md-stackhead') : null;
+      const refocusRow = !!actRow;
+      if (actRow) kbKey = rowKey(actRow);
       deckEl.innerHTML = '';
       updateCrumb();
 
@@ -687,18 +743,23 @@
       // none of them.
       // Both empty states are the design system's one line of italic muted
       // text where the rows would be, with the way out as a slot in it.
+      // The design system's empty state (`.blockr-empty`); `md-empty` keeps
+      // its look where an older copy of blockr.ui's block stylesheet wins
+      // the dependency name.
       const emptyLine = (text, slotText, onSlot) => {
         const p = document.createElement('p');
-        p.className = 'md-empty';
-        p.appendChild(document.createTextNode(text + ' '));
-        const b = document.createElement('button');
-        b.type = 'button';
-        b.className = 'md-empty-add md-slot';
-        // a host may still write the old "+ Add ..." wording; the slot is
-        // already the offer, so the plus goes
-        b.textContent = String(slotText).replace(/^\+\s*/, '');
-        b.addEventListener('click', () => onSlot(b));
-        p.appendChild(b);
+        p.className = 'blockr-empty blockr-empty--panel md-empty';
+        p.appendChild(document.createTextNode(text + (slotText ? ' ' : '')));
+        if (slotText) {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'md-empty-add blockr-slot md-slot';
+          // a host may still write the old "+ Add ..." wording; the slot is
+          // already the offer, so the plus goes
+          b.textContent = String(slotText).replace(/^\+\s*/, '');
+          b.addEventListener('click', () => onSlot(b));
+          p.appendChild(b);
+        }
         deckEl.appendChild(p);
       };
 
@@ -714,9 +775,17 @@
         return;
       }
 
+      // An empty list is one line. Where the list ends with the add button
+      // (`addRow`), the button is still there under it and the line has no
+      // slot of its own.
       if (!blocks.length) {
-        emptyLine(opts.emptyText, opts.emptyAddText,
-          (b) => emit('block_add', { el: b }));
+        if (opts.addRow) {
+          emptyLine(opts.emptyText);
+          deckEl.appendChild(addRowBtn(0));
+        } else {
+          emptyLine(opts.emptyText, opts.emptyAddText,
+            (b) => emit('block_add', { el: b }));
+        }
         updateBar();
         return;
       }
@@ -727,11 +796,14 @@
         if (r.t === 'node') lastPos.set('n:' + r.node.id, i);
         else lastPos.set('s:' + r.stack.id, i);
       });
+      geo = Object.assign({ rows: rows }, rowTops(rows));
       const { entries, rowOf, rl, back } = railModel(rows);
       const { laneOf, edges, backs, nLanes } = layout(entries, rl, rowOf, back);
       const labelPad = opts.edgeLabels ? opts.labelPad : 0;
       const railW = RAIL_L + nLanes * LANE_W + RAIL_R + labelPad;
-      const H = rows.length * PITCH;
+      const H = geo.height;
+      // a row drags only where there is somewhere to drop it (a stack)
+      rootEl.classList.toggle('md-can-drag', !!(opts.stacks && stacks.length));
 
       const svg = svgEl('svg');
       svg.setAttribute('class', 'md-rail');
@@ -823,10 +895,10 @@
         const p = svgEl('path');
         p.setAttribute('d',
           'M' + xF + ',' + yF +
-          ' C' + (xF + LANE_W) + ',' + yF + ' ' + xB + ',' + (yF - GAP) +
+          ' C' + (xF + LANE_W) + ',' + yF + ' ' + xB + ',' + (yF - PITCH * 0.25) +
           ' ' + xB + ',' + (yF - PITCH * 0.5) +
           ' L' + xB + ',' + (yT + PITCH * 0.5) +
-          ' C' + xB + ',' + (yT + GAP) + ' ' + (xT + LANE_W) + ',' + yT +
+          ' C' + xB + ',' + (yT + PITCH * 0.25) + ' ' + (xT + LANE_W) + ',' + yT +
           ' ' + (xT + DOT_R + 2) + ',' + yT);
         p.setAttribute('fill', 'none');
         p.setAttribute('stroke', LANE_COLORS[e.lane % LANE_COLORS.length]);
@@ -921,43 +993,57 @@
       });
       deckEl.appendChild(svg);
 
-      rows.forEach((r, i) => {
-        if (r.t !== 'header') return;
-        const size = r.stack.blocks.length;
-        const frame = document.createElement('div');
-        frame.className = 'md-stackframe';
-        frame.dataset.stack = r.stack.id;
-        if (r.stack.color) {
-          // a custom property rather than `style.borderColor`: the selected
-          // state needs to override this, and an inline value would win. The
-          // tint is mixed in the stylesheet, onto the surface, so it follows
-          // the dark scheme.
-          frame.classList.add('md-tinted');
-          frame.style.setProperty('--blockr-outline-stack', r.stack.color);
-        }
-        frame.style.left = (railW - FRAME_PAD_X) + 'px';
-        frame.style.right = '0px';
-        frame.style.top = (i * PITCH - FRAME_PAD_Y) + 'px';
-        // Exactly the rows plus FRAME_PAD_Y above and below:
-        // (1 + size) * PITCH - GAP is the header plus members, since
-        // PITCH - GAP is ROW_H. The air BETWEEN two frames is not taken from
-        // here -- subtracting it drove the padding negative and the last row
-        // hung out of its own frame. It falls out of the row spacing instead,
-        // as GAP - 2 * FRAME_PAD_Y, which is why GAP is 8 and not 6.
-        frame.style.height =
-          ((1 + size) * PITCH - GAP + 2 * FRAME_PAD_Y) + 'px';
-        deckEl.appendChild(frame);
-      });
-
+      // The rows. A stack is a band (`.md-stackframe`) holding its header and
+      // its members, or its one folded row: the stack's colour at 7% on the
+      // surface, no border (design system, "Block lists"). Every margin comes
+      // from `rowTops`, so the rows land where the rail put their dots.
       const list = document.createElement('div');
       list.className = 'md-rows';
       list.style.marginLeft = railW + 'px';
-      rows.forEach((r) => {
-        if (r.t === 'node') list.appendChild(chip(r.node, r.inStack));
-        else if (r.t === 'stack') list.appendChild(stackChip(r.stack));
-        else list.appendChild(stackHead(r.stack));
+      let band = null;
+      rows.forEach((r, i) => {
+        let rowEl;
+        if (opensBand(r)) {
+          band = document.createElement('div');
+          band.className = 'md-stackframe' +
+            (r.t === 'stack' ? ' md-folded' : '');
+          band.dataset.stack = r.stack.id;
+          // the colour is data and comes in as a custom property; the tint
+          // is mixed in the stylesheet, onto the surface, so it follows the
+          // dark scheme
+          if (r.stack.color) {
+            band.classList.add('md-tinted');
+            band.style.setProperty('--blockr-outline-stack', r.stack.color);
+          }
+          band.style.marginTop = geo.gaps[i] + 'px';
+          list.appendChild(band);
+          rowEl = r.t === 'stack' ? stackChip(r.stack) : stackHead(r.stack);
+          band.appendChild(rowEl);
+          return;
+        }
+        rowEl = chip(r.node, r.inStack);
+        rowEl.style.marginTop = geo.gaps[i] + 'px';
+        if (band && r.inStack && band.dataset.stack === r.inStack.id) {
+          band.appendChild(rowEl);
+        } else {
+          band = null;
+          list.appendChild(rowEl);
+        }
       });
       deckEl.appendChild(list);
+      // One row takes Tab (a roving tabindex): the one keyboard focus was
+      // on before this rebuild, else the current row, else the first.
+      const focusables = [...list.querySelectorAll('.md-chip, .md-stackhead')];
+      focusables.forEach((x) => { x.tabIndex = -1; });
+      const back2 = kbKey && focusables.find((x) => rowKey(x) === kbKey);
+      paintCurrent();
+      const home = back2 || list.querySelector('.md-current') || focusables[0];
+      if (home) home.tabIndex = 0;
+      if (back2 && refocusRow) {
+        back2.focus({ preventScroll: true });
+        if (kbMoved) back2.scrollIntoView({ block: 'nearest' });
+      }
+      kbMoved = false;
 
       // "Add a block" as the last row of the list rather than as a button in the
       // search row: every other add gesture is about a parent (drag a dot to a
@@ -970,31 +1056,7 @@
       // wider than the rows nor separated from them by the drop-zone slack. The
       // empty state carries the same offer, so this is only drawn when there are
       // rows.
-      if (opts.addRow) {
-        // A quiet button, as "Add condition" under a list of rows: text only,
-        // with the plus, and a hover wash. It sizes to its words; the margin
-        // lines its text up with the names above it.
-        const addRow = document.createElement('button');
-        addRow.type = 'button';
-        addRow.className = 'md-addrow';
-        addRow.style.marginLeft = railW + 'px';
-        addRow.style.maxWidth = 'calc(100% - ' + railW + 'px)';
-        const plus = document.createElement('span');
-        plus.className = 'md-addrow-icon';
-        plus.innerHTML = icon('plus');
-        addRow.appendChild(plus);
-        const lbl = document.createElement('span');
-        lbl.className = 'md-addrow-label';
-        // While focused, a new block joins the focused stack at creation
-        // (the host adapter enforces it) -- said here, where the block will
-        // appear, because a block that landed OUTSIDE the stack would vanish
-        // from this view the instant it landed.
-        const fs = focusedStack();
-        lbl.textContent = opts.addRowText + (fs ? ' · joins ' + fs.name : '');
-        addRow.appendChild(lbl);
-        addRow.addEventListener('click', () => emit('block_add', { el: addRow }));
-        deckEl.appendChild(addRow);
-      }
+      if (opts.addRow) deckEl.appendChild(addRowBtn(railW));
 
       // One empty row's worth of canvas under the list. On a long board (the
       // CDEX one is 92 rows) the list fills the panel exactly, so scrolled to
@@ -1049,12 +1111,40 @@
 
     /* ---- row builders ---- */
 
+    // The end of the list (design system, "Block lists"): a quiet button
+    // named for what lands in it, 30px, its plus under the marks. It opens
+    // the "+" menu the host answers `block_add` with. `left` is the rail's
+    // width, so it lines up with the rows.
+    const addRowBtn = (left) => {
+      const addRow = document.createElement('button');
+      addRow.type = 'button';
+      addRow.className = 'md-addrow';
+      // the row's 6px padding and half the 24px mark, less half the 12px
+      // plus and the button's 8px padding: the plus under the marks' centre
+      const inset = left + 4;
+      addRow.style.marginLeft = inset + 'px';
+      addRow.style.maxWidth = 'calc(100% - ' + inset + 'px)';
+      const plus = document.createElement('span');
+      plus.className = 'md-addrow-icon';
+      plus.innerHTML = icon('plus');
+      addRow.appendChild(plus);
+      const lbl = document.createElement('span');
+      lbl.className = 'md-addrow-label';
+      // While focused, a new block joins the focused stack at creation
+      // (the host adapter enforces it) -- said here, where the block will
+      // appear, because a block that landed OUTSIDE the stack would vanish
+      // from this view the instant it landed.
+      const fs = focusedStack();
+      lbl.textContent = opts.addRowText + (fs ? ' · joins ' + fs.name : '');
+      addRow.appendChild(lbl);
+      addRow.addEventListener('click', () => emit('block_add', { el: addRow }));
+      return addRow;
+    };
+
     // The right end of a row: its tools, then whatever else keeps the right
-    // edge (the adapter's aside, a stack's chevron). On a panel narrow
-    // enough that the names need every pixel, the tools lie OVER the end of
-    // the name while the row is hovered instead of pushing it shorter;
-    // wider, they sit in the row (outline.css steps between the two on the
-    // panel's width).
+    // edge (the adapter's aside, a stack's chevron). The tools are in the
+    // row, never over the name: at rest they take no space, and on hover or
+    // keyboard focus they take the place of the aside (outline.css).
     const rowEnd = (row) => {
       const end = document.createElement('span');
       end.className = 'md-end';
@@ -1072,19 +1162,6 @@
       el.className = 'md-chip' + (inStack ? ' instack' : '') +
         (selection.has(b.id) ? ' sel' : '');
       el.dataset.id = b.id;
-      // the frame ends at the outline's right edge, so a framed row has to stop
-      // short of it or the border is drawn ON the row -- padded on the left,
-      // clipped on the right, which is how it read before
-      if (inStack) {
-        el.style.marginRight = FRAME_PAD_X + 'px';
-        // what is under the row is the frame's fill, which the row's hover
-        // tools are painted on (outline.css)
-        const home = stackOf(b.id);
-        if (home && home.color) {
-          el.classList.add('md-tinted');
-          el.style.setProperty('--blockr-outline-stack', home.color);
-        }
-      }
 
       const lead = nodeLead(b);
       if (lead) el.appendChild(lead);
@@ -1117,10 +1194,13 @@
       const end = rowEnd(el);
 
       // The row's tools, shown on hover or keyboard focus of the row: the
-      // adapter's (the board's "append after this row") and remove.
+      // adapter's, and remove. A host with a row menu (`rowMenu`, the
+      // board) hands over one "…" that carries every action, Remove
+      // included, so the renderer adds none (design system, "Block lists":
+      // one tool, no × on the row).
       const extra = nodeTools(b);
       if (extra) end.tools.appendChild(extra);
-      if (opts.remove) {
+      if (opts.remove && !opts.rowMenu) {
         const rm = toolBtn('md-rm md-reveal', icon('x'), 'Remove block');
         rm.addEventListener('click', (e) => {
           e.stopPropagation();
@@ -1309,17 +1389,16 @@
       status.dataset.stack = stack.id;
       el.appendChild(status);
 
+      // renamed in place like the expanded header's name
       const name = document.createElement('span');
       name.className = 'md-name';
       name.textContent = stack.name;
-      tip(name, stack.name, { overflow: true });
+      renameable(name, stack,
+        (nm) => emit('stack_rename', { id: stack.id, name: nm }),
+        opts.stackNoun.toLowerCase());
       el.appendChild(name);
 
-      // a count with a unit is a badge: neutral, read-only
-      const badge = document.createElement('span');
-      badge.className = 'md-badge';
-      badge.textContent = stack.blocks.length + ' ' + opts.stackUnit;
-      el.appendChild(badge);
+      el.appendChild(countEl(stack));
 
       const spring = document.createElement('span');
       spring.className = 'md-spring';
@@ -1340,7 +1419,8 @@
       // big board gets walked stack by stack.
       const doorway = opts.focusView && stackFocus && stack.id !== stackFocus;
 
-      if (opts.focusView && !doorway) {
+      // with a row menu, "Show only this group" is in the "…"
+      if (opts.focusView && !doorway && !opts.rowMenu) {
         const fb = toolBtn('md-focusbtn', FOCUS_ICON, 'Show only ' + stack.name);
         fb.setAttribute('aria-pressed', 'false');
         fb.addEventListener('click', (e) => {
@@ -1351,7 +1431,7 @@
       }
 
       // In a doorway the arrow is a "go to": it points right and stays
-      // there. Otherwise it is the fold, closed.
+      // there. Otherwise it is the fold, closed, at the end of the row.
       const chev = doorway
         ? toolBtn('md-chev md-closed md-goto', icon('chevron'), 'Show only ' + stack.name)
         : chevBtn('', false, 'Expand ' + opts.stackNoun.toLowerCase());
@@ -1368,7 +1448,7 @@
       }
 
       el.addEventListener('click', (e) => {
-        if (e.target.closest('button')) return;
+        if (e.target.closest('button') || e.target.isContentEditable) return;
         if (doorway) {
           setStackFocus(stack.id);
           return;
@@ -1380,11 +1460,11 @@
         selectStack(stack, e.metaKey || e.ctrlKey || e.shiftKey);
       });
 
-      // Same drill-in double-click as the expanded header (the collapsed row
-      // has no rename, so the whole row carries it).
+      // Same drill-in double-click as the expanded header: on the row, not
+      // on the name, which renames.
       if (opts.focusView && !doorway) {
         el.addEventListener('dblclick', (e) => {
-          if (e.target.closest('button')) return;
+          if (e.target.closest('button, .md-name') || e.target.isContentEditable) return;
           setStackFocus(stack.id);
         });
       }
@@ -1392,18 +1472,23 @@
       return el;
     };
 
+    // A stack's member count: 13px text-muted, a plain number.
+    const countEl = (stack) => {
+      const n = document.createElement('span');
+      n.className = 'md-count';
+      n.textContent = String(stack.blocks.length);
+      n.setAttribute('aria-label', stack.blocks.length + ' ' + opts.stackUnit);
+      return n;
+    };
+
     const stackHead = (stack) => {
       const el = document.createElement('div');
       el.className = 'md-stackhead';
       el.dataset.stack = stack.id;
-      el.style.marginRight = FRAME_PAD_X + 'px';   // inside the frame too
-      if (stack.color) {
-        el.classList.add('md-tinted');
-        el.style.setProperty('--blockr-outline-stack', stack.color);
-      }
 
+      // the stack's 24px mark, in the stack's colour
       const cap = document.createElement('span');
-      cap.className = 'md-cap';
+      cap.className = 'md-cap md-stackkind';
       cap.innerHTML = opts.stackIcon;
       if (stack.color) cap.style.setProperty('--blockr-outline-mark', stack.color);
       el.appendChild(cap);
@@ -1416,10 +1501,7 @@
         opts.stackNoun.toLowerCase());
       el.appendChild(name);
 
-      const badge = document.createElement('span');
-      badge.className = 'md-badge';
-      badge.textContent = String(stack.blocks.length);
-      el.appendChild(badge);
+      el.appendChild(countEl(stack));
 
       // A stack the flow runs OUT of and back INTO cannot be drawn as one
       // clean run of rows, and the symptom -- an arrow climbing the gutter,
@@ -1508,12 +1590,15 @@
       // action bar depends on it. Not hover-revealed like `md-rm`: an
       // affordance nobody has seen is one nobody uses, and this is the one
       // button on the row that changes what the whole list shows.
-      // remove first, so the focus tool keeps its place when it appears
-      const rm = toolBtn('md-rm md-reveal', icon('x'), opts.stackRmTitle);
-      rm.addEventListener('click', () => emit('stack_rm', { id: stack.id }));
-      end.tools.appendChild(rm);
+      // remove first, so the focus tool keeps its place when it appears.
+      // A host with a row menu carries both in the header's "…" instead.
+      if (!opts.rowMenu) {
+        const rm = toolBtn('md-rm md-reveal', icon('x'), opts.stackRmTitle);
+        rm.addEventListener('click', () => emit('stack_rm', { id: stack.id }));
+        end.tools.appendChild(rm);
+      }
 
-      if (opts.focusView) {
+      if (opts.focusView && !opts.rowMenu) {
         const on = stackFocus === stack.id;
         // a pressed icon button while the view is focused on this stack
         const fb = toolBtn('md-focusbtn' + (on ? ' active' : ''), FOCUS_ICON,
@@ -1528,10 +1613,12 @@
         end.tools.appendChild(fb);
       }
 
-      // No collapse offer on the focused stack: its rows ARE the view.
+      // The fold, at the end of the header. No collapse offer on the focused
+      // stack: its rows ARE the view.
       if (stackFocus !== stack.id) {
         const chev = chevBtn('', true, 'Collapse ' + opts.stackNoun.toLowerCase());
-        chev.addEventListener('click', () => {
+        chev.addEventListener('click', (e) => {
+          e.stopPropagation();
           collapsed.add(stack.id);
           render();
         });
@@ -1540,6 +1627,100 @@
 
       return el;
     };
+
+    /* ---- the current row ----
+     *
+     * The block open in the dock is the current row (design system, "Block
+     * lists"): `bg-selected` and `text-accent`. Inside a folded stack, the
+     * folded row stands for it.
+     */
+    const paintCurrent = () => {
+      deckEl.querySelectorAll('.md-current').forEach((x) => {
+        x.classList.remove('md-current');
+        x.removeAttribute('aria-current');
+      });
+      if (!current) return;
+      let row = deckEl.querySelector('.md-chip[data-id="' + CSS.escape(current) + '"]');
+      if (!row) {
+        const s = stackOf(current);
+        if (s) row = deckEl.querySelector('.md-chip[data-id="' + CSS.escape('stack:' + s.id) + '"]');
+      }
+      if (row) {
+        row.classList.add('md-current');
+        row.setAttribute('aria-current', 'true');
+      }
+    };
+
+    /* ---- the keyboard row ----
+     *
+     * One row takes Tab (a roving tabindex, set in `render`); the arrows
+     * move it, Enter opens it as a click does, and Alt+Up/Down moves the
+     * row as a drag would (design system, "Block lists"). The outline's
+     * order comes from the links, so the one place a row can move to is
+     * across the edge of a stack: into the band above or below it, or out
+     * of the one it is in from its first or last place.
+     */
+    const rowEls = () =>
+      [...deckEl.querySelectorAll('.md-rows .md-chip, .md-rows .md-stackhead')];
+
+    deckEl.addEventListener('focusin', (e) => {
+      const row = e.target.closest('.md-chip, .md-stackhead');
+      if (!row || row !== e.target) return;
+      rowEls().forEach((x) => { x.tabIndex = x === row ? 0 : -1; });
+      kbKey = rowKey(row);
+    });
+
+    // a refusal said at the row, the way a drag says it at the pointer
+    const sayAtRow = (row, text) => {
+      const r = row.getBoundingClientRect();
+      sayAt({ clientX: r.left + 16, clientY: r.bottom - 12 }, text, true);
+      setTimeout(unsay, 1600);
+    };
+
+    const kbMove = (row, down) => {
+      const id = row.dataset.id;
+      if (!opts.stacks || !id || id.startsWith('stack:')) return;
+      const all = rowEls();
+      const i = all.indexOf(row);
+      const bandEl = (x) => x ? x.closest('.md-stackframe') : null;
+      const mine = bandEl(row);
+      const next = all[down ? i + 1 : i - 1];
+      let join = null, leave = false;
+      if (mine) {
+        // out of the band from its edge: the first member going up (the
+        // header is above it), the last going down
+        leave = down ? bandEl(next) !== mine
+          : !!next && next.matches('.md-stackhead') && bandEl(next) === mine;
+      } else if (bandEl(next)) {
+        join = bandEl(next).dataset.stack;
+      }
+      if (!join && !leave) return;
+      const ids = [id];
+      if (join && !rowDragOk(ids, join)) {
+        sayAtRow(row, 'That grouping would tangle the flow');
+        return;
+      }
+      kbKey = id;
+      kbMoved = true;
+      if (join) emit('stack_join', { blocks: ids, stack: join });
+      else emit('stack_leave', { blocks: ids });
+    };
+
+    deckEl.addEventListener('keydown', (e) => {
+      const row = e.target;
+      if (!row.matches || !row.matches('.md-chip, .md-stackhead')) return;
+      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        const down = e.key === 'ArrowDown';
+        if (e.altKey) { kbMove(row, down); return; }
+        const all = rowEls();
+        const to = all[all.indexOf(row) + (down ? 1 : -1)];
+        if (to) to.focus();
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        row.click();
+      }
+    });
 
     /* ---- lineage on hover ---- */
 
@@ -1808,6 +1989,8 @@
       deckEl.querySelectorAll('.md-stackhead').forEach((el) => {
         const s = stacks.find((x) => x.id === el.dataset.stack);
         const whole = !!s && wholeStackSelected(s);
+        // the header is the stack's row, so it carries the selected look
+        el.classList.toggle('sel', whole);
         if (whole) {
           s.blocks.forEach((id) => {
             const row = deckEl.querySelector(
@@ -1838,6 +2021,10 @@
     };
 
     const updateBar = () => {
+      // One selected row has no look of its own: it is the row just
+      // clicked, which the dock then shows as the current one. Two or more
+      // are a selection with somewhere to go, and are filled.
+      deckEl.classList.toggle('md-multi', selection.size >= 2);
       if (!barEl) return;
       paintStackSel();
       barEl.classList.remove('err');
@@ -2039,12 +2226,87 @@
       const label = ids.length > 1 ? ids.length + ' blocks' : b.name;
       const x0 = ev.clientX, y0 = ev.clientY;
       let moved = false, frames = [], deckBox = null, drop = null;
+      // where the row lands, per target: the drop line is worked out once
+      // for each target the pointer visits, not on every mousemove
+      const lineAt = new Map();
+      let lineEl = null;
 
       const unpaint = () => {
         deckEl.querySelectorAll('.md-stackframe').forEach(
           (f) => f.classList.remove('drop-ok', 'drop-no', 'drop-out')
         );
+        if (lineEl) lineEl.hidden = true;
         unsay();
+      };
+
+      // The 2px accent line where the row will land (design system, "Block
+      // lists"). The outline's order comes from the links, so where that is
+      // is asked of the layout: the list as it would be drawn after the
+      // move, and the row the moved one would come after.
+      const landing = (joinId) => {
+        const key = joinId || '';
+        if (lineAt.has(key)) return lineAt.get(key);
+        let at = null;
+        const trial = stacks.map((s) => Object.assign({}, s, {
+          blocks: s.id === joinId
+            ? s.blocks.concat(ids.filter((id) => !s.blocks.includes(id)))
+            : s.blocks.filter((id) => !ids.includes(id))
+        })).filter((s) => s.blocks.length);
+        const rowsT = G.displayRows(Object.assign(model(), { stacks: trial }));
+        const i = rowsT.findIndex((r) => r.t === 'node' && ids.includes(r.node.id));
+        if (i >= 0 && !searchKeep && !stackFocus) {
+          const bandT = rowsT[i].inStack ? rowsT[i].inStack.id : null;
+          let p = i - 1;
+          while (p >= 0 && rowsT[p].t === 'node' && ids.includes(rowsT[p].node.id)) p--;
+          const q = (s) => deckEl.querySelector(s);
+          const bandEl = (sid) => q('.md-stackframe[data-stack="' + CSS.escape(sid) + '"]');
+          let ref = null, below = false, inside = null;
+          if (p < 0) {
+            ref = q('.md-rows > *');
+          } else {
+            const r = rowsT[p];
+            below = true;
+            if (r.t === 'header') {
+              ref = q('.md-stackhead[data-stack="' + CSS.escape(r.stack.id) + '"]');
+              inside = bandEl(r.stack.id);
+            } else if (r.t === 'stack') {
+              ref = bandEl(r.stack.id);
+            } else if (r.inStack && r.inStack.id === bandT) {
+              ref = q('.md-chip[data-id="' + CSS.escape(r.node.id) + '"]');
+              inside = bandEl(bandT);
+            } else if (r.inStack) {
+              ref = bandEl(r.inStack.id);
+            } else {
+              ref = q('.md-chip[data-id="' + CSS.escape(r.node.id) + '"]');
+            }
+          }
+          if (ref) at = { ref: ref, below: below, inside: inside };
+        }
+        lineAt.set(key, at);
+        return at;
+      };
+
+      const showLine = (at) => {
+        if (!at || !at.ref.isConnected) return;
+        const dBox = deckEl.getBoundingClientRect();
+        const rBox = at.ref.getBoundingClientRect();
+        const wBox = (at.inside || deckEl.querySelector('.md-rows'))
+          .getBoundingClientRect();
+        const inset = at.inside ? STACK_PAD : 0;
+        // on the boundary: under the row it follows, or halfway into the air
+        // after a band
+        const air = at.below && at.ref.classList.contains('md-stackframe')
+          ? STACK_GAP / 2 : 0;
+        const y = (at.below ? rBox.bottom + air : rBox.top) - dBox.top;
+        if (!lineEl) {
+          lineEl = document.createElement('div');
+          lineEl.className = 'md-dropline';
+          deckEl.appendChild(lineEl);
+        }
+        lineEl.hidden = false;
+        lineEl.style.top = (y - 1) + 'px';
+        lineEl.style.left = (wBox.left - dBox.left + inset) + 'px';
+        lineEl.style.width = (wBox.width - 2 * inset) + 'px';
       };
 
       const say = sayAt;
@@ -2054,6 +2316,7 @@
           if (Math.abs(e.clientX - x0) + Math.abs(e.clientY - y0) < 6) return;
           moved = true;
           dragging = true;
+          rootEl.classList.add('md-dragging');
           clearFocus();
           hideEdgeXNow();
           if (closePicker) closePicker();
@@ -2076,6 +2339,7 @@
           if (rowDragOk(ids, over.id)) {
             drop = { join: over.id };
             over.el.classList.add('drop-ok');
+            showLine(landing(over.id));
             say(e, 'Add ' + label + ' to ' + target.name);
           } else {
             over.el.classList.add('drop-no');
@@ -2089,6 +2353,7 @@
           drop = { leave: true };
           const f = frames.find((x) => x.id === home.id);
           if (f) f.el.classList.add('drop-out');
+          showLine(landing(null));
           say(e, 'Take ' + label + ' out of ' + home.name);
         }
       };
@@ -2097,6 +2362,8 @@
         document.removeEventListener('mousemove', onMove);
         document.removeEventListener('mouseup', onUp);
         unpaint();
+        if (lineEl) { lineEl.remove(); lineEl = null; }
+        rootEl.classList.remove('md-dragging');
         el.classList.remove('md-moving');
         if (!moved) {
           return;                 // never crossed the threshold: a plain click
@@ -2163,10 +2430,10 @@
       // Two drop zones, one per mental model: in the CHIP column the whole
       // row band is a target (forgiving); in the RAIL gutter only the dots
       // themselves are — the line and the blank gutter read as canvas.
-      const bandRows = displayRows();
+      const bandRows = geo.rows;
       const rowRail = bandRows.map((r) => r.t === 'node' ? railIdOf(r.node.id)
         : r.t === 'stack' ? 'stack:' + r.stack.id : null);
-      const listH = bandRows.length * PITCH;
+      const listH = geo.height;
       const railW = parseInt(deckEl.querySelector('.md-rows').style.marginLeft, 10) || 40;
       const dotPos = [...deckEl.querySelectorAll('svg.md-rail circle.md-dot')].map((c) => ({
         id: c.dataset.rail,
@@ -2175,9 +2442,7 @@
 
       const bandAt = (x, y) => {
         if (x >= railW - 8 && x <= deckEl.clientWidth + 8) {
-          let idx = -1;
-          if (y >= -8 && y < listH) idx = Math.max(0, Math.floor(y / PITCH));
-          else if (y >= listH && y < listH + 12) idx = rowRail.length - 1;
+          const idx = rowAtY(y);
           if (idx < 0) return null;
           let band = rowRail[idx];
           if (!band && idx + 1 < rowRail.length) band = rowRail[idx + 1];
@@ -2194,7 +2459,10 @@
 
       const onMove = (ev) => {
         const x = ev.clientX - deckBox.left, y = ev.clientY - deckBox.top;
-        if (Math.abs(x - x0) + Math.abs(y - y0) > 6) moved = true;
+        if (Math.abs(x - x0) + Math.abs(y - y0) > 6) {
+          moved = true;
+          rootEl.classList.add('md-dragging');
+        }
         const dx = x - x0, dy = y - y0;
         const bend = Math.min(36, Math.abs(dx) * 0.5) * (dx < 0 ? -1 : 1);
         path.setAttribute('d', 'M' + x0 + ',' + y0 +
@@ -2242,6 +2510,7 @@
         document.removeEventListener('mousemove', onMove);
         document.removeEventListener('mouseup', onUp);
         dragging = false;
+        rootEl.classList.remove('md-dragging');
         unsay();
         path.remove();
         if (ghost) ghost.remove();
@@ -2325,6 +2594,11 @@
       setData,
       setBadge,
       render,
+      // The block open in the host's dock, by id (null for none).
+      setCurrent: (id) => {
+        current = id == null ? null : String(id);
+        paintCurrent();
+      },
       setHoverFocus: (on) => {
         hoverFocus = !!on;
         if (!hoverFocus) clearFocus();
@@ -2340,9 +2614,11 @@
       // consistent answer -- a modal would rename in a different place from
       // where the double-click does.
       editName: (id) => {
+        // a stack's name is on its header, or on its folded row
         const sel = String(id).startsWith('stack:')
-          ? '.md-stackhead[data-stack="' + CSS.escape(String(id).slice(6))
-            + '"] .md-name'
+          ? '.md-stackhead[data-stack="' + CSS.escape(String(id).slice(6)) +
+            '"] .md-name, .md-chip[data-id="' + CSS.escape(String(id)) +
+            '"] .md-name'
           : '.md-chip[data-id="' + CSS.escape(String(id)) + '"] .md-name';
         const name = deckEl.querySelector(sel);
         if (!name || name.tagName === 'INPUT') return false;
@@ -2381,5 +2657,8 @@
   // `toolBtn`, `icon`, `tip` and `pointAnchor` are the design-system pieces
   // the board adapter draws its own controls with, so a tool in a row looks
   // the same whoever built it.
-  return { create, LANE_COLORS, escapeHtml, hexA, toolBtn, icon, tip, pointAnchor };
+  return {
+    create, LANE_COLORS, escapeHtml, hexA, toolBtn, icon, tip, pointAnchor,
+    rowTops: rowTopsFor, DEFAULT_METRICS
+  };
 });
