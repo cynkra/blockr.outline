@@ -30,7 +30,7 @@ Remotes:
 Imports:
     blockr.core,
     blockr.dock (>= 0.1.4.9005),
-    blockr.ui (>= 0.0.1.9041),
+    blockr.ui,
     shiny,
     htmltools,
     commonmark,
