@@ -900,8 +900,8 @@ report_ext_srv <- function(items, title, settings) {
         # One deliberate difference: the DOWNLOAD builds from a projection
         # carrying the browser's captures, so a chart lands in the document
         # as the picture the canvas drew. The code view has no captures to
-        # show (none have been asked for while nobody is downloading), so it
-        # keeps showing the call that would draw one.
+        # show (none have been asked for while nobody is downloading), so a
+        # chart shows no output line there.
         qmd_for <- function(sects) {
           export_qmd(
             sects,

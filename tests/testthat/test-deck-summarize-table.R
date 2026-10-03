@@ -86,11 +86,9 @@ test_that("the same table reaches an HTML slide as the app's own markup", {
   expect_false(grepl("<script[^>]+src=", txt))
 })
 
-test_that("a chart is placed by the same method its own download calls", {
+test_that("a chart goes on a slide as its captured picture, or not at all", {
   skip_if_not_installed("officer")
-  skip_if_not_installed("ggplot2")
   skip_if_not_installed("blockr.viz")
-  skip_if_not(!is.null(pptx_exhibit_method("gg")))
 
   board <- blockr.core::new_board(
     blocks = c(
@@ -106,16 +104,29 @@ test_that("a chart is placed by the same method its own download calls", {
   )
   s <- slide_sections(exprs, board, slides = "ch")
 
-  # The chart rebuilds itself as a ggplot rather than printing its data.
-  expect_match(sect_output(s, which(s$ids == "ch")), "ggplot2::ggplot",
-               fixed = TRUE)
-
+  # No capture: no output line, no slide, and no error.
+  expect_identical(sect_output(s, which(s$ids == "ch")), "")
+  expect_false(grepl("## Chart", export_deck_qmd(s), fixed = TRUE))
   f <- withr::local_tempfile(fileext = ".pptx")
-  render_pptx_officer(s, f, "Deck", template = NULL, title_slide = FALSE)
-
-  files <- utils::unzip(f, list = TRUE)$Name
-  expect_true(any(grepl("^ppt/media/", files)))
+  render_pptx_officer(s, f, "Deck", template = NULL, title_slide = TRUE)
   expect_identical(length(officer::read_pptx(f)), 1L)
+
+  # A capture: the picture.
+  png <- withr::local_tempfile(fileext = ".png")
+  grDevices::png(png, width = 300, height = 200)
+  graphics::plot.new()
+  grDevices::dev.off()
+  cap <- structure(
+    list(png = readBin(png, "raw", file.size(png)), width = 300 / 96,
+         height = 200 / 96),
+    class = "chart_capture"
+  )
+  g <- withr::local_tempfile(fileext = ".pptx")
+  render_pptx_officer(s, g, "Deck", template = NULL, title_slide = FALSE,
+                      captures = list(ch = cap))
+  files <- utils::unzip(g, list = TRUE)$Name
+  expect_true(any(grepl("^ppt/media/", files)))
+  expect_identical(length(officer::read_pptx(g)), 1L)
 })
 
 test_that("an unconfigured deck is widescreen, not officer's 4:3 stock", {

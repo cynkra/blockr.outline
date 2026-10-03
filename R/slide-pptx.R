@@ -373,8 +373,8 @@ slide_pptx_exhibit <- function(doc, val, r, fnt, template = NULL) {
   }
 
   if (inherits(val, c("gg", "ggplot"))) {
-    # A chart that states its own size (static_chart's pptx_width/height)
-    # keeps it, centred in the slot; capped at the slot, never stretched.
+    # A plot that states its own size (pptx_width / pptx_height) keeps it,
+    # centred in the slot; capped at the slot, never stretched.
     w <- min(coal(attr(val, "pptx_width"), r$w), r$w)
     h <- min(coal(attr(val, "pptx_height"), r$h), r$h)
     return(tryCatch(

@@ -1544,10 +1544,8 @@ sect_output_html <- function(sects, env, i, note = NULL) {
       }
     ),
     # A renderer that DEGRADES rather than fails is the quieter half of the
-    # problem: static_chart() warns and hands back the chart's data when it
-    # cannot draw the requested type from the block's state, so the preview
-    # shows a table where a chart belongs and nothing says why. Carry the
-    # warning under the exhibit.
+    # problem: it warns and hands back something other than what was asked
+    # for, and nothing says why. Carry the warning under the exhibit.
     warning = function(w) {
       warn <<- c(warn, conditionMessage(w))
       invokeRestart("muffleWarning")
@@ -1873,8 +1871,8 @@ exhibit_html <- function(exhibit) {
   tags$pre(paste(utils::capture.output(print(exhibit)), collapse = "\n"))
 }
 
-# A ggplot as an inline PNG data-URI. Sizes from the block's own pptx
-# geometry (static_chart carries pptx_width / pptx_height in inches) capped to
+# A ggplot as an inline PNG data-URI. Sizes from the plot's own pptx
+# geometry (pptx_width / pptx_height in inches, when it carries them) capped to
 # a sensible on-screen width, so the preview keeps the deck's proportions
 # without rendering an 12in-wide canvas into a narrow panel.
 # blockr.viz decides how big type is on a printed plot (gg_type_scale(),
@@ -2170,9 +2168,9 @@ deck_pageable <- function(x) {
 
   # A ggplot goes through the same seam, when blockr.viz has a method for it.
   # Not because a plot needs paging -- it is one slide by definition -- but
-  # because the chart block's own PowerPoint download calls that method, and a
-  # chart placed here by different code would be a different picture on the
-  # slide than the one the block hands you. One placement rule, one result.
+  # because blockr.viz's PowerPoint downloads call that method, and a plot
+  # placed here by different code would be a different picture on the slide
+  # than the one the download hands you. One placement rule, one result.
   if (inherits(x, c("gg", "ggplot"))) {
     return(!is.null(pptx_exhibit_method("gg")))
   }
@@ -2225,8 +2223,8 @@ place_exhibit <- function(doc, exhibit) {
   }
 
   if (inherits(exhibit, c("gg", "ggplot"))) {
-    # static_chart() sizes the plot from the chart's row geometry and carries
-    # the result as attributes; a plain ggplot takes the default box.
+    # A plot that carries its own size as attributes keeps it; a plain
+    # ggplot takes the default box.
     loc <- officer::ph_location(
       left = left, top = top,
       width = coal(attr(exhibit, "pptx_width"), 11.9),

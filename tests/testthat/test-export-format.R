@@ -156,14 +156,9 @@ test_that("chapter_intro emits the stack description only under a fresh heading"
   expect_length(chapter_intro(s, ch, non_head), 0L)
 })
 
-test_that("a block-supplied report call wins the chunk output line", {
-  # The chart block states its printed form through blockr.viz::report_call
-  # (emitting a static_chart call over the result variable). A head block
-  # wearing the chart_block class exercises the dispatch + emission
-  # plumbing without pulling chart fixtures into this suite; its state env
-  # has none of the chart names, so the emitted call is the minimal one.
-  skip_if_not_installed("blockr.viz")
-
+test_that("a chart block prints its captured picture, or nothing", {
+  # A chart's result is the data it draws; its picture comes from the
+  # browser. A head block wearing the chart_block class stands in for one.
   blocks <- c(
     data = blockr.core::new_dataset_block("iris"),
     ch   = blockr.core::new_head_block()
@@ -180,14 +175,18 @@ test_that("a block-supplied report call wins the chunk output line", {
 
   s <- outline_sections(exprs, board,
                         annotations = otl_ann(ids = c("data", "ch")))
-  expect_match(
-    unname(s$report_calls[s$ids == "ch"]),
-    "^blockr\\.viz::static_chart\\(ch"
-  )
+  i <- which(s$ids == "ch")
+  expect_true(s$drawn[[i]])
+  expect_identical(sect_output(s, i), "")
 
   for (txt in list(export_qmd(s), export_spin(s))) {
-    expect_match(txt, "blockr.viz::static_chart(ch", fixed = TRUE)
+    expect_false(any(strsplit(txt, "\n")[[1L]] == "ch"))
   }
+
+  png <- withr::local_tempfile(fileext = ".png")
+  writeBin(as.raw(1:10), png)
+  s$captures <- list(ch = png)
+  expect_match(sect_output(s, i), "knitr::include_graphics(", fixed = TRUE)
 })
 
 test_that("display-table blocks keep the exhibit wrap, plain blocks print bare", {
@@ -279,15 +278,4 @@ test_that("a deck wraps every non-figure exhibit, a document does not", {
   plt <- blockr.core::new_head_block()
   class(plt) <- c("plot_block", class(plt))
   expect_identical(block_report_renderer(plt, "static"), "")
-})
-
-test_that("a report call that chart_code() cannot format is deparsed", {
-  # chart_code() rewrote a `{ ... }` body (the composer block's report call)
-  # as a pipe that does not parse, and the deck dropped the slide.
-  cl <- quote({
-    .d <- as.data.frame(x)
-    nrow(.d)
-  })
-  expect_false(same_call_text(".d |> as.data.frame(x) <- NULL |> {nrow(.d)}", cl))
-  expect_true(same_call_text("x |> head(3)", quote(head(x, 3))))
 })
