@@ -100,6 +100,7 @@ slide_sections <- function(expressions, board, slides = character(),
       seq_along(blks),
       function(i) block_report_call_str(blks[[i]], ids[[i]])
     ),
+    drawn = lgl_ply(blks, block_browser_drawn),
     # A deck has no chapters. The fields stay, holding nothing: every
     # consumer downstream reads them, and NA is what "unstacked" already
     # looks like to all of them.
@@ -167,8 +168,11 @@ export_deck_qmd <- function(sects, title = "Deck") {
   # nothing bound: its code is a comment (see sect_export_code), so the
   # exhibit expression would fail the render. The download flow demands the
   # closure and waits for it, so this is the belt to that braces.
+  #
+  # A chart the browser did not draw has no output line either, so it gets
+  # no slide rather than a heading over nothing.
   shown <- Filter(
-    function(i) !isTRUE(sects$pending[i]),
+    function(i) !isTRUE(sects$pending[i]) && nzchar(sect_output(sects, i)),
     slide_seq(sects)
   )
 

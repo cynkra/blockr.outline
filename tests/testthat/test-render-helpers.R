@@ -500,8 +500,8 @@ test_that("an exhibit call that throws is told apart from no output", {
 
 test_that("a renderer that degrades instead of failing says so", {
 
-  # static_chart() warns and returns the chart's DATA when it cannot draw the
-  # requested type -- the preview then shows a table where a chart belongs.
+  # A renderer that warns and returns something other than what was asked
+  # for: the preview shows it, and the warning with it.
   s <- list(ids = "a", pending = FALSE, exported = TRUE, report = TRUE,
             code = "a <- 1",
             report_calls = "{ warning('cannot draw scatter'); a }",
