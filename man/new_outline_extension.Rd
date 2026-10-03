@@ -49,9 +49,8 @@ menu,
 block that takes any number of inputs as ∞; a click lists the blocks
 that can feed it. \strong{Connect to…} and \strong{Insert a block before} in the
 row's menu are the keyboard way to the same,
-\item removing a block with exactly one link into it links its parent to each
-of its children in its place (blockr.dock's \code{bridge_links()}); any other
-block takes its links with it, and its \strong{Remove} row says so,
+\item removing a block takes its links with it, and its \strong{Remove} row says
+so,
 \item board stacks show as tinted bands; fold them to their header row, drag a
 row into a band to add that block to the stack and out of every band to
 take it out again (a selection moves together; a line shows where it

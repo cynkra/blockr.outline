@@ -139,8 +139,7 @@ outline_ext_srv <- function(id, board, update, actions, ...) {
       })
 
       # Remove blocks (one from a row's menu or its ×, several from a
-      # selection or a stack). A block with exactly one link into it is
-      # bridged, by blockr.dock's rule: see `outline_rm_delta()`.
+      # selection or a stack): see `outline_rm_delta()`.
       shiny::observeEvent(input$block_rm, {
         msg <- input$block_rm
         delta <- outline_rm_delta(

@@ -815,9 +815,7 @@
         }));
 
         box.appendChild(el('blockr-menu__divider', 'div'));
-        // A block with one input is bridged when it goes (its parent takes
-        // its output links); any other block with links loses them, and the
-        // row says so.
+        // A block with links loses them when it goes, and the row says so.
         const one = spec.blocks.length === 1 ? blockOf(spec.blocks[0]) : null;
         box.appendChild(menuBtn(
           spec.blocks.length > 1
@@ -826,7 +824,6 @@
           one && one.drops ? 'its links are dropped' : '',
           { danger: true, icon: 'trash' }, () => {
             closeMenu();
-            // in one message, so a chain of removed blocks bridges through
             push('block_rm', { ids: spec.blocks });
           }
         ));
@@ -1275,7 +1272,7 @@
         id: b.id, name: b.name, type: b.type || '',
         category: b.category || '', color: b.color,
         inputs: asArr(b.inputs), variadic: !!b.variadic,
-        // removing it drops its links rather than bridging them
+        // removing it drops its links
         drops: !!b.drops
       }));
       links = asArr(msg.links).map((l) => ({

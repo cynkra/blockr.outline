@@ -1,6 +1,5 @@
 # The link model of the outline (design system, "Links in the outline"):
-# removing a block bridges it by blockr.dock's rule, a link's input is renamed
-# or moved through a checked `links$mod`, and the gestures reach the board
+# removing a block drops its links, a link's input is renamed or moved through a checked `links$mod`, and the gestures reach the board
 # through the extension server.
 
 # data -> sub -> {head, merge x}, data -> rbind (1), sub -> rbind (2)
@@ -29,31 +28,12 @@ link_id <- function(board, from, to) {
   names(lnks)[lnks$from == from & lnks$to == to]
 }
 
-link_rows <- function(lnks) {
-  sort(paste0(lnks$from, ">", lnks$to, ":", lnks$input))
-}
-
-test_that("removing a block with one input bridges its parent to its children", {
+test_that("removing a block adds no links", {
   brd <- lnk_board()
   upd <- outline_rm_delta(brd, "sub")
-
   expect_identical(upd$blocks$rm, "sub")
-  # every output link of `sub` now comes from `data`, into the same input
-  expect_identical(
-    link_rows(upd$links$add),
-    c("data>bind:2", "data>head:data", "data>mrg:x")
-  )
-  expect_null(upd$stacks)
-})
-
-test_that("removing a block with two inputs drops its links", {
-  brd <- lnk_board()
-  upd <- outline_rm_delta(brd, "bind")
-  expect_identical(upd$blocks$rm, "bind")
   expect_null(upd$links)
-
-  # a block with no input is not bridged either
-  expect_null(outline_rm_delta(brd, "data")$links)
+  expect_null(upd$stacks)
 })
 
 test_that("removing every member of a stack removes the stack", {
@@ -68,10 +48,10 @@ test_that("the payload says which blocks lose their links on removal", {
   pay <- outline_payload(lnk_board())
   drops <- vapply(pay$blocks, `[[`, NA, "drops")
   names(drops) <- vapply(pay$blocks, `[[`, "", "id")
-  # data has no input, bind two: both drop; sub, head and mrg have one
+  # every block here is linked
   expect_identical(
     drops,
-    c(data = TRUE, sub = FALSE, head = FALSE, mrg = FALSE, bind = TRUE)
+    c(data = TRUE, sub = TRUE, head = TRUE, mrg = TRUE, bind = TRUE)
   )
 
   # a block with no links at all has nothing to drop
@@ -129,13 +109,10 @@ test_that("the link gestures reach the board through the server", {
     {
       session$setInputs(ready = TRUE)
 
-      # remove: bridged, in one update
+      # remove
       session$setInputs(block_rm = list(ids = list("sub")))
       expect_identical(upd()$blocks$rm, "sub")
-      expect_identical(
-        link_rows(upd()$links$add),
-        c("data>bind:2", "data>head:data", "data>mrg:x")
-      )
+      expect_null(upd()$links)
 
       # the old single-id message still works
       session$setInputs(block_rm = list(id = "bind"))

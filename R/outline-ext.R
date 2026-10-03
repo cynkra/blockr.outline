@@ -32,9 +32,8 @@
 #'   block that takes any number of inputs as ∞; a click lists the blocks
 #'   that can feed it. **Connect to…** and **Insert a block before** in the
 #'   row's menu are the keyboard way to the same,
-#' - removing a block with exactly one link into it links its parent to each
-#'   of its children in its place (blockr.dock's `bridge_links()`); any other
-#'   block takes its links with it, and its **Remove** row says so,
+#' - removing a block takes its links with it, and its **Remove** row says
+#'   so,
 #' - board stacks show as tinted bands; fold them to their header row, drag a
 #'   row into a band to add that block to the stack and out of every band to
 #'   take it out again (a selection moves together; a line shows where it
@@ -274,9 +273,9 @@ outline_payload <- function(board) {
       color = meta$color[i],
       inputs = I(as.list(blockr.core::block_inputs(b))),
       variadic = is.na(blockr.core::block_arity(b)),
-      # Removing it drops its links rather than bridging them: the row
-      # menu's Remove says so (design system, "Links in the outline").
-      drops = id %in% linked && !blockr.dock::bridges_block(board, id)
+      # Removing it drops its links: the row menu's Remove says so (design
+      # system, "Links in the outline").
+      drops = id %in% linked
     )
   }
 
@@ -309,13 +308,10 @@ outline_payload <- function(board) {
   )
 }
 
-# Removing blocks from the outline. A block with exactly one input is
-# bridged: its parent takes each of its output links, into the same inputs.
-# The rule is blockr.dock's (`bridge_links()`), so the outline, the DAG and
-# the dock header remove alike; blockr.core drops the links incident to the
-# removed blocks in the same update, which frees the inputs the bridge links
-# go into. A stack whose every member goes goes too: the core cascade prunes
-# the members but keeps the stack, which would leave an empty husk.
+# Removing blocks from the outline. blockr.core drops the links incident to
+# the removed blocks in the same update. A stack whose every member goes goes
+# too: the core cascade prunes the members but keeps the stack, which would
+# leave an empty husk.
 outline_rm_delta <- function(board, ids) {
 
   ids <- intersect(ids, names(blockr.core::board_blocks(board)))
@@ -325,12 +321,6 @@ outline_rm_delta <- function(board, ids) {
   }
 
   upd <- list(blocks = list(rm = ids))
-
-  add <- blockr.dock::bridge_links(board, ids)
-
-  if (length(add)) {
-    upd$links <- list(add = add)
-  }
 
   stacks <- blockr.core::board_stacks(board)
   gone <- names(stacks)[vapply(
