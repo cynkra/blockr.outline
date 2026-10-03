@@ -34,9 +34,8 @@ capture_exchange <- function(kind = "deck") {
       return(FALSE)
     }
 
-    # A chart that cannot be captured falls back to the server-side
-    # renderer, which draws a DIFFERENT picture -- so say which chart and
-    # why, rather than letting a document come back quietly mixed.
+    # A chart that cannot be captured is left out of the document, so say
+    # which chart and why.
     ask <- function(bid) {
       key <- tryCatch(blockr.viz::chart_capture_for(bid),
                       error = function(e) NULL)
@@ -92,7 +91,7 @@ capture_exchange <- function(kind = "deck") {
 
 # Captures written to disk and hung on the projection, keyed by block id.
 # `sect_output()` reads them: a chart with a picture already drawn puts the
-# picture in the document instead of the code that would redraw it.
+# picture in the document; one without is left out.
 #
 # prune_sections() subsets a fixed list of per-block fields and leaves
 # everything else alone, so this rides along whether it is attached before or

@@ -309,6 +309,7 @@ outline_sections <- function(expressions, board, annotations,
       seq_along(blks),
       function(i) block_report_call_str(blks[[i]], ids[[i]])
     ),
+    drawn = lgl_ply(blks, block_browser_drawn),
     stack_ids = stack_ids,
     stack_names = stack_names,
     stack_colors = stack_colors,
@@ -581,9 +582,8 @@ block_report_renderer <- function(blk,
 }
 
 # A block-supplied report call, deparsed for the document. blockr.viz's
-# report_call() generic lets a block state how its result prints -- the
-# chart block emits blockr.viz::static_chart(<var>, <state...>), rebuilding the
-# canvas chart as a ggplot. Resolved defensively (same pattern as
+# report_call() generic lets a block state how its result prints (the table
+# blocks rebuild their styled table). Resolved defensively (same pattern as
 # block_icon_html): without blockr.viz, or for a block with no method, the
 # simpler renderer paths below apply.
 block_report_call_str <- function(blk, var) {
@@ -607,55 +607,24 @@ block_report_call_str <- function(blk, var) {
     return("")
   }
 
-  # blockr.viz >= 0.2.36 compiles chart state to a plain dplyr + ggplot2
-  # pipeline and ships chart_code(), which formats any report call one
-  # pipeline stage / layer per line (nested data-threading rendered in pipe
-  # form). Older blockr.viz: plain deparse, as before.
-  #
-  # chart_code() is written for chart pipelines. Other report calls go
-  # through it too, and it can get them wrong: the composer block's call is
-  # a `{ ... }` body, which it rewrote as `.d |> as.data.frame(x) <- NULL |>
-  # { ... }`, a parse error, so every composer table left the deck without a
-  # slide. Its text is used only if it parses back to the same call.
-  fmt <- tryCatch(
-    getExportedValue("blockr.viz", "chart_code"),
-    error = function(e) NULL
-  )
-
-  if (is.function(fmt)) {
-    out <- tryCatch(fmt(cl), error = function(e) NULL)
-    if (is.character(out) && length(out) == 1L && nzchar(out) &&
-        same_call_text(out, cl)) {
-      return(out)
-    }
-  }
-
   paste(deparse(cl), collapse = "\n")
 }
 
-# TRUE when `txt` parses to exactly the call `cl`. The native pipe is resolved
-# at parse time, so a correct pipe-form rendering compares equal.
-same_call_text <- function(txt, cl) {
-  parsed <- tryCatch(
-    parse(text = txt, keep.source = FALSE),
-    error = function(e) NULL
-  )
-  length(parsed) == 1L &&
-    identical(
-      paste(deparse(parsed[[1L]]), collapse = "\n"),
-      paste(deparse(cl), collapse = "\n")
-    )
+# TRUE for a block whose picture only the browser can draw: blockr.viz's
+# chart block. Its result is the data it draws, so a document without the
+# captured picture prints nothing for it rather than that data.
+block_browser_drawn <- function(blk) {
+  inherits(blk, "chart_block")
 }
 
 # The output line of a reported chunk: the picture the browser already drew
-# when there is one, else the block's own report call, else the result
-# variable wrapped in the block's report renderer.
+# when there is one, else the block's own report call, else nothing for a
+# chart the browser has not drawn, else the result variable wrapped in the
+# block's report renderer.
 #
 # A chart the canvas has drawn goes into the document AS THAT PICTURE. The
-# alternative is emitting code that redraws it through a second renderer,
-# which is how a report came to disagree with the screen it was made from.
-# The block's own code still runs above it, because downstream blocks read
-# the result; only the figure is substituted.
+# block's own code still runs above it, because downstream blocks read the
+# result; only the figure is substituted.
 sect_output <- function(sects, i) {
 
   cap <- sects$captures[[sects$ids[i]]]
@@ -667,6 +636,9 @@ sect_output <- function(sects, i) {
   rc <- coal(sects$report_calls[i], "")
   if (nzchar(rc)) {
     return(rc)
+  }
+  if (isTRUE(sects$drawn[i])) {
+    return("")
   }
   rndr <- coal(sects$renderers[i], "")
   if (nzchar(rndr)) {
@@ -818,7 +790,7 @@ display_sections <- function(sects, listed, lnks, cache = NULL) {
 
   per_block <- c(
     "ids", "pending", "code", "names", "icons", "descriptions", "report",
-    "exported", "kinds", "renderers", "report_calls", "stack_ids",
+    "exported", "kinds", "renderers", "report_calls", "drawn", "stack_ids",
     "stack_names"
   )
 
@@ -867,7 +839,7 @@ prune_sections <- function(sects) {
 
   per_block <- c(
     "ids", "pending", "code", "names", "icons", "descriptions", "report",
-    "exported", "kinds", "renderers", "report_calls", "stack_ids",
+    "exported", "kinds", "renderers", "report_calls", "drawn", "stack_ids",
     "stack_names"
   )
 
