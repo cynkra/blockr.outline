@@ -79,10 +79,10 @@ test_that("the same table reaches an HTML slide as the app's own markup", {
   txt <- paste(readLines(f, warn = FALSE), collapse = "\n")
 
   # The marks, not a screenshot of them and not a bare data frame.
-  expect_true(grepl("blockr-rank-table", txt, fixed = TRUE))
+  expect_true(grepl("blockr-summarize-table", txt, fixed = TRUE))
   expect_true(grepl("lane-box", txt, fixed = TRUE))
-  # Still self-contained: the rank table's CSS and JS are inlined like every
-  # other dependency the deck carries.
+  # Still self-contained: the summarize table's CSS and JS are inlined like
+  # every other dependency the deck carries.
   expect_false(grepl("<script[^>]+src=", txt))
 })
 
