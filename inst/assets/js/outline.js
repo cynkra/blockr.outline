@@ -1214,9 +1214,12 @@
     let clickStack = null;
 
     document.addEventListener('mousedown', (ev) => {
-      lastInside = rootEl.contains(ev.target);
-      if (!lastInside) return;
-      const hit = ev.target.closest && ev.target.closest('[data-stack]');
+      // The row menu hangs off <body>, but a click in it is a click in the
+      // outline: its Copy and Cut fire the copy event this has to own.
+      const t = ev.target;
+      lastInside = rootEl.contains(t) || !!(menuEl && menuEl.contains(t));
+      if (!rootEl.contains(t)) return;
+      const hit = t.closest && t.closest('[data-stack]');
       clickStack = hit && rootEl.contains(hit) ? hit.dataset.stack : null;
     }, true);
 

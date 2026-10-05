@@ -1,3 +1,8 @@
+# blockr.outline 0.0.207
+
+* Copy and Cut in the row menu work. The menu hangs outside the outline, so
+  the outline ignored the copy its click started.
+
 # blockr.outline 0.0.206
 
 * Ctrl+C, Ctrl+X and Ctrl+V work in the outline when the DAG extension is on
