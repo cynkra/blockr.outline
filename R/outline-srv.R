@@ -385,7 +385,12 @@ outline_ext_srv <- function(id, board, update, actions, ...) {
       })
 
       shiny::observeEvent(input$block_paste, {
-        delta <- outline_paste_delta(board$board, input$block_paste$json)
+        msg <- input$block_paste
+        delta <- outline_paste_delta(
+          board$board,
+          msg$json,
+          stack = if (is.character(msg$stack)) msg$stack
+        )
         if (!is.null(delta)) {
           update(delta)
         }

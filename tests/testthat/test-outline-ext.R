@@ -622,6 +622,49 @@ test_that("the clipboard round-trips a selection with fresh ids", {
   expect_null(outline_paste_delta(board, "not json at all"))
 })
 
+test_that("a paste joins the stack it is aimed at in the same update", {
+
+  board <- blockr.dock::new_dock_board(
+    blocks = c(
+      a = blockr.core::new_dataset_block("iris"),
+      b = blockr.core::new_head_block(n = 3L),
+      c = blockr.core::new_head_block(n = 9L)
+    ),
+    links = blockr.core::links(
+      from = c("a", "b"), to = c("b", "c"), input = c("data", "data")
+    ),
+    stacks = blockr.core::stacks(
+      s1 = blockr.dock::new_dock_stack(c("a", "b"), name = "Prep")
+    ),
+    extensions = list(mini = new_outline_extension())
+  )
+
+  # one block of a stack, pasted into that stack
+  delta <- outline_paste_delta(
+    board, outline_clip_json(board, "b", list()), stack = "s1"
+  )
+  new_id <- names(delta$blocks$add)
+  expect_identical(delta$stacks$mod$s1$blocks, c("a", "b", new_id))
+  expect_silent(blockr.core::validate_board_update(delta, board))
+
+  # no target, or a stack that no longer exists: the paste stays loose
+  expect_null(
+    outline_paste_delta(board, outline_clip_json(board, "c", list()))$stacks
+  )
+  expect_null(
+    outline_paste_delta(
+      board, outline_clip_json(board, "c", list()), stack = "gone"
+    )$stacks
+  )
+
+  # a whole stack keeps its own membership; nothing is left loose to join
+  whole <- outline_paste_delta(
+    board, outline_clip_json(board, c("a", "b"), list()), stack = "s1"
+  )
+  expect_length(whole$stacks$add, 1L)
+  expect_null(whole$stacks$mod)
+})
+
 test_that("a NULL state field survives the clipboard as NULL", {
 
   # blockr.dag#144: without `null = "null"` every NULL state field becomes

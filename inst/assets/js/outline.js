@@ -841,7 +841,7 @@
         let data = null;
         try { data = JSON.parse(text); } catch (e) { return; }
         if (!data || data.object !== 'subboard') return;
-        push('block_paste', { json: text });
+        pushRaw('block_paste', { json: text, stack: pasteStack() });
       }).catch(() => {});
     };
 
@@ -1209,8 +1209,15 @@
     let lastSel = '';
     let lastInside = false;
 
+    // The stack under the last click is where a paste lands: a row inside a
+    // stack, its header or its frame. Anywhere else in the outline is loose.
+    let clickStack = null;
+
     document.addEventListener('mousedown', (ev) => {
       lastInside = rootEl.contains(ev.target);
+      if (!lastInside) return;
+      const hit = ev.target.closest && ev.target.closest('[data-stack]');
+      clickStack = hit && rootEl.contains(hit) ? hit.dataset.stack : null;
     }, true);
 
     // The renderer owns the selection and does not announce changes, so the
@@ -1254,6 +1261,24 @@
     document.addEventListener('copy', onCopy(false));
     document.addEventListener('cut', onCopy(true));
 
+    // blockr.dag binds Mod+C/X/V on the whole document and cancels the
+    // keydown, which suppresses the native `copy` and `cut` events this
+    // relies on, and on paste it reads the clipboard itself, so one keystroke
+    // pasted twice. While the outline owns the gesture the keydown stops here,
+    // in the capture phase on window, before it reaches dag's document
+    // listener. Its default action is left alone, so the native events fire.
+    window.addEventListener('keydown', (ev) => {
+      if (!(ev.ctrlKey || ev.metaKey) || ev.altKey) return;
+      const k = ev.key && ev.key.toLowerCase();
+      if (k !== 'c' && k !== 'x' && k !== 'v') return;
+      if (ownsGesture()) ev.stopPropagation();
+    }, true);
+
+    // A focused stack is the only thing on screen, so a click outside it
+    // still pastes into it; a loose copy would vanish from the view. R adds
+    // the pasted blocks to it in the same update as the blocks themselves.
+    const pasteStack = () => clickStack || rail.stackFocus() || null;
+
     document.addEventListener('paste', (ev) => {
       if (!ownsGesture()) return;
       const text = ev.clipboardData && ev.clipboardData.getData('text/plain');
@@ -1262,7 +1287,7 @@
       try { data = JSON.parse(text); } catch (e) { return; }
       if (!data || data.object !== 'subboard') return;   // not ours: let it be
       ev.preventDefault();
-      push('block_paste', { json: text });
+      pushRaw('block_paste', { json: text, stack: pasteStack() });
     });
 
     const asArr = (x) => x == null ? [] : (Array.isArray(x) ? x : [x]);

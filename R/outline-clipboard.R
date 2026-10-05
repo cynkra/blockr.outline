@@ -91,7 +91,11 @@ outline_clip_json <- function(board, block_ids, states) {
 # paste onto the board it was copied from cannot collide. Returns NULL when
 # the text is not one of our envelopes -- the client already screens for that,
 # but a paste is user input and this is the authoritative gate.
-outline_paste_delta <- function(board, json) {
+#
+# `stack` is where the paste goes: the stack the user last clicked in. The
+# pasted blocks that arrive without a stack of their own join it in the same
+# update, so they never show up loose first.
+outline_paste_delta <- function(board, json, stack = NULL) {
 
   data <- tryCatch(
     jsonlite::fromJSON(json, simplifyDataFrame = FALSE, simplifyMatrix = FALSE),
@@ -150,8 +154,25 @@ outline_paste_delta <- function(board, json) {
     links = if (length(links)) list(add = links)
   )
 
+  stacked <- character()
+
   if (length(parts$stacks)) {
-    upd$stacks <- list(add = outline_remap_stacks(parts$stacks, id_map))
+    added <- outline_remap_stacks(parts$stacks, id_map)
+    upd$stacks <- list(add = added)
+    stacked <- unlist(lapply(added, blockr.core::stack_blocks))
+  }
+
+  stks <- blockr.core::board_stacks(board)
+
+  if (length(stack) == 1L && stack %in% names(stks)) {
+    loose <- setdiff(names(blocks), stacked)
+    if (length(loose)) {
+      cur <- blockr.core::stack_blocks(stks[[stack]])
+      upd$stacks$mod <- stats::setNames(
+        list(list(blocks = c(cur, loose))),
+        stack
+      )
+    }
   }
 
   Filter(Negate(is.null), upd)
